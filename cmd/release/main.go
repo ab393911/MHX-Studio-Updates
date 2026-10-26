@@ -79,6 +79,7 @@ func main() {
 		fail(e)
 	}
 	add(*exe, "MHXStudio.exe")
+	add("docs/START_HERE.txt", "START_HERE.txt")
 	add("docs/TESTING.md", "TESTING.md")
 	add("docs/SOURCE_INVENTORY.md", "SOURCE_INVENTORY.md")
 	add(filepath.Join(*out, "update.json"), "update.json")

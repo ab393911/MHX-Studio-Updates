@@ -40,17 +40,30 @@ func (windowsRuntime) WaitParent(ctx context.Context, pid int) error {
 	}
 }
 
-type windowsChild struct{ cmd *exec.Cmd }
+type windowsChild struct {
+	cmd  *exec.Cmd
+	done chan struct{}
+}
 
-func (c windowsChild) Stop() error {
+func (c *windowsChild) Exited() <-chan struct{} { return c.done }
+
+func (c *windowsChild) Stop() error {
+	select {
+	case <-c.done:
+		return nil
+	default:
+	}
 	e := c.cmd.Process.Kill()
 	if e != nil && !errors.Is(e, os.ErrProcessDone) {
-		return e
+		select {
+		case <-c.done:
+			return nil
+		case <-time.After(300 * time.Millisecond):
+			return e
+		}
 	}
-	done := make(chan error, 1)
-	go func() { done <- c.cmd.Wait() }()
 	select {
-	case <-done:
+	case <-c.done:
 		return nil
 	case <-time.After(10 * time.Second):
 		return errors.New("new EXE did not exit after termination")
@@ -62,5 +75,7 @@ func (windowsRuntime) Launch(path string, args ...string) (update.Child, error) 
 	if e := cmd.Start(); e != nil {
 		return nil, e
 	}
-	return windowsChild{cmd}, nil
+	c := &windowsChild{cmd: cmd, done: make(chan struct{})}
+	go func() { _ = cmd.Wait(); close(c.done) }()
+	return c, nil
 }

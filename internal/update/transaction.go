@@ -189,6 +189,10 @@ func (i Installer) Install(ctx context.Context, p Plan) error {
 	defer cancel()
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
+	var exited <-chan struct{}
+	if observer, ok := child.(interface{ Exited() <-chan struct{} }); ok {
+		exited = observer.Exited()
+	}
 	for {
 		var r Receipt
 		if filesafe.ReadJSON(receiptPath, &r) == nil && r.Version == p.Version && r.Token == p.Token && strings.EqualFold(r.SHA256, p.NewSHA) {
@@ -197,6 +201,8 @@ func (i Installer) Install(ctx context.Context, p Plan) error {
 			}
 		}
 		select {
+		case <-exited:
+			return i.rollback(p, errors.New("new EXE exited before GUI startup health check"))
 		case <-health.Done():
 			if e = child.Stop(); e != nil {
 				return errors.Join(e, i.result(p, "recovery_required", "new process could not be stopped; backup retained"))

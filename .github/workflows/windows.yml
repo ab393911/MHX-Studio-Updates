@@ -51,10 +51,12 @@ jobs:
           if ($LASTEXITCODE) { throw 'Main EXE build failed' }
           go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=3.4.999 -X main.sourceCommit=$env:GITHUB_SHA" -o dist/old-test.exe ./cmd/mhxstudio
           if ($LASTEXITCODE) { throw 'Test EXE build failed' }
+          go build -trimpath -ldflags "-H windowsgui -s -w" -o dist/exit-test.exe ./cmd/testexit
+          if ($LASTEXITCODE) { throw 'Exit fixture build failed' }
       - name: Run native GUI, real EXE replacement and rollback tests
         shell: pwsh
         run: |
-          go run ./cmd/windowsverify -old "$pwd/dist/old-test.exe" -new "$pwd/dist/MHXStudio.exe" -version '${{ steps.build.outputs.version }}' -out dist/windows-tests.json
+          go run ./cmd/windowsverify -old "$pwd/dist/old-test.exe" -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '${{ steps.build.outputs.version }}' -out dist/windows-tests.json
           if ($LASTEXITCODE) { throw 'Native Windows tests failed' }
       - name: Package verified preview
         shell: pwsh

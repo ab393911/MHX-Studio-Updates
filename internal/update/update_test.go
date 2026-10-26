@@ -61,15 +61,20 @@ func planFixture(t *testing.T) (Plan, []byte) {
 	return p, old
 }
 
-type fakeChild struct{ stopped bool }
+type fakeChild struct {
+	stopped bool
+	exited  <-chan struct{}
+}
 
-func (c *fakeChild) Stop() error { c.stopped = true; return nil }
+func (c *fakeChild) Stop() error             { c.stopped = true; return nil }
+func (c *fakeChild) Exited() <-chan struct{} { return c.exited }
 
 type fakeRuntime struct {
 	p          Plan
 	health     bool
 	launchFail bool
 	parentFail bool
+	earlyExit  bool
 	launches   int
 	child      fakeChild
 }
@@ -82,6 +87,11 @@ func (r *fakeRuntime) WaitParent(context.Context, int) error {
 }
 func (r *fakeRuntime) Launch(_ string, args ...string) (Child, error) {
 	r.launches++
+	if r.earlyExit && r.launches == 1 {
+		ch := make(chan struct{})
+		close(ch)
+		r.child.exited = ch
+	}
 	if r.launchFail && r.launches == 1 {
 		return nil, errors.New("launch denied")
 	}
@@ -259,5 +269,27 @@ func TestMissingTargetRecovery(t *testing.T) {
 	}
 	if e := i.Recover(p); e == nil {
 		t.Fatal("recovery overwrote existing target")
+	}
+}
+
+func TestImmediateProcessExitRollsBackWithoutTryingToKillDeadProcess(t *testing.T) {
+	p, _ := planFixture(t)
+	rt := &fakeRuntime{p: p, earlyExit: true}
+	if e := (Installer{Runtime: rt, HealthTimeout: time.Hour}).Install(context.Background(), p); e == nil || !strings.Contains(e.Error(), "exited before") {
+		t.Fatal(e)
+	}
+	if rt.child.stopped {
+		t.Fatal("attempted to kill a process that had already exited")
+	}
+	if e := Verify(p.Target, p.OldSHA); e != nil {
+		t.Fatal(e)
+	}
+	if e := Verify(p.Backup, p.OldSHA); e != nil {
+		t.Fatal(e)
+	}
+	var r Result
+	filesafe.ReadJSON(filepath.Join(p.Dir(), "result.json"), &r)
+	if r.Status != "rolled_back" {
+		t.Fatal(r)
 	}
 }

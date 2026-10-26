@@ -74,6 +74,7 @@ func waitWindow(title string) error {
 func main() {
 	old := flag.String("old", "", "")
 	newExe := flag.String("new", "", "")
+	exitExe := flag.String("exit-fixture", "", "")
 	version := flag.String("version", "", "")
 	out := flag.String("out", "dist/windows-tests.json", "")
 	live := flag.String("live-update", "", "")
@@ -108,7 +109,11 @@ func main() {
 		fail(errors.New("native GUI smoke test failed"))
 	}
 	results := map[string]any{"native_windows": true, "arch": "amd64", "gui_smoke": sm, "windows_game_tested": false, "version": *version}
-	for _, scenario := range []string{"success", "startup_timeout", "sha_tamper", "sharing_violation"} {
+	scenarios := []string{"success", "startup_timeout", "sha_tamper", "sharing_violation"}
+	if *exitExe != "" {
+		scenarios = append(scenarios, "immediate_exit")
+	}
+	for _, scenario := range scenarios {
 		fmt.Println("Native Windows update scenario:", scenario)
 		folder := filepath.Join(root, scenario)
 		fail(os.MkdirAll(folder, 0700))
@@ -117,7 +122,11 @@ func main() {
 		tx := filepath.Join(folder, ".mhx-updates", "tx-native")
 		fail(os.MkdirAll(tx, 0700))
 		stage := filepath.Join(tx, "package.exe")
-		copyFile(*newExe, stage)
+		if scenario == "immediate_exit" {
+			copyFile(*exitExe, stage)
+		} else {
+			copyFile(*newExe, stage)
+		}
 		hash, e := update.Hash(stage)
 		fail(e)
 		p, e := update.NewPlan(target, stage, *version, hash)
@@ -161,7 +170,7 @@ func main() {
 			fail(update.Verify(p.Backup, p.OldSHA))
 			fail(waitWindow("知夏 · MHX Studio " + *version))
 			closeTitle("知夏 · MHX Studio " + *version)
-		case "startup_timeout":
+		case "startup_timeout", "immediate_exit":
 			if result.Status != "rolled_back" {
 				fail(fmt.Errorf("rollback failed: %+v", result))
 			}
@@ -180,7 +189,7 @@ func main() {
 		if string(b) != string(sentinel) {
 			fail(errors.New("configuration bytes changed during update"))
 		}
-		results[scenario] = map[string]any{"passed": true, "status": result.Status, "config_unchanged": true, "backup_retained": scenario == "success" || scenario == "startup_timeout"}
+		results[scenario] = map[string]any{"passed": true, "status": result.Status, "config_unchanged": true, "backup_retained": scenario == "success" || scenario == "startup_timeout" || scenario == "immediate_exit"}
 	}
 	// Also prove settings saves preserve unknown fields (unit tests cover detail).
 	results["passed"] = true
