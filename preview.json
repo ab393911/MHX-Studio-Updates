@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "version": "3.5.0-preview.5",
+  "version": "3.5.0-preview.7",
   "platform": "windows-amd64",
-  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.5/MHXStudio.exe",
-  "sha256": "1bd933f258ec39ac483fa5bccd6f8fdd8d5ab968801ca0731784cabc7b797e4b",
-  "size": 7198208,
+  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.7/MHXStudio.exe",
+  "sha256": "c251850d2204b5c9dbd85ba54e1a3d0871c14edec0a601ca010dc1f31673e747",
+  "size": 7199744,
   "notes": "在线更新、备份和失败回滚；登录标定与闭环测试。Windows 自动测试已执行；真实雷电/游戏尚待用户实机验收。",
-  "source_commit": "9bf15508ed7d302452c5d13410f15eed5b420df0",
+  "source_commit": "a3a8b72e665b7a16eede6f7499385b22dfa19f67",
   "windows_game_tested": false
 }
