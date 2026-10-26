@@ -20,13 +20,20 @@ foreach ($row in $rows) {
  if ([int]::TryParse($p[0],[ref]$i)) { $instances += [pscustomobject]@{Index=$i;Name=$p[1]} }
 }
 $all = @($instances | Sort-Object Index -Unique | Where-Object { $_.Index -ge $StartIndex })
+# Batch membership follows consecutive numeric instance IDs; never compress gaps.
 if ($all.Count -eq 0) { throw 'No available LDPlayer instances.' }
 $batches = @()
-for ($n=0; $n -lt $all.Count; $n += $BatchSize) {
- $end=[Math]::Min($n+$BatchSize-1,$all.Count-1)
- $group=@($all[$n..$end])
- if ($group.Count -ne $BatchSize) { Write-Warning "Skipping incomplete final group: $(($group.Index) -join ',')"; break }
- $batches += ,@($group.Index)
+$known = @{}
+foreach ($inst in $all) { $known[[int]$inst.Index] = $true }
+$maxIndex = [int](($all | Measure-Object -Property Index -Maximum).Maximum)
+for ($first = $StartIndex; $first -le $maxIndex; $first += $BatchSize) {
+ $last = $first + $BatchSize - 1
+ $expected = @($first..$last)
+ $missing = @($expected | Where-Object { -not $known.ContainsKey([int]$_) })
+ if ($missing.Count -gt 0) {
+   throw "Incomplete sequential batch $first-$last; missing indices: $($missing -join ','). No switching performed."
+ }
+ $batches += ,$expected
 }
 if (-not $batches.Count) { throw 'No full batch available.' }
 $state = @{ Batch = 0; Status = 'pending'; Batches = $batches; UpdatedAt = (Get-Date).ToString('o') }
