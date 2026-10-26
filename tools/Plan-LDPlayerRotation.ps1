@@ -3,7 +3,7 @@
 param(
  [string]$InstallDir = 'D:\LDPlayer14',
  [int]$BatchSize = 5,
- [int]$StartIndex = 0,
+ [int]$StartIndex = 1,
  [string]$StateFile = "$PSScriptRoot\rotation-state.json",
  [switch]$AdvanceAfterVerifiedCompletion
 )
