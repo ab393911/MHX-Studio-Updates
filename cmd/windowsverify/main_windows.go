@@ -77,12 +77,13 @@ func main() {
 	version := flag.String("version", "", "")
 	out := flag.String("out", "dist/windows-tests.json", "")
 	live := flag.String("live-update", "", "")
+	oldVersion := flag.String("old-version", "3.4.999", "")
 	flag.Parse()
 	if *live != "" {
 		if *old == "" || *version == "" {
 			fail(errors.New("old EXE and expected version required"))
 		}
-		liveUpdate(*old, *live, *version, *out)
+		liveUpdate(*old, *oldVersion, *live, *version, *out)
 		return
 	}
 	if *old == "" || *newExe == "" || *version == "" {

@@ -16,6 +16,6 @@
 
 配置、标定、单机验证资料在 %LOCALAPPDATA%/MHXStudioNext，与旧版 %APPDATA%/MHXStudioV3 分开。更新助手只操作本次目标 EXE、事务及其备份，不替换配置目录。GUI 保存设置时保留未知顶层字段。
 
-发布工作流使用 Go 1.26.10；Linux go vet/竞态测试；Windows go vet/单元测试；真正运行 GUI、替换/回滚/篡改/文件占用用例。发布总是创建新版本和新资产，不使用 clobber。匿名校验失败时保留为 draft，清单不推进。
+发布工作流使用 Go 1.26.10；Linux go vet/竞态测试；Windows go vet/单元测试；真正运行 GUI、替换/回滚/篡改/文件占用用例。发布总是创建新版本和新资产，不使用 clobber。先上传候选发行版并匿名验证，再从已发布的 preview.1 实际点击更新按钮升级至候选版，确认重启、备份和配置不变后才推进默认清单；之后再匿名下载默认清单与 EXE 复核，并追加发布验证报告。匿名校验失败时保留为 draft，清单不推进。
 
 稳定版尚未宣称验收完成；本次是 preview 渠道。版本号由 Actions run_number 生成，客户端可比较 preview.9 与 preview.10。主程序不依赖 Python、PowerShell、浏览器组件或额外安装运行库；仓库历史辅助脚本原样保留。

@@ -89,7 +89,7 @@ jobs:
         with:
           name: MHXStudio-Windows-x64
           path: dist
-      - name: Publish a new preview, anonymously verify bytes, then advance channel
+      - name: Publish preview candidate and anonymously verify bytes
         env:
           GH_TOKEN: ${{ github.token }}
           MHX_VERSION: ${{ needs.windows.outputs.version }}
@@ -110,14 +110,14 @@ jobs:
         with:
           go-version: '1.26.10'
           cache: false
-      - name: Exercise the actual update button against the public channel
+      - name: Exercise the published previous EXE against the candidate manifest
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           $env:CGO_ENABLED = '0'
-          go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=3.4.999 -X main.sourceCommit=$env:GITHUB_SHA" -o dist/old-test.exe ./cmd/mhxstudio
-          if ($LASTEXITCODE) { throw 'Test binary build failed' }
-          go run ./cmd/windowsverify -old "$pwd/dist/old-test.exe" -live-update 'https://raw.githubusercontent.com/ab393911/MHX-Studio-Updates/updates/preview.json' -version '${{ needs.windows.outputs.version }}' -out dist/live-gui-update.json
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.1/MHXStudio.exe' -OutFile dist/previous-release.exe
+          if ((Get-FileHash dist/previous-release.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'bab41749ca5dea6814d123af93dae5754bbdd047c4174e4c34440da8adbbca03') { throw 'Published baseline SHA-256 mismatch' }
+          go run ./cmd/windowsverify -old "$pwd/dist/previous-release.exe" -old-version '3.5.0-preview.1' -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v${{ needs.windows.outputs.version }}/update.json' -version '${{ needs.windows.outputs.version }}' -out dist/live-gui-update.json
           if ($LASTEXITCODE) { throw 'Live GUI update test failed' }
       - uses: actions/upload-artifact@v4
         if: always()
@@ -127,3 +127,34 @@ jobs:
             dist/live-gui-update.json
             dist/gui-preview.png
           if-no-files-found: ignore
+
+  promote-channel:
+    needs: [publish, windows, live-gui-update]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: MHXStudio-Windows-x64
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: live-gui-update-verification
+          path: dist
+      - name: Advance channel only after the real GUI update passes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MHX_VERSION: ${{ needs.windows.outputs.version }}
+        run: bash scripts/promote-channel.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: promoted-channel-verification
+          path: dist/download-verification.json
+          if-no-files-found: error

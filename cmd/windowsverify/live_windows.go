@@ -20,10 +20,10 @@ import (
 	"github.com/ab393911/MHX-Studio-Updates/internal/update"
 )
 
-func liveUpdate(old, manifest, expected, out string) {
+func liveUpdate(old, oldVersion, manifest, expected, out string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	m, newer, e := update.Check(ctx, update.Client(), manifest, "3.4.999")
+	m, newer, e := update.Check(ctx, update.Client(), manifest, oldVersion)
 	fail(e)
 	if !newer || m.Version != expected {
 		fail(fmt.Errorf("unexpected live channel version %s", m.Version))
@@ -42,7 +42,7 @@ func liveUpdate(old, manifest, expected, out string) {
 	oldHash, e := update.Hash(target)
 	fail(e)
 	parent := start(target)
-	oldTitle := "知夏 · MHX Studio 3.4.999"
+	oldTitle := "知夏 · MHX Studio " + oldVersion
 	fail(waitWindow(oldTitle))
 	time.Sleep(500 * time.Millisecond)
 	h := findWindow(oldTitle)
@@ -105,7 +105,7 @@ func liveUpdate(old, manifest, expected, out string) {
 		fail(errors.New("GUI update changed config bytes"))
 	}
 	closeTitle(newTitle)
-	fail(filesafe.JSON(out, map[string]any{"native_windows": true, "real_update_button_clicked": true, "confirmation_clicked": true, "anonymous_channel_download": true, "sha256_verified": true, "old_exe_backup_retained": true, "new_gui_restarted": true, "configuration_byte_identical": true, "version": expected, "source_commit": m.SourceCommit, "windows_game_tested": false, "passed": true, "completed_at": time.Now().UTC().Format(time.RFC3339)}))
+	fail(filesafe.JSON(out, map[string]any{"native_windows": true, "previous_published_version": oldVersion, "real_update_button_clicked": true, "confirmation_clicked": true, "anonymous_manifest_download": true, "sha256_verified": true, "old_exe_backup_retained": true, "new_gui_restarted": true, "configuration_byte_identical": true, "version": expected, "source_commit": m.SourceCommit, "windows_game_tested": false, "passed": true, "completed_at": time.Now().UTC().Format(time.RFC3339)}))
 	fmt.Println("Live public-channel GUI update passed:", expected)
 }
 
