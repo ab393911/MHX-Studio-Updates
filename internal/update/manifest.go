@@ -166,6 +166,13 @@ func get(ctx context.Context, c *http.Client, raw string) (*http.Response, error
 }
 func Check(ctx context.Context, c *http.Client, raw, current string) (Manifest, bool, error) {
 	var m Manifest
+	// GitHub raw serves a cached channel; a nonce requests the just-published bytes.
+	if u, err := url.Parse(raw); err == nil && u.Hostname() == "raw.githubusercontent.com" {
+		q := u.Query()
+		q.Set("mhx_check", strconv.FormatInt(time.Now().UnixNano(), 10))
+		u.RawQuery = q.Encode()
+		raw = u.String()
+	}
 	r, e := get(ctx, c, raw)
 	if e != nil {
 		return m, false, e

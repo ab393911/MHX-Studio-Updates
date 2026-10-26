@@ -106,13 +106,14 @@ func (c *calibration) open() {
 		}
 	}
 	inst, _, _ := moduleHandle.Call(0)
-	h, _, _ := createWindow.Call(0, ptr("MHXStudioNextWindow"), ptr(fmt.Sprintf("实例 %d 标定 · %s", c.index, c.name.label)), 0x00CA0000|wsVisible, 100, 50, 1015, 750, c.app.hwnd, 0, inst, 0)
+	h, _, _ := createWindow.Call(0, uintptr(unsafe.Pointer(utf("MHXStudioNextWindow"))), uintptr(unsafe.Pointer(utf(fmt.Sprintf("实例 %d 标定 · %s", c.index, c.name.label)))), 0x00CA0000|wsVisible, 100, 50, 1015, 750, c.app.hwnd, 0, inst, 0)
 	if h == 0 {
 		c.app.cal = nil
 		c.app.log("标定窗口创建失败")
 		return
 	}
 	c.hwnd = h
+	user32.NewProc("EnableWindow").Call(c.app.hwnd, 0)
 	c.label = child(h, "STATIC", "第1框：稳定的页面特征（避开动画、人物和计时数字）。在截图上拖出矩形。", 20, 12, 950, 40, 0, 0)
 	child(h, "BUTTON", "清除重画", 20, 640, 130, 34, 0, 301)
 	child(h, "BUTTON", "保存这次标定", 165, 640, 165, 34, 0, 302)
@@ -241,6 +242,7 @@ func (c *calibration) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 		return 0
 	case wmDestroy:
 		c.app.cal = nil
+		user32.NewProc("EnableWindow").Call(c.app.hwnd, 1)
 		return 0
 	}
 	r, _, _ := defWindow.Call(h, uintptr(m), w, l)

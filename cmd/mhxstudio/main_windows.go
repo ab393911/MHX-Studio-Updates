@@ -101,23 +101,25 @@ type app struct {
 var active *app
 
 func utf(s string) *uint16 { return syscall.StringToUTF16Ptr(s) }
-func ptr(s string) uintptr { return uintptr(unsafe.Pointer(utf(s))) }
+
 func text(h uintptr) string {
 	b := make([]uint16, 4096)
 	getWindowText.Call(h, uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)))
 	return syscall.UTF16ToString(b)
 }
-func setText(h uintptr, s string) { setWindowText.Call(h, ptr(s)) }
+func setText(h uintptr, s string) { setWindowText.Call(h, uintptr(unsafe.Pointer(utf(s)))) }
 func send(h uintptr, m uint32, a, b uintptr) uintptr {
 	r, _, _ := sendMessage.Call(h, uintptr(m), a, b)
 	return r
 }
 func (a *app) ask(s string) bool {
-	r, _, _ := messageBox.Call(a.hwnd, ptr(s), ptr("MHX Studio"), 4|0x30)
+	r, _, _ := messageBox.Call(a.hwnd, uintptr(unsafe.Pointer(utf(s))), uintptr(unsafe.Pointer(utf("MHX Studio"))), 4|0x30)
 	return r == 6
 }
-func (a *app) info(s string) { messageBox.Call(a.hwnd, ptr(s), ptr("MHX Studio"), 0x40) }
-func (a *app) ui(f func())   { a.actions <- f; postMessage.Call(a.hwnd, wmApp, 0, 0) }
+func (a *app) info(s string) {
+	messageBox.Call(a.hwnd, uintptr(unsafe.Pointer(utf(s))), uintptr(unsafe.Pointer(utf("MHX Studio"))), 0x40)
+}
+func (a *app) ui(f func()) { a.actions <- f; postMessage.Call(a.hwnd, wmApp, 0, 0) }
 func (a *app) log(s string) {
 	a.logs = append(a.logs, time.Now().Format("15:04:05")+"  "+s)
 	if len(a.logs) > 180 {
@@ -130,7 +132,7 @@ func (a *app) log(s string) {
 func (a *app) logAsync(s string) { a.ui(func() { a.log(s) }) }
 func child(parent uintptr, class, title string, x, y, w, h int, style uintptr, id int) uintptr {
 	inst, _, _ := moduleHandle.Call(0)
-	out, _, _ := createWindow.Call(0, ptr(class), ptr(title), wsChild|wsVisible|style, uintptr(x), uintptr(y), uintptr(w), uintptr(h), parent, uintptr(id), inst, 0)
+	out, _, _ := createWindow.Call(0, uintptr(unsafe.Pointer(utf(class))), uintptr(unsafe.Pointer(utf(title))), wsChild|wsVisible|style, uintptr(x), uintptr(y), uintptr(w), uintptr(h), parent, uintptr(id), inst, 0)
 	return out
 }
 func (a *app) control(class, title string, x, y, w, h int, style uintptr, id int) uintptr {
@@ -144,7 +146,7 @@ func (a *app) control(class, title string, x, y, w, h int, style uintptr, id int
 }
 func (a *app) label(s string, x, y, w int)      { a.control("STATIC", s, x, y, w, 25, 0, 0) }
 func (a *app) button(s string, x, y, w, id int) { a.control("BUTTON", s, x, y, w, 32, 0, id) }
-func comboAdd(h uintptr, s string)              { send(h, 0x143, 0, ptr(s)) }
+func comboAdd(h uintptr, s string)              { sendMessage.Call(h, 0x143, 0, uintptr(unsafe.Pointer(utf(s)))) }
 func comboIndex(h uintptr) int                  { return int(int32(send(h, 0x147, 0, 0))) }
 func (a *app) build() {
 	a.label("MHX Studio "+version+"  |  更新与登录验证版", 20, 15, 1000)
@@ -714,11 +716,11 @@ func main() {
 			planPath := filepath.Join(filepath.Dir(exe), "plan.json")
 			var p update.Plan
 			if filesafe.ReadJSON(planPath, &p) == nil {
-				r, _, _ := messageBox.Call(0, ptr("检测到更新恢复助手。仅在主程序缺失时从已校验备份恢复，不覆盖现有 EXE。继续？"), ptr("MHX Studio 恢复"), 4|0x30)
+				r, _, _ := messageBox.Call(0, uintptr(unsafe.Pointer(utf("检测到更新恢复助手。仅在主程序缺失时从已校验备份恢复，不覆盖现有 EXE。继续？"))), uintptr(unsafe.Pointer(utf("MHX Studio 恢复"))), 4|0x30)
 				if r == 6 {
 					e := (update.Installer{}).Recover(p)
 					if e != nil {
-						messageBox.Call(0, ptr(e.Error()), ptr("未执行恢复，文件保留"), 0x10)
+						messageBox.Call(0, uintptr(unsafe.Pointer(utf(e.Error()))), uintptr(unsafe.Pointer(utf("未执行恢复，文件保留"))), 0x10)
 					} else {
 						_, _ = (windowsRuntime{}).Launch(p.Target, "--update-result", filepath.Join(p.Dir(), "result.json"))
 					}
@@ -755,29 +757,29 @@ func main() {
 		data = filepath.Join(base, "MHXStudioNext")
 	}
 	if e := os.MkdirAll(data, 0700); e != nil {
-		messageBox.Call(0, ptr(e.Error()), ptr("MHX Studio 启动失败"), 0x10)
+		messageBox.Call(0, uintptr(unsafe.Pointer(utf(e.Error()))), uintptr(unsafe.Pointer(utf("MHX Studio 启动失败"))), 0x10)
 		os.Exit(1)
 	}
 	defer func() {
 		if r := recover(); r != nil {
 			_ = filesafe.Write(filepath.Join(data, "startup-error.txt"), []byte(fmt.Sprint(r)), 0600)
-			messageBox.Call(0, ptr(fmt.Sprint(r)), ptr("MHX Studio 错误，详情已保留"), 0x10)
+			messageBox.Call(0, uintptr(unsafe.Pointer(utf(fmt.Sprint(r)))), uintptr(unsafe.Pointer(utf("MHX Studio 错误，详情已保留"))), 0x10)
 		}
 	}()
 	mutexName := fmt.Sprintf("Local\\MHXStudioNext-%x", sha256.Sum256([]byte(strings.ToLower(filepath.Clean(data)))))
-	mutex, _, mutexErr := kernel32.NewProc("CreateMutexW").Call(0, 0, ptr(mutexName))
+	mutex, _, mutexErr := kernel32.NewProc("CreateMutexW").Call(0, 0, uintptr(unsafe.Pointer(utf(mutexName))))
 	if mutex == 0 {
-		messageBox.Call(0, ptr(mutexErr.Error()), ptr("无法创建运行锁"), 0x10)
+		messageBox.Call(0, uintptr(unsafe.Pointer(utf(mutexErr.Error()))), uintptr(unsafe.Pointer(utf("无法创建运行锁"))), 0x10)
 		return
 	}
 	defer kernel32.NewProc("CloseHandle").Call(mutex)
 	if mutexErr == syscall.Errno(183) {
-		messageBox.Call(0, ptr("已有 MHX Studio 使用此数据目录，请先关闭该窗口。"), ptr("MHX Studio"), 0x40)
+		messageBox.Call(0, uintptr(unsafe.Pointer(utf("已有 MHX Studio 使用此数据目录，请先关闭该窗口。"))), uintptr(unsafe.Pointer(utf("MHX Studio"))), 0x40)
 		return
 	}
 	cfg, e := loadSettings(data)
 	if e != nil {
-		messageBox.Call(0, ptr(e.Error()), ptr("配置保留，启动已停止"), 0x10)
+		messageBox.Call(0, uintptr(unsafe.Pointer(utf(e.Error()))), uintptr(unsafe.Pointer(utf("配置保留，启动已停止"))), 0x10)
 		return
 	}
 	a := &app{controls: map[int]uintptr{}, actions: make(chan func(), 512), root: data, cfg: cfg, cache: automation.NewCache(2, 32<<20), healthPath: receipt, healthToken: token, healthVersion: healthVersion, smokePath: smoke}
@@ -789,12 +791,12 @@ func main() {
 	name := utf("MHXStudioNextWindow")
 	wc := wndclass{Size: uint32(unsafe.Sizeof(wndclass{})), Proc: syscall.NewCallback(windowProc), Instance: inst, Cursor: cursor, Background: 6, Name: name}
 	if r, _, err := registerClass.Call(uintptr(unsafe.Pointer(&wc))); r == 0 {
-		messageBox.Call(0, ptr(err.Error()), ptr("窗口注册失败"), 0x10)
+		messageBox.Call(0, uintptr(unsafe.Pointer(utf(err.Error()))), uintptr(unsafe.Pointer(utf("窗口注册失败"))), 0x10)
 		return
 	}
-	h, _, err := createWindow.Call(0, uintptr(unsafe.Pointer(name)), ptr("知夏 · MHX Studio "+version), 0x00CF0000|wsVisible, 80, 40, 1050, 780, 0, 0, inst, 0)
+	h, _, err := createWindow.Call(0, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(utf("知夏 · MHX Studio "+version))), 0x00CF0000|wsVisible, 80, 40, 1050, 780, 0, 0, inst, 0)
 	if h == 0 {
-		messageBox.Call(0, ptr(err.Error()), ptr("窗口创建失败"), 0x10)
+		messageBox.Call(0, uintptr(unsafe.Pointer(utf(err.Error()))), uintptr(unsafe.Pointer(utf("窗口创建失败"))), 0x10)
 		return
 	}
 	a.hwnd = h

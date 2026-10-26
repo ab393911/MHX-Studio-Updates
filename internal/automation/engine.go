@@ -144,7 +144,7 @@ func (e *Engine) click(ctx context.Context, before, button, after string) error 
 // its own selected-row AND in-game identity anchors before proceeding.
 func (e *Engine) Cycle(ctx context.Context, roles []int) (err error) {
 	defer func() {
-		if err != nil && e.Options.OnError != nil {
+		if err != nil && !errors.Is(err, context.Canceled) && e.Options.OnError != nil {
 			e.Options.OnError(e.last, err)
 		}
 	}()
@@ -314,6 +314,7 @@ func (e *Engine) clickAny(ctx context.Context, before, button string, after []st
 	return last
 }
 func (e *Engine) toRoles(ctx context.Context) error {
+	unknown := 0
 	for step := 0; step < 8; step++ {
 		img, err := e.image(ctx)
 		if err != nil {
@@ -354,7 +355,15 @@ func (e *Engine) toRoles(ctx context.Context) error {
 			}
 			continue
 		}
-		return errors.New("unknown page: no click performed; check calibration or dismiss the unexpected dialog")
+		if unknown >= e.Options.Retries {
+			return errors.New("unknown page: retry limit reached; no click performed")
+		}
+		unknown++
+		e.log(fmt.Sprintf("未知页面，等待重试 %d/%d，不点击", unknown, e.Options.Retries))
+		if err = pause(ctx, 500*time.Millisecond); err != nil {
+			return err
+		}
+		step--
 	}
 	return errors.New("login transition limit exceeded")
 }

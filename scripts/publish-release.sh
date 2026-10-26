@@ -16,7 +16,7 @@ gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false
 manifest="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/update.json"
 verified=false
 for attempt in 1 2 3 4 5 6; do
-  if go run ./cmd/release -verify "$manifest" -commit "$GITHUB_SHA" -report dist/download-verification.json; then verified=true; break; fi
+  if go run ./cmd/release -verify "$manifest" -commit "$GITHUB_SHA" -version "$MHX_VERSION" -report dist/download-verification.json; then verified=true; break; fi
   sleep 5
 done
 if [ "$verified" != true ]; then
@@ -34,7 +34,7 @@ jq -n --arg content "$content" --arg sha "$existing_sha" --arg message "Publish 
 gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/preview.json" --input "$request" > /dev/null
 # Confirm the exact client-facing channel, without a GitHub token.
 for attempt in 1 2 3 4 5 6; do
-  if go run ./cmd/release -verify 'https://raw.githubusercontent.com/ab393911/MHX-Studio-Updates/updates/preview.json' -commit "$GITHUB_SHA" -report dist/download-verification.json; then exit 0; fi
+  if go run ./cmd/release -verify 'https://raw.githubusercontent.com/ab393911/MHX-Studio-Updates/updates/preview.json' -commit "$GITHUB_SHA" -version "$MHX_VERSION" -report dist/download-verification.json; then exit 0; fi
   sleep 5
 done
 exit 1

@@ -34,6 +34,9 @@ func main() {
 		defer cancel()
 		m, _, e := update.Check(ctx, update.Client(), *verify, "0.0.0")
 		fail(e)
+		if *ver != "" && m.Version != *ver {
+			fail(fmt.Errorf("unexpected version %s", m.Version))
+		}
 		if *commit != "" && m.SourceCommit != *commit {
 			fail(fmt.Errorf("unexpected source commit %s", m.SourceCommit))
 		}
