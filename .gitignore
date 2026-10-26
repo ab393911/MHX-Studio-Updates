@@ -1,0 +1,10 @@
+/dist/
+/bin/
+*.test
+*.exe
+/config.json
+/progress.json
+/diagnostics/
+/profiles/
+/.mhx-updates/
+/.mhx-backups/

@@ -1,0 +1,102 @@
+name: Windows x64 tests and preview release
+
+on:
+  push:
+    branches: [main, codex/mhx-studio-recovery]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mhx-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  portable-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+
+  windows:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+      - name: Build Windows x64 GUI and previous-version test binary
+        id: build
+        shell: pwsh
+        run: |
+          $version = "3.5.0-preview.$env:GITHUB_RUN_NUMBER"
+          if ($env:GITHUB_REF_TYPE -eq 'tag') { $version = $env:GITHUB_REF_NAME.TrimStart('v') }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $env:CGO_ENABLED = '0'
+          go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version -X main.sourceCommit=$env:GITHUB_SHA" -o dist/MHXStudio.exe ./cmd/mhxstudio
+          if ($LASTEXITCODE) { throw 'Main EXE build failed' }
+          go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=3.4.999 -X main.sourceCommit=$env:GITHUB_SHA" -o dist/old-test.exe ./cmd/mhxstudio
+          if ($LASTEXITCODE) { throw 'Test EXE build failed' }
+      - name: Run native GUI, real EXE replacement and rollback tests
+        shell: pwsh
+        run: |
+          go run ./cmd/windowsverify -old "$pwd/dist/old-test.exe" -new "$pwd/dist/MHXStudio.exe" -version '${{ steps.build.outputs.version }}' -out dist/windows-tests.json
+          if ($LASTEXITCODE) { throw 'Native Windows tests failed' }
+      - name: Package verified preview
+        shell: pwsh
+        run: |
+          go run ./cmd/release -exe dist/MHXStudio.exe -version '${{ steps.build.outputs.version }}' -commit $env:GITHUB_SHA -report dist/windows-tests.json
+          if ($LASTEXITCODE) { throw 'Packaging failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MHXStudio-Windows-x64
+          path: |
+            dist/MHXStudio.exe
+            dist/MHXStudio-Windows-x64.zip
+            dist/update.json
+            dist/SHA256SUMS.txt
+            dist/windows-tests.json
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/mhx-studio-recovery' || startsWith(github.ref, 'refs/tags/v'))
+    needs: [portable-tests, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: MHXStudio-Windows-x64
+          path: dist
+      - name: Publish a new preview, anonymously verify bytes, then advance channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MHX_VERSION: ${{ needs.windows.outputs.version }}
+        run: bash scripts/publish-release.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: anonymous-download-verification
+          path: dist/download-verification.json
+          if-no-files-found: ignore

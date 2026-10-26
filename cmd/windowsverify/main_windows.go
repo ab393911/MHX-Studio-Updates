@@ -1,0 +1,181 @@
+//go:build windows
+
+package main
+
+import (
+	"errors"
+	"flag"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"syscall"
+	"time"
+	"unsafe"
+
+	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
+	"github.com/ab393911/MHX-Studio-Updates/internal/update"
+)
+
+var user = syscall.NewLazyDLL("user32.dll")
+
+func fail(e error) {
+	if e != nil {
+		fmt.Fprintln(os.Stderr, e)
+		os.Exit(1)
+	}
+}
+func copyFile(a, b string) { fail(os.MkdirAll(filepath.Dir(b), 0700)); fail(filesafe.CopyNew(a, b)) }
+func start(path string, args ...string) *exec.Cmd {
+	cmd := exec.Command(path, args...)
+	fail(cmd.Start())
+	return cmd
+}
+func wait(cmd *exec.Cmd, timeout time.Duration) error {
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case e := <-done:
+		return e
+	case <-time.After(timeout):
+		_ = cmd.Process.Kill()
+		return errors.New("Windows EXE timed out")
+	}
+}
+func findWindow(title string) uintptr {
+	p, _ := syscall.UTF16PtrFromString(title)
+	h, _, _ := user.NewProc("FindWindowW").Call(0, uintptr(unsafe.Pointer(p)))
+	return h
+}
+func closeTitle(title string) {
+	h := findWindow(title)
+	if h != 0 {
+		user.NewProc("PostMessageW").Call(h, 0x10, 0, 0)
+		end := time.Now().Add(8 * time.Second)
+		for time.Now().Before(end) {
+			if findWindow(title) == 0 {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		fail(fmt.Errorf("window did not close: %s", title))
+	}
+}
+func waitWindow(title string) error {
+	end := time.Now().Add(15 * time.Second)
+	for time.Now().Before(end) {
+		if findWindow(title) != 0 {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("GUI not found: %s", title)
+}
+func main() {
+	old := flag.String("old", "", "")
+	newExe := flag.String("new", "", "")
+	version := flag.String("version", "", "")
+	out := flag.String("out", "dist/windows-tests.json", "")
+	flag.Parse()
+	if *old == "" || *newExe == "" || *version == "" {
+		fail(errors.New("old/new EXEs and new version required"))
+	}
+	root, e := os.MkdirTemp("", "MHX Windows 中文 空格 ")
+	fail(e)
+	defer os.RemoveAll(root)
+	// All GUI and update tests use a fresh Windows data directory.
+	data := filepath.Join(root, "AppData")
+	fail(os.Setenv("LOCALAPPDATA", data))
+	fail(os.MkdirAll(filepath.Join(data, "MHXStudioNext"), 0700))
+	sentinel := []byte("{\"retries\":7,\"future_unknown_field\":{\"keep\":true}}\n")
+	cfg := filepath.Join(data, "MHXStudioNext", "config.json")
+	fail(os.WriteFile(cfg, sentinel, 0600))
+	smoke := filepath.Join(root, "smoke.json")
+	cmd := start(*newExe, "--smoke-test", smoke)
+	fail(wait(cmd, 20*time.Second))
+	var sm map[string]any
+	fail(filesafe.ReadJSON(smoke, &sm))
+	if sm["window_created"] != true || sm["message_loop"] != true {
+		fail(errors.New("native GUI smoke test failed"))
+	}
+	results := map[string]any{"native_windows": true, "arch": "amd64", "gui_smoke": sm, "windows_game_tested": false, "version": *version}
+	for _, scenario := range []string{"success", "startup_timeout", "sha_tamper", "sharing_violation"} {
+		fmt.Println("Native Windows update scenario:", scenario)
+		folder := filepath.Join(root, scenario)
+		fail(os.MkdirAll(folder, 0700))
+		target := filepath.Join(folder, "MHXStudio.exe")
+		copyFile(*old, target)
+		tx := filepath.Join(folder, ".mhx-updates", "tx-native")
+		fail(os.MkdirAll(tx, 0700))
+		stage := filepath.Join(tx, "package.exe")
+		copyFile(*newExe, stage)
+		hash, e := update.Hash(stage)
+		fail(e)
+		p, e := update.NewPlan(target, stage, *version, hash)
+		fail(e)
+		parentReport := filepath.Join(folder, "parent-smoke.json")
+		parent := start(target, "--smoke-test", parentReport)
+		p.ParentPID = parent.Process.Pid
+		if scenario == "startup_timeout" {
+			p.Version = "99.0.0"
+		}
+		fail(filesafe.JSON(filepath.Join(tx, "plan.json"), p))
+		helper := filepath.Join(tx, "updater.exe")
+		copyFile(*old, helper)
+		var lock syscall.Handle
+		if scenario == "sharing_violation" {
+			name, _ := syscall.UTF16PtrFromString(target)
+			lock, e = syscall.CreateFile(name, syscall.GENERIC_READ, syscall.FILE_SHARE_READ, nil, syscall.OPEN_EXISTING, 0, 0)
+			fail(e)
+		}
+		if scenario == "sha_tamper" {
+			f, e := os.OpenFile(stage, os.O_APPEND|os.O_WRONLY, 0600)
+			fail(e)
+			_, e = f.Write([]byte("tampered"))
+			fail(e)
+			fail(f.Close())
+		}
+		helperCmd := start(helper, "--apply-update", filepath.Join(tx, "plan.json"))
+		fail(wait(parent, 20*time.Second))
+		helperErr := wait(helperCmd, 50*time.Second)
+		if lock != 0 {
+			syscall.CloseHandle(lock)
+		}
+		var result update.Result
+		fail(filesafe.ReadJSON(filepath.Join(tx, "result.json"), &result))
+		switch scenario {
+		case "success":
+			if helperErr != nil || result.Status != "committed" {
+				fail(fmt.Errorf("commit failed: %v %+v", helperErr, result))
+			}
+			fail(update.Verify(target, p.NewSHA))
+			fail(update.Verify(p.Backup, p.OldSHA))
+			fail(waitWindow("知夏 · MHX Studio " + *version))
+			closeTitle("知夏 · MHX Studio " + *version)
+		case "startup_timeout":
+			if result.Status != "rolled_back" {
+				fail(fmt.Errorf("rollback failed: %+v", result))
+			}
+			fail(update.Verify(target, p.OldSHA))
+			fail(update.Verify(p.Backup, p.OldSHA))
+			fail(waitWindow("知夏 · MHX Studio 3.4.999"))
+			closeTitle("知夏 · MHX Studio 3.4.999")
+		default:
+			if helperErr == nil || result.Status != "unchanged" {
+				fail(fmt.Errorf("preflight protection failed: %+v %v", result, helperErr))
+			}
+			fail(update.Verify(target, p.OldSHA))
+		}
+		b, e := os.ReadFile(cfg)
+		fail(e)
+		if string(b) != string(sentinel) {
+			fail(errors.New("configuration bytes changed during update"))
+		}
+		results[scenario] = map[string]any{"passed": true, "status": result.Status, "config_unchanged": true, "backup_retained": scenario == "success" || scenario == "startup_timeout"}
+	}
+	// Also prove settings saves preserve unknown fields (unit tests cover detail).
+	results["passed"] = true
+	results["completed_at"] = time.Now().UTC().Format(time.RFC3339)
+	fail(filesafe.JSON(*out, results))
+	fmt.Println("Native Windows GUI/update checks passed; LDPlayer/game tests remain pending.")
+}
