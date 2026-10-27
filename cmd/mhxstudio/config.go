@@ -13,6 +13,7 @@ import (
 
 	"github.com/ab393911/MHX-Studio-Updates/internal/automation"
 	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
+	"github.com/ab393911/MHX-Studio-Updates/internal/gameapp"
 	"github.com/ab393911/MHX-Studio-Updates/internal/update"
 )
 
@@ -22,19 +23,21 @@ type proof struct {
 	At         string `json:"at"`
 }
 type settings struct {
-	InstallDir        string               `json:"ldplayer_directory"`
-	GroupStart        int                  `json:"group_start_index"`
-	ManifestURL       string               `json:"manifest_url"`
-	Retries           int                  `json:"retries"`
-	MinDelayMS        int                  `json:"min_delay_ms"`
-	MaxDelayMS        int                  `json:"max_delay_ms"`
-	Jobs              map[string][5]string `json:"jobs"`
-	SingleValidations map[string]proof     `json:"single_validations"`
+	InstallDir        string                     `json:"ldplayer_directory"`
+	GroupStart        int                        `json:"group_start_index"`
+	ManifestURL       string                     `json:"manifest_url"`
+	Retries           int                        `json:"retries"`
+	MinDelayMS        int                        `json:"min_delay_ms"`
+	MaxDelayMS        int                        `json:"max_delay_ms"`
+	Jobs              map[string][5]string       `json:"jobs"`
+	SingleValidations map[string]proof           `json:"single_validations"`
+	Games             map[string]gameapp.Binding `json:"game_bindings"`
+	TargetRoles       map[string]int             `json:"target_roles"`
 	raw               map[string]json.RawMessage
 }
 
 func defaults() settings {
-	return settings{ManifestURL: update.DefaultManifestURL, GroupStart: 1, Retries: 3, MinDelayMS: 250, MaxDelayMS: 650, Jobs: map[string][5]string{}, SingleValidations: map[string]proof{}}
+	return settings{ManifestURL: update.DefaultManifestURL, GroupStart: 1, Retries: 3, MinDelayMS: 250, MaxDelayMS: 650, Jobs: map[string][5]string{}, SingleValidations: map[string]proof{}, Games: map[string]gameapp.Binding{}, TargetRoles: map[string]int{}}
 }
 func loadSettings(root string) (settings, error) {
 	c := defaults()
@@ -56,6 +59,12 @@ func loadSettings(root string) (settings, error) {
 	}
 	if c.SingleValidations == nil {
 		c.SingleValidations = map[string]proof{}
+	}
+	if c.Games == nil {
+		c.Games = map[string]gameapp.Binding{}
+	}
+	if c.TargetRoles == nil {
+		c.TargetRoles = map[string]int{}
 	}
 	return c, c.Validate()
 }

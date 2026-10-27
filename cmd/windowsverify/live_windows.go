@@ -56,7 +56,7 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		fail(filesafe.JSON(filepath.Join(dataRoot, "ldplayer-discovery.json"), map[string]string{"directory": install, "adb": filepath.Join(install, "adb.exe")}))
 	}
 	cfgPath := filepath.Join(dataRoot, "config.json")
-	fail(filesafe.JSON(cfgPath, map[string]any{"ldplayer_directory": install, "group_start_index": 1, "manifest_url": manifest, "retries": 7, "min_delay_ms": 250, "max_delay_ms": 650, "jobs": map[string]any{}, "single_validations": map[string]any{}, "future_unknown_field": map[string]any{"keep": true}}))
+	fail(filesafe.JSON(cfgPath, map[string]any{"ldplayer_directory": install, "group_start_index": 1, "manifest_url": manifest, "retries": 7, "min_delay_ms": 250, "max_delay_ms": 650, "jobs": map[string]any{}, "single_validations": map[string]any{}, "future_unknown_field": map[string]any{"keep": true}, "target_roles": map[string]int{"1": 4}, "game_bindings": map[string]any{"1": map[string]any{"package": "com.fixture.confirmed", "activity": ".Main", "android_id": "abcdef0123456789", "user_confirmed": true}}}))
 	profile := filepath.Join(dataRoot, "profiles", "1.json")
 	fail(filesafe.JSON(profile, map[string]any{"future_calibration_sentinel": "preserve bytes"}))
 	before, e := os.ReadFile(cfgPath)
@@ -80,6 +80,10 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	prefix := "legacy"
 	if oneClick {
 		prefix = "one-click"
+	}
+	published := oldVersion != "3.4.999"
+	if published && oneClick {
+		prefix = "published"
 	}
 	fail(captureWindow(h, filepath.Join(filepath.Dir(out), prefix+"-before.png")))
 	button := control(h, 110)
@@ -173,6 +177,7 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	})
 	detectionVerified := false
 	launchVerified := false
+	fiveVerified := false
 	if fixture != "" {
 		until(h, "upgraded GUI no longer detects 24 instances", func() bool {
 			return strings.Contains(readText(control(h, 208)), "检测到 24 台，已运行 5 台，ADB 已验证 5 台")
@@ -184,18 +189,27 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 			return strings.Contains(readText(control(h, 208)), "检测到 24 台，已运行 6 台，ADB 已验证 6 台")
 		})
 		launchVerified = true
+		writeText(control(h, 205), "6")
+		click(h, 115)
+		until(h, "upgraded GUI could not start dynamic five-instance group", func() bool {
+			return strings.Contains(readText(control(h, 208)), "检测到 24 台，已运行 10 台，ADB 已验证 10 台")
+		})
+		fiveVerified = true
 	}
 	time.Sleep(200 * time.Millisecond)
 	click(h, 110)
 	until(h, "latest-version check did not show the expected message", func() bool { return strings.Contains(readText(control(h, 209)), "当前已是最新版本") })
 	fail(captureWindow(h, filepath.Join(filepath.Dir(out), prefix+"-after.png")))
 	closeTitle(newTitle)
-	resultMap := map[string]any{"native_windows": true, "previous_version": oldVersion, "baseline_published": !oneClick, "real_update_button_clicked": true, "update_button_clicks": 1, "confirmation_clicks": confirmations, "one_click_without_confirmation": oneClick, "anonymous_manifest_download": true, "sha256_verified": true, "old_exe_backup_retained": true, "configuration_snapshot_verified": true, "configuration_byte_identical": true, "calibration_byte_identical": true, "new_gui_restarted": true, "new_gui_visible": true, "explicit_success_message": true, "latest_version_message": true, "post_upgrade_24_instance_detection_fixture": detectionVerified, "post_upgrade_start_and_adb_fixture": launchVerified, "emulator_fixture_only": true, "real_ldplayer_tested": false, "version": expected, "source_commit": m.SourceCommit, "windows_game_tested": false, "passed": true, "completed_at": time.Now().UTC().Format(time.RFC3339)}
+	resultMap := map[string]any{"native_windows": true, "previous_version": oldVersion, "baseline_published": published, "real_update_button_clicked": true, "update_button_clicks": 1, "confirmation_clicks": confirmations, "one_click_without_confirmation": oneClick, "anonymous_manifest_download": true, "sha256_verified": true, "old_exe_backup_retained": true, "configuration_snapshot_verified": true, "configuration_byte_identical": true, "calibration_byte_identical": true, "game_settings_byte_preserved": true, "new_gui_restarted": true, "new_gui_visible": true, "explicit_success_message": true, "latest_version_message": true, "post_upgrade_24_instance_detection_fixture": detectionVerified, "post_upgrade_start_and_adb_fixture": launchVerified, "post_upgrade_five_launch_and_adb_fixture": fiveVerified, "emulator_fixture_only": true, "real_ldplayer_tested": false, "version": expected, "source_commit": m.SourceCommit, "windows_game_tested": false, "passed": true, "completed_at": time.Now().UTC().Format(time.RFC3339)}
 	if !oneClick {
 		resultMap["previous_published_version"] = oldVersion
 		resultMap["configuration_backup_timing"] = "legacy_new_gui_before_health"
 	} else {
 		resultMap["configuration_backup_timing"] = "before_executable_replacement"
+	}
+	if published {
+		resultMap["previous_published_version"] = oldVersion
 	}
 	fail(filesafe.JSON(out, resultMap))
 	fmt.Println("Live GUI update passed:", expected, "one click:", oneClick, "legacy confirmations:", confirmations)

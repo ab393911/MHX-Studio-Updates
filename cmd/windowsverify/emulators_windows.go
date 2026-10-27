@@ -152,9 +152,13 @@ func emulatorGUI(exe, fixture, version, outDir string) map[string]any {
 	if _, e = os.Stat(filepath.Join(restoredData, "config.json")); !os.IsNotExist(e) {
 		fail(errors.New("restoration changed config"))
 	}
+	click(h, 115)
+	until(h, "cold five-instance launch no longer verifies every ADB identity", func() bool {
+		return strings.Contains(readText(control(h, 208)), "检测到 5 台，已运行 5 台，ADB 已验证 5 台")
+	})
 	closeTitle(title)
 	fail(wait(restored, 10*time.Second))
-	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "startup_process_path_discovery": true, "ten_column_inventory": true, "offline_instance_retained": true, "automatic_scan_does_not_save_config": true, "validated_path_automatically_remembered": true, "restart_from_discovery_record_with_all_instances_stopped": true, "single_launch_button": true, "dynamic_group_6_to_10": true, "running_instances_not_relaunched": true, "missing_index_rejected_before_launch": true, "periodic_refresh": true, "cloned_android_id_with_unique_boot_ids": true, "control_notifications_do_not_trigger_actions": true}
+	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "startup_process_path_discovery": true, "ten_column_inventory": true, "offline_instance_retained": true, "automatic_scan_does_not_save_config": true, "validated_path_automatically_remembered": true, "restart_from_discovery_record_with_all_instances_stopped": true, "cold_five_launch_and_adb_verified": true, "single_launch_button": true, "dynamic_group_6_to_10": true, "running_instances_not_relaunched": true, "missing_index_rejected_before_launch": true, "periodic_refresh": true, "cloned_android_id_with_unique_boot_ids": true, "control_notifications_do_not_trigger_actions": true}
 }
 
 func adbFallbackGUI(exe, fixture, version, outDir string) map[string]any {

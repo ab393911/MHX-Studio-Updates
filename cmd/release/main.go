@@ -60,7 +60,7 @@ func main() {
 	fail(e)
 	st, e := os.Stat(*exe)
 	fail(e)
-	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "一键在线更新验收版：新版本取消更新二次确认，增加配置快照、回滚恢复及重启后成功提示；保留preview.15雷电检测和启动。首次从旧preview.15升级仍需其原确认框，配置快照由新程序在健康确认前补建；后续升级在替换前备份。", SourceCommit: *commit, WindowsTested: false}
+	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "单台游戏启动/指定角色登录测试版：先确认绑定游戏入口，复用现有页面标定，未知画面停止；角色身份无法核验时不报告完全成功。保留已验收preview.17更新、雷电发现及单台/五台启动，保留配置和标定。新增游戏功能仅通过自动测试，待真实轻享实机验收；不含战斗、换区或五台游戏自动化。", SourceCommit: *commit, WindowsTested: false}
 	fail(m.Validate())
 	fail(os.MkdirAll(*out, 0700))
 	fail(filesafe.JSON(filepath.Join(*out, "update.json"), m))
@@ -83,6 +83,8 @@ func main() {
 	add("docs/TESTING.md", "TESTING.md")
 	add("docs/SOURCE_INVENTORY.md", "SOURCE_INVENTORY.md")
 	add("docs/ONLINE_UPDATE_ACCEPTANCE.md", "ONLINE_UPDATE_ACCEPTANCE.md")
+	add("docs/SINGLE_GAME_ACCEPTANCE.md", "SINGLE_GAME_ACCEPTANCE.md")
+	add("docs/DELIVERY_RULES.md", "DELIVERY_RULES.md")
 	add(filepath.Join(*out, "update.json"), "update.json")
 	add(filepath.Join(*out, "SHA256SUMS.txt"), "SHA256SUMS.txt")
 	if *report != "" {

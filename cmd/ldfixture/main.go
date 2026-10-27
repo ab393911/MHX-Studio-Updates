@@ -112,6 +112,9 @@ func main() {
 			fmt.Printf("aaaaaaaa-bbbb-4ccc-8ddd-%012d\n", n)
 			return
 		}
+		if gameCommand(root, command) {
+			return
+		}
 	}
 	die(fmt.Errorf("unsupported fixture command %v", args))
 }

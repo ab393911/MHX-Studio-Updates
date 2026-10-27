@@ -32,13 +32,13 @@ jobs:
       version: ${{ steps.build.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - name: Preserve the user-verified preview.15 emulator implementation
+      - name: Preserve the user-verified preview.17 foundation and updater
         shell: pwsh
         run: |
-          git fetch --no-tags --depth=1 origin 6fba48321210ce7692a3d11caab00bc7f62d7cc8
+          git fetch --no-tags --depth=1 origin f6ac38e5ea5d1e5ff1e6f13e20c0298363d7ae66
           if ($LASTEXITCODE) { throw 'Cannot fetch accepted emulator source baseline' }
-          git diff --exit-code 6fba48321210ce7692a3d11caab00bc7f62d7cc8 HEAD -- internal/ldplayer internal/automation cmd/mhxstudio/config.go cmd/mhxstudio/emulators_windows.go cmd/mhxstudio/discovery_store.go cmd/mhxstudio/calibration_windows.go
-          if ($LASTEXITCODE) { throw 'Accepted emulator implementation was changed during updater-only development' }
+          git diff --exit-code f6ac38e5ea5d1e5ff1e6f13e20c0298363d7ae66 HEAD -- internal/ldplayer internal/update internal/automation/engine.go internal/automation/profile.go cmd/mhxstudio/runtime_windows.go cmd/mhxstudio/update_status_windows.go cmd/mhxstudio/emulators_windows.go cmd/mhxstudio/discovery_store.go cmd/mhxstudio/calibration_windows.go
+          if ($LASTEXITCODE) { throw 'Accepted foundation was changed during the single-game addition' }
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.10'
@@ -84,6 +84,7 @@ jobs:
             dist/windows-tests.json
             dist/emulator-gui-preview.png
             dist/adb-fallback-gui-preview.png
+            dist/single-game-gui-preview.png
             dist/old-test.exe
             dist/ldfixture.exe
           if-no-files-found: error
@@ -134,9 +135,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           $env:CGO_ENABLED = '0'
-          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.15/MHXStudio.exe' -OutFile dist/previous-release.exe
-          if ((Get-FileHash dist/previous-release.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'cdad473fea5b7ed1c22d9d364112e5afecf174756b5557a0a7668881153c31d5') { throw 'Published baseline SHA-256 mismatch' }
-          go run ./cmd/windowsverify -old "$pwd/dist/previous-release.exe" -old-version '3.5.0-preview.15' -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v${{ needs.windows.outputs.version }}/update.json' -version '${{ needs.windows.outputs.version }}' -emulator-fixture "$pwd/verification/ldfixture.exe" -out dist/live-gui-update.json
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.17/MHXStudio.exe' -OutFile dist/previous-release.exe
+          if ((Get-FileHash dist/previous-release.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne '49269a937ad125723f5488f5690ac9aa42b5a260dcadb04c4dec5c794f3aed8a') { throw 'Published baseline SHA-256 mismatch' }
+          go run ./cmd/windowsverify -old "$pwd/dist/previous-release.exe" -old-version '3.5.0-preview.17' -expect-one-click -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v${{ needs.windows.outputs.version }}/update.json' -version '${{ needs.windows.outputs.version }}' -emulator-fixture "$pwd/verification/ldfixture.exe" -out dist/live-gui-update.json
           if ($LASTEXITCODE) { throw 'Live GUI update test failed' }
       - name: Verify the new updater requires exactly one click and no confirmation
         shell: pwsh
@@ -154,6 +155,8 @@ jobs:
             dist/legacy-after.png
             dist/one-click-before.png
             dist/one-click-after.png
+            dist/published-before.png
+            dist/published-after.png
           if-no-files-found: ignore
 
   promote-channel:

@@ -105,6 +105,8 @@ type app struct {
 	updateResultDone                                  bool
 	updating                                          bool
 	startupBackupDone                                 bool
+	gameSelector                                      *gameSelector
+	roleInstanceKey                                   string
 }
 
 var active *app
@@ -158,8 +160,8 @@ func (a *app) button(s string, x, y, w, id int) { a.control("BUTTON", s, x, y, w
 func comboAdd(h uintptr, s string)              { sendMessage.Call(h, 0x143, 0, uintptr(unsafe.Pointer(utf(s)))) }
 func comboIndex(h uintptr) int                  { return int(int32(send(h, 0x147, 0, 0))) }
 func (a *app) build() {
-	a.label("MHX Studio "+version+"  |  一键在线更新验收版", 20, 15, 1000)
-	a.label("本轮只验证在线更新；保留preview.15的雷电检测和启动功能。", 20, 44, 1000)
+	a.label("MHX Studio "+version+"  |  单台启动游戏与指定角色测试版", 20, 15, 1000)
+	a.label("保留已验收更新及雷电功能；本轮只测单台登录，游戏功能尚待实机验收。", 20, 44, 1000)
 	a.label("雷电目录", 20, 83, 90)
 	a.control("EDIT", a.cfg.InstallDir, 115, 78, 610, 28, wsBorder, 201)
 	a.button("选择雷电程序", 740, 77, 140, 101)
@@ -181,6 +183,8 @@ func (a *app) build() {
 	a.button("保存设置", 440, 160, 110, 104)
 	a.button("单机闭环：5角色", 565, 160, 180, 105)
 	a.button("五开闭环测试", 760, 160, 150, 106)
+	user32.NewProc("EnableWindow").Call(a.controls[105], 0)
+	user32.NewProc("EnableWindow").Call(a.controls[106], 0)
 	a.button("停止", 925, 160, 80, 107)
 	a.label("标定页面", 20, 213, 90)
 	cal := a.control("COMBOBOX", "", 115, 205, 500, 380, 3|0x200000, 206)
@@ -202,8 +206,20 @@ func (a *app) build() {
 	a.button("启动本组5台", 720, 326, 190, 115)
 	a.button("检测详情", 925, 326, 80, 116)
 	a.control("STATIC", "正在自动查找雷电；已启动但 ADB 未就绪的实例也会显示。", 20, 373, 990, 25, 0, 208)
-	a.control("EDIT", "", 20, 405, 985, 300, wsBorder|0x200000|4|0x40|0x800, 900)
-	a.log("程序已启动。V3.3/V3.4 文件和数据未改动。当前版本未做用户 Windows + 雷电实机验收。")
+	a.label("目标角色", 20, 411, 80)
+	role := a.control("COMBOBOX", "", 100, 405, 65, 160, 3, 210)
+	for n := 1; n <= 5; n++ {
+		comboAdd(role, strconv.Itoa(n))
+	}
+	send(role, 0x14E, 0, 0)
+	a.button("启动游戏并进入角色", 180, 405, 215, 117)
+	a.button("仅启动游戏", 410, 405, 125, 118)
+	a.button("发现/绑定游戏", 550, 405, 145, 119)
+	a.button("查看异常截图", 710, 405, 140, 120)
+	a.button("标定指引", 865, 405, 140, 121)
+	a.control("STATIC", "游戏状态：未检查；选择实例和目标角色后开始。", 20, 448, 985, 40, 0, 211)
+	a.control("EDIT", "", 20, 495, 985, 210, wsBorder|0x200000|4|0x40|0x800, 900)
+	a.log("preview.17 更新、雷电发现、单台/五台启动与ADB已由用户实机验收；本版新增游戏功能尚待实机验收。")
 	a.log("当前版本 " + version + "：启动后自动搜索管理程序和ADB，空闲时每12秒刷新；已核验路径自动记住。具体路径与原因见“检测详情”。")
 	a.log("配置位置：" + a.root)
 }
@@ -215,6 +231,11 @@ func (a *app) work(f func(context.Context) error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	background := a.backgroundScan
+	if !background {
+		for _, id := range []int{117, 118, 119, 121} {
+			user32.NewProc("EnableWindow").Call(a.controls[id], 0)
+		}
+	}
 	go func() {
 		err := f(ctx)
 		cancel()
@@ -222,6 +243,10 @@ func (a *app) work(f func(context.Context) error) {
 			a.busy.Store(false)
 			a.cancel = nil
 			a.backgroundScan = false
+			for _, id := range []int{117, 118, 119, 121} {
+				user32.NewProc("EnableWindow").Call(a.controls[id], 1)
+			}
+			a.restoreTargetRole()
 			if err != nil && !(background && errors.Is(err, context.Canceled)) {
 				a.log("操作停止：" + err.Error())
 				if a.updating {
@@ -250,6 +275,9 @@ func (a *app) save() error {
 		return errors.New("重试次数必须是整数")
 	}
 	c.Retries = n
+	if d, e := a.selected(); e == nil {
+		c.TargetRoles[strconv.Itoa(d.Index)] = comboIndex(a.controls[210]) + 1
+	}
 	c.GroupStart, e = strconv.Atoi(strings.TrimSpace(text(a.controls[205])))
 	if e != nil {
 		return errors.New("五开首编号必须是整数")
@@ -571,7 +599,7 @@ func (a *app) handle(id int) {
 		return
 	}
 	if a.busy.Load() && id != 107 && id != 111 && id != 116 {
-		if (a.backgroundScan && id >= 101 && id <= 115) || id == 110 {
+		if (a.backgroundScan && id >= 101 && id <= 121) || id == 110 {
 			a.pendingAction = id
 			if a.cancel != nil {
 				a.cancel()
@@ -607,14 +635,15 @@ func (a *app) handle(id int) {
 			a.log("设置已保存，未知配置字段保留。")
 		}
 	case 105:
-		a.cycle(false)
+		a.info("当前阶段只验收单台、单个指定角色。请使用“启动游戏并进入角色”。")
 	case 106:
-		a.cycle(true)
+		a.info("五台游戏自动化暂缓，待单台实机验收后再开放。模拟器五台批量启动仍可使用。")
 	case 107:
 		a.pendingAction = 0
 		if a.cancel != nil {
 			a.cancel()
 			a.log("正在停止；不会再开始下一次点击。")
+			setText(a.controls[211], "已请求停止，等待当前ADB调用安全退出；不会开始下一步点击。")
 		}
 	case 108:
 		a.startCalibration()
@@ -625,7 +654,7 @@ func (a *app) handle(id int) {
 	case 111:
 		_ = exec.Command("explorer.exe", a.root).Start()
 	case 112:
-		a.info("当前只验收一键在线更新：\n点击“一键检查更新”，等待下载、校验、备份、重启及成功结果。\n没有更新时显示“当前已是最新版本”。\n\npreview.15旧程序首次升级仍有原确认弹窗；新版本取消该弹窗。\n雷电检测和启动保留；本轮不开发游戏内功能。\n详细验证记录见发行版测试报告。")
+		a.info("preview.17基础功能已由用户实机验收：在线升级、雷电24实例发现、单台和五台启动、ADB核验。\n新增只测试单台游戏启动与指定角色登录；先绑定当前游戏，再标定页面。\n未知或冲突画面停止，不执行任务、创建角色或换区。\n后续版本始终使用“一键检查更新”，保留配置及标定。\n真实机器故障回滚仍未验收。")
 	case 113:
 		a.pendingUpdates()
 	case 114:
@@ -634,6 +663,18 @@ func (a *app) handle(id int) {
 		a.startEmulators(true)
 	case 116:
 		a.detectionDetails()
+	case 117:
+		a.startGame(true)
+	case 118:
+		a.startGame(false)
+	case 119:
+		a.discoverGame(0)
+	case 120:
+		dir := filepath.Join(a.root, "diagnostics")
+		_ = os.MkdirAll(dir, 0700)
+		_ = exec.Command("explorer.exe", dir).Start()
+	case 121:
+		a.loginCalibrationGuide()
 	}
 }
 func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
@@ -641,13 +682,19 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 	if a != nil && a.cal != nil && h == a.cal.hwnd {
 		return a.cal.proc(h, m, w, l)
 	}
+	if a != nil && a.gameSelector != nil && h == a.gameSelector.hwnd {
+		return a.gameSelector.proc(h, m, w, l)
+	}
 	if a != nil && h == a.hwnd {
 		switch m {
 		case wmCommand:
 			// EDIT/COMBOBOX notifications also arrive as WM_COMMAND. Only user
 			// button clicks are actions; internal field refreshes must not log or queue work.
 			id := int(w & 0xffff)
-			if id >= 101 && id <= 116 && w>>16 == 0 {
+			if id == 202 && w>>16 == 1 {
+				a.restoreTargetRole()
+			}
+			if id >= 101 && id <= 121 && w>>16 == 0 {
 				a.handle(id)
 			}
 			return 0
@@ -747,7 +794,7 @@ func (a *app) tick() {
 	if a.updateResultPath != "" && !a.updateResultDone {
 		return
 	}
-	if !a.busy.Load() && a.cal == nil && !a.closing && time.Now().After(a.nextScan) {
+	if !a.busy.Load() && a.cal == nil && a.gameSelector == nil && !a.closing && time.Now().After(a.nextScan) {
 		a.detectInstances(false)
 	}
 }

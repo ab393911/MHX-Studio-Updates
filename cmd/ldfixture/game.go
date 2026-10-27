@@ -1,0 +1,111 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
+)
+
+// game-fixture.json and PNGs are synthetic CI data, never real game templates.
+type gameState struct {
+	Package, Activity, Foreground, Page string
+	Role                                int
+	Running, Stall, WrongRole           bool
+	Starts, Taps                        int
+}
+
+func gameCommand(root, command string) bool {
+	path := filepath.Join(root, "game-fixture.json")
+	var g gameState
+	if filesafe.ReadJSON(path, &g) != nil {
+		return false
+	}
+	if strings.Contains(command, "query-activities") {
+		fmt.Printf("com.android.launcher/.Launcher\n%s/%s\ncom.example.other/.Main\n", g.Package, g.Activity)
+		return true
+	}
+	if strings.Contains(command, "dumpsys activity") || strings.Contains(command, "dumpsys window") {
+		fmt.Printf("mResumedActivity: ActivityRecord{abc u0 %s/.Main t1}\n", g.Foreground)
+		return true
+	}
+	if strings.Contains(command, "pidof") {
+		if !g.Running {
+			os.Exit(1)
+		}
+		fmt.Println("12345")
+		return true
+	}
+	if strings.Contains(command, "am start") {
+		if !strings.Contains(command, g.Package+"/"+g.Activity) {
+			die(fmt.Errorf("wrong fixture package"))
+		}
+		g.Starts++
+		g.Running = true
+		g.Foreground = g.Package
+		die(filesafe.JSON(path, g))
+		fmt.Println("Status: ok")
+		return true
+	}
+	if strings.Contains(command, "screencap") {
+		b, e := os.ReadFile(filepath.Join(root, "screens", g.Page+".png"))
+		die(e)
+		_, e = os.Stdout.Write(b)
+		die(e)
+		return true
+	}
+	if strings.Contains(command, "input tap") {
+		fields := strings.Fields(command)
+		x, e := strconv.Atoi(fields[len(fields)-2])
+		die(e)
+		y, e := strconv.Atoi(fields[len(fields)-1])
+		die(e)
+		g.Taps++
+		if !g.Stall {
+			switch g.Page {
+			case "notice":
+				if x >= 465 && x <= 495 && y >= 470 && y <= 490 {
+					g.Page = "tree"
+				} else {
+					die(fmt.Errorf("bad notice tap"))
+				}
+			case "tree":
+				if x >= 735 && x <= 765 && y >= 395 && y <= 415 {
+					g.Page = "roles"
+				} else {
+					die(fmt.Errorf("bad tree tap"))
+				}
+			case "roles", "selected_1", "selected_2", "selected_3", "selected_4", "selected_5":
+				if x >= 125 && x <= 155 {
+					ys := []int{95, 169, 240, 311, 382}
+					n := 0
+					for i, cy := range ys {
+						if y >= cy-12 && y <= cy+12 {
+							n = i + 1
+						}
+					}
+					if n == 0 {
+						die(fmt.Errorf("bad role tap"))
+					}
+					g.Role = n
+					if g.WrongRole {
+						g.Role = n%5 + 1
+					}
+					g.Page = fmt.Sprintf("selected_%d", g.Role)
+				} else if x >= 835 && x <= 865 && y >= 478 && y <= 498 && g.Role > 0 {
+					g.Page = fmt.Sprintf("game_%d", g.Role)
+				} else {
+					die(fmt.Errorf("bad enter tap"))
+				}
+			default:
+				die(fmt.Errorf("unexpected game action in %s", g.Page))
+			}
+		}
+		die(filesafe.JSON(path, g))
+		return true
+	}
+	return false
+}
