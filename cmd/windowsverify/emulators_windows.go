@@ -124,8 +124,11 @@ func emulatorGUI(exe, fixture, version, outDir string) map[string]any {
 	until(h, "periodic refresh did not notice externally stopped instance", func() bool {
 		return strings.Contains(readText(control(h, 208)), "已运行 4 台，ADB 已验证 3 台")
 	})
+	if strings.Contains(readText(control(h, 900)), "操作进行中，请先停止或等待完成") {
+		fail(errors.New("internal control notifications were treated as user actions"))
+	}
 	fail(captureWindow(h, filepath.Join(outDir, "emulator-gui-preview.png")))
 	closeTitle(title)
 	fail(wait(app, 10*time.Second))
-	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "startup_process_path_discovery": true, "ten_column_inventory": true, "offline_instance_retained": true, "automatic_scan_does_not_save_config": true, "single_launch_button": true, "dynamic_group_6_to_10": true, "running_instances_not_relaunched": true, "missing_index_rejected_before_launch": true, "periodic_refresh": true, "cloned_android_id_with_unique_boot_ids": true}
+	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "startup_process_path_discovery": true, "ten_column_inventory": true, "offline_instance_retained": true, "automatic_scan_does_not_save_config": true, "single_launch_button": true, "dynamic_group_6_to_10": true, "running_instances_not_relaunched": true, "missing_index_rejected_before_launch": true, "periodic_refresh": true, "cloned_android_id_with_unique_boot_ids": true, "control_notifications_do_not_trigger_actions": true}
 }

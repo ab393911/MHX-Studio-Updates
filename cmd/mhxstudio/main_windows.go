@@ -623,7 +623,12 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 	if a != nil && h == a.hwnd {
 		switch m {
 		case wmCommand:
-			a.handle(int(w & 0xffff))
+			// EDIT/COMBOBOX notifications also arrive as WM_COMMAND. Only user
+			// button clicks are actions; internal field refreshes must not log or queue work.
+			id := int(w & 0xffff)
+			if id >= 101 && id <= 115 && w>>16 == 0 {
+				a.handle(id)
+			}
 			return 0
 		case wmApp:
 			for {
