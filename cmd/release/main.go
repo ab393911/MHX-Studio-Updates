@@ -60,7 +60,7 @@ func main() {
 	fail(e)
 	st, e := os.Stat(*exe)
 	fail(e)
-	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "优先修复雷电自动发现：搜索管理程序、独立ADB及本机ADB服务，记住已核验目录，提供检测详情。不猜测实例编号。Windows自动测试使用接口模拟，真实雷电尚待实机验收；更新保留配置与旧版备份。", SourceCommit: *commit, WindowsTested: false}
+	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "一键在线更新验收版：新版本取消更新二次确认，增加配置快照、回滚恢复及重启后成功提示；保留preview.15雷电检测和启动。首次从旧preview.15升级仍需其原确认框，配置快照由新程序在健康确认前补建；后续升级在替换前备份。", SourceCommit: *commit, WindowsTested: false}
 	fail(m.Validate())
 	fail(os.MkdirAll(*out, 0700))
 	fail(filesafe.JSON(filepath.Join(*out, "update.json"), m))
@@ -82,6 +82,7 @@ func main() {
 	add("docs/START_HERE.txt", "START_HERE.txt")
 	add("docs/TESTING.md", "TESTING.md")
 	add("docs/SOURCE_INVENTORY.md", "SOURCE_INVENTORY.md")
+	add("docs/ONLINE_UPDATE_ACCEPTANCE.md", "ONLINE_UPDATE_ACCEPTANCE.md")
 	add(filepath.Join(*out, "update.json"), "update.json")
 	add(filepath.Join(*out, "SHA256SUMS.txt"), "SHA256SUMS.txt")
 	if *report != "" {

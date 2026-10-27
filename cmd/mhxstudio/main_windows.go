@@ -101,6 +101,10 @@ type app struct {
 	groupSeeded                                       bool
 	backgroundScan                                    bool
 	pendingAction                                     int
+	updateResultPath                                  string
+	updateResultDone                                  bool
+	updating                                          bool
+	startupBackupDone                                 bool
 }
 
 var active *app
@@ -154,8 +158,8 @@ func (a *app) button(s string, x, y, w, id int) { a.control("BUTTON", s, x, y, w
 func comboAdd(h uintptr, s string)              { sendMessage.Call(h, 0x143, 0, uintptr(unsafe.Pointer(utf(s)))) }
 func comboIndex(h uintptr) int                  { return int(int32(send(h, 0x147, 0, 0))) }
 func (a *app) build() {
-	a.label("MHX Studio "+version+"  |  雷电自动发现修复与登录验证版", 20, 15, 1000)
-	a.label("战斗未开发；登录流程需标定和实机验收；测试不会记录任务完成或自动换区。", 20, 44, 1000)
+	a.label("MHX Studio "+version+"  |  一键在线更新验收版", 20, 15, 1000)
+	a.label("本轮只验证在线更新；保留preview.15的雷电检测和启动功能。", 20, 44, 1000)
 	a.label("雷电目录", 20, 83, 90)
 	a.control("EDIT", a.cfg.InstallDir, 115, 78, 610, 28, wsBorder, 201)
 	a.button("选择雷电程序", 740, 77, 140, 101)
@@ -188,8 +192,9 @@ func (a *app) build() {
 	a.button("只检查当前识别", 825, 204, 180, 109)
 	a.label("更新清单", 20, 256, 90)
 	a.control("EDIT", a.cfg.ManifestURL, 115, 250, 710, 28, wsBorder, 207)
-	a.button("一键检查并更新", 840, 248, 165, 110)
-	a.label("正常截图仅存内存，最多2帧/设备、总计32 MiB；异常截图在本机保留最多20组。", 20, 295, 990)
+	a.button("一键检查更新", 840, 248, 165, 110)
+	a.control("STATIC", "点击一次即可检查并自动完成可用更新，旧EXE及配置会备份。", 20, 282, 990, 20, 0, 209)
+	a.control("STATIC", "正常截图仅存内存，最多2帧/设备、总计32 MiB；异常截图在本机保留最多20组。", 20, 305, 990, 18, 0, 0)
 	a.button("打开数据目录", 20, 326, 140, 111)
 	a.button("查看验收说明", 175, 326, 140, 112)
 	a.button("检查未完成更新", 330, 326, 170, 113)
@@ -219,7 +224,11 @@ func (a *app) work(f func(context.Context) error) {
 			a.backgroundScan = false
 			if err != nil && !(background && errors.Is(err, context.Canceled)) {
 				a.log("操作停止：" + err.Error())
+				if a.updating {
+					setText(a.controls[209], "更新未完成："+err.Error())
+				}
 			}
+			a.updating = false
 			if a.closing {
 				destroyWindow.Call(a.hwnd)
 				return
@@ -472,33 +481,24 @@ func (a *app) checkRecognition() {
 	})
 }
 func (a *app) onlineUpdate() {
-	if e := a.save(); e != nil {
-		a.log(e.Error())
-		return
+	// Updating preserves the saved configuration verbatim and must not depend
+	// on unfinished edits in unrelated game/emulator controls.
+	raw := strings.TrimSpace(text(a.controls[207]))
+	if raw == "" {
+		raw = a.cfg.ManifestURL
 	}
-	raw := a.cfg.ManifestURL
+	a.updating = true
 	a.work(func(ctx context.Context) error {
-		a.logAsync("正在获取更新清单……")
+		a.updateLog("正在检查新版本……")
 		m, newer, e := update.Check(ctx, update.Client(), raw, version)
 		if e != nil {
 			return fmt.Errorf("更新检查失败，当前程序未改动：%w", e)
 		}
 		if !newer {
-			a.logAsync("已核对清单：当前版本 " + version + "，服务器版本 " + m.Version + "，无需更新。")
+			a.updateLog("当前已是最新版本（" + version + "）。")
 			return nil
 		}
-		reply := make(chan bool, 1)
-		a.ui(func() {
-			reply <- a.ask(fmt.Sprintf("发现版本 %s\n%s\n\n下载并校验后，将保留当前 EXE 备份，再替换本程序；配置保持原位。\n新程序未通过启动检查时会自动回滚。\n确认更新？", m.Version, m.Notes))
-		})
-		select {
-		case ok := <-reply:
-			if !ok {
-				return nil
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		a.updateLog("发现新版本 " + m.Version + "，正在自动下载并校验SHA-256……")
 		target, e := os.Executable()
 		if e != nil {
 			return e
@@ -511,12 +511,15 @@ func (a *app) onlineUpdate() {
 		if e != nil {
 			return e
 		}
-		a.logAsync("正在下载；下载中断或 SHA-256 不符时不会替换主程序。")
 		stage, e := update.Download(ctx, update.Client(), m, tx)
 		if e != nil {
 			return e
 		}
 		plan, e := update.NewPlan(target, stage, m.Version, m.SHA256)
+		if e != nil {
+			return e
+		}
+		plan, e = update.WithConfig(plan, a.root)
 		if e != nil {
 			return e
 		}
@@ -536,7 +539,7 @@ func (a *app) onlineUpdate() {
 			return e
 		}
 		a.ui(func() {
-			a.log("SHA-256 和 Windows x64 文件结构检查通过，正在退出并备份替换。备份：" + plan.Backup)
+			a.log("校验通过，正在安全退出，由独立更新器备份EXE和配置、替换并重启。备份：" + plan.Backup)
 			destroyWindow.Call(a.hwnd)
 		})
 		return nil
@@ -563,13 +566,21 @@ func (a *app) pendingUpdates() {
 	}
 }
 func (a *app) handle(id int) {
+	if a.updateResultPath != "" && !a.updateResultDone && id != 111 && id != 116 {
+		a.log("正在确认升级结果，请稍候。")
+		return
+	}
 	if a.busy.Load() && id != 107 && id != 111 && id != 116 {
-		if a.backgroundScan && id >= 101 && id <= 115 {
+		if (a.backgroundScan && id >= 101 && id <= 115) || id == 110 {
 			a.pendingAction = id
 			if a.cancel != nil {
 				a.cancel()
 			}
-			a.log("正在结束后台检测，随后执行所选操作。")
+			if id == 110 {
+				a.log("正在安全结束当前操作，随后自动检查更新。")
+			} else {
+				a.log("正在结束后台检测，随后执行所选操作。")
+			}
 			return
 		}
 		a.log("操作进行中，请先停止或等待完成。")
@@ -614,7 +625,7 @@ func (a *app) handle(id int) {
 	case 111:
 		_ = exec.Command("explorer.exe", a.root).Start()
 	case 112:
-		a.info("测试顺序：\n1. 新文件夹运行，保留旧版。\n2. 程序自动查找雷电并检测实例；找不到时选择控制台程序。\n3. 可选择未启动实例并点“启动当前模拟器”；五开填实际首编号后点“启动本组5台”。\n4. 核对已运行和ADB已验证数量，再人工绑定职业和标定。\n5. 先检查识别，再测单机五角色闭环；五台分别通过后再五开。\n6. 更新先确认，再备份替换。\n\n雷电检测/启动按钮的Windows自动测试使用测试替身；真实雷电仍需实测。\n本版不执行战斗或自动换区；跳过任务不算完成。\n详细步骤见发行包内TESTING.md。")
+		a.info("当前只验收一键在线更新：\n点击“一键检查更新”，等待下载、校验、备份、重启及成功结果。\n没有更新时显示“当前已是最新版本”。\n\npreview.15旧程序首次升级仍有原确认弹窗；新版本取消该弹窗。\n雷电检测和启动保留；本轮不开发游戏内功能。\n详细验证记录见发行版测试报告。")
 	case 113:
 		a.pendingUpdates()
 	case 114:
@@ -697,14 +708,36 @@ func (a *app) tick() {
 		if e != nil {
 			return
 		}
+		if !a.startupBackupDone {
+			var plan update.Plan
+			if e = filesafe.ReadJSON(filepath.Join(filepath.Dir(a.healthPath), "plan.json"), &plan); e != nil {
+				a.log("无法读取更新事务：" + e.Error())
+				return
+			}
+			if plan.Token != a.healthToken || plan.Version != version || !strings.EqualFold(plan.NewSHA, hash) || !strings.EqualFold(plan.Target, exe) {
+				a.log("更新事务与当前程序不匹配，未确认健康状态。")
+				return
+			}
+			backup, e := update.EnsureStartupConfigBackup(plan, a.root)
+			if e != nil {
+				a.log("配置备份核对失败：" + e.Error())
+				return
+			}
+			a.startupBackupDone = true
+			a.log("配置快照已核对：" + backup)
+		}
 		if e = filesafe.JSON(a.healthPath, update.Receipt{Version: version, Token: a.healthToken, SHA256: hash}); e != nil {
 			a.log("健康确认写入失败：" + e.Error())
 		}
 	}
 	a.healthDone = true
+	a.pollUpdateResult()
 	if a.smokePath != "" {
 		_ = filesafe.JSON(a.smokePath, map[string]any{"version": version, "source_commit": sourceCommit, "window_created": a.hwnd != 0, "message_loop": true, "controls": len(a.controls), "windows_game_tested": false})
 		destroyWindow.Call(a.hwnd)
+		return
+	}
+	if a.updateResultPath != "" && !a.updateResultDone {
 		return
 	}
 	if !a.busy.Load() && a.cal == nil && !a.closing && time.Now().After(a.nextScan) {
@@ -801,6 +834,10 @@ func main() {
 		return
 	}
 	a := &app{controls: map[int]uintptr{}, actions: make(chan func(), 512), root: data, cfg: cfg, cache: automation.NewCache(2, 32<<20), healthPath: receipt, healthToken: token, healthVersion: healthVersion, smokePath: smoke}
+	if result == "" && receipt != "" {
+		result = filepath.Join(filepath.Dir(receipt), "result.json")
+	}
+	a.updateResultPath = result
 	if receipt != "" {
 		a.nextScan = time.Now().Add(4 * time.Second)
 	}
@@ -824,10 +861,8 @@ func main() {
 	a.hwnd = h
 	a.build()
 	if result != "" {
-		var r update.Result
-		if filesafe.ReadJSON(result, &r) == nil {
-			a.log("上次更新：" + r.Status + "；" + r.Detail + "；备份 " + r.Backup)
-		}
+		setText(a.controls[209], "新版本已启动，正在完成健康检查并确认升级结果……")
+		a.pollUpdateResult()
 	}
 	setTimer.Call(h, 1, 1200, 0)
 	var m msg

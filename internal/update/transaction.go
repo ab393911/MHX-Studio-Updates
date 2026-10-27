@@ -15,14 +15,16 @@ import (
 )
 
 type Plan struct {
-	Target    string `json:"target"`
-	Stage     string `json:"stage"`
-	Backup    string `json:"backup"`
-	OldSHA    string `json:"old_sha256"`
-	NewSHA    string `json:"new_sha256"`
-	Version   string `json:"version"`
-	Token     string `json:"token"`
-	ParentPID int    `json:"parent_pid"`
+	Target       string `json:"target"`
+	Stage        string `json:"stage"`
+	Backup       string `json:"backup"`
+	OldSHA       string `json:"old_sha256"`
+	NewSHA       string `json:"new_sha256"`
+	Version      string `json:"version"`
+	Token        string `json:"token"`
+	ParentPID    int    `json:"parent_pid"`
+	DataRoot     string `json:"data_root,omitempty"`
+	ConfigBackup string `json:"config_backup,omitempty"`
 }
 type Receipt struct {
 	Version string `json:"version"`
@@ -30,10 +32,11 @@ type Receipt struct {
 	SHA256  string `json:"sha256"`
 }
 type Result struct {
-	Status  string `json:"status"`
-	Detail  string `json:"detail"`
-	Backup  string `json:"backup"`
-	Version string `json:"version"`
+	Status       string `json:"status"`
+	Detail       string `json:"detail"`
+	Backup       string `json:"backup"`
+	Version      string `json:"version"`
+	ConfigBackup string `json:"config_backup,omitempty"`
 }
 
 // Runtime owns OS-specific child process and parent-exit handling.
@@ -46,6 +49,7 @@ type Installer struct {
 	Runtime       Runtime
 	Rename        func(string, string) error
 	HealthTimeout time.Duration
+	StableFor     time.Duration
 }
 
 func NewToken() string {
@@ -108,6 +112,12 @@ func (p Plan) validate(recovery bool) error {
 		return e
 	}
 	paths := []string{root, filepath.Dir(dir), dir, filepath.Dir(p.Backup)}
+	if p.DataRoot != "" || p.ConfigBackup != "" {
+		if !filepath.IsAbs(p.DataRoot) || filepath.Clean(p.DataRoot) != p.DataRoot || p.ConfigBackup != p.ConfigBackupPath() {
+			return errors.New("invalid configuration backup location")
+		}
+		paths = append(paths, p.DataRoot)
+	}
 	if recovery {
 		paths = append(paths, p.Backup)
 	} else {
@@ -136,7 +146,31 @@ func (i Installer) rename(a, b string) error {
 	return os.Rename(a, b)
 }
 func (i Installer) result(p Plan, status, detail string) error {
-	return filesafe.JSON(filepath.Join(p.Dir(), "result.json"), Result{status, detail, p.Backup, p.Version})
+	backup := p.Backup
+	if _, e := os.Stat(backup); e != nil {
+		backup = ""
+	}
+	config := p.ConfigBackup
+	if config != "" {
+		if _, e := os.Stat(filepath.Join(config, "manifest.json")); e != nil {
+			config = ""
+		}
+	}
+	return filesafe.JSON(filepath.Join(p.Dir(), "result.json"), Result{Status: status, Detail: detail, Backup: backup, Version: p.Version, ConfigBackup: config})
+}
+func (i Installer) unchanged(p Plan, cause error) error {
+	e := i.result(p, "unchanged", cause.Error())
+	if verify := Verify(p.Target, p.OldSHA); verify != nil {
+		return errors.Join(cause, e, verify)
+	}
+	_, launch := i.Runtime.Launch(p.Target, p.launchArgs("--update-result", filepath.Join(p.Dir(), "result.json"))...)
+	return errors.Join(cause, e, launch)
+}
+func (p Plan) launchArgs(args ...string) []string {
+	if p.DataRoot != "" {
+		args = append(args, "--data-dir", p.DataRoot)
+	}
+	return args
 }
 func (i Installer) Install(ctx context.Context, p Plan) error {
 	if i.Runtime == nil {
@@ -156,16 +190,21 @@ func (i Installer) Install(ctx context.Context, p Plan) error {
 		return errors.Join(e, i.result(p, "unchanged", e.Error()))
 	}
 	if e = Verify(p.Stage, p.NewSHA); e != nil {
-		return errors.Join(e, i.result(p, "unchanged", e.Error()))
+		return i.unchanged(p, e)
 	}
 	if e = ValidateEXE(p.Stage); e != nil {
-		return errors.Join(e, i.result(p, "unchanged", e.Error()))
+		return i.unchanged(p, e)
+	}
+	if p.DataRoot != "" {
+		if e = BackupConfig(p.DataRoot, p.ConfigBackup, p.Token); e != nil {
+			return i.unchanged(p, fmt.Errorf("configuration backup failed: %w", e))
+		}
 	}
 	if e = i.result(p, "prepared", ""); e != nil {
 		return e
 	}
 	if e = i.rename(p.Target, p.Backup); e != nil {
-		return errors.Join(e, i.result(p, "unchanged", e.Error()))
+		return i.unchanged(p, e)
 	}
 	if e = i.result(p, "backed_up", ""); e != nil {
 		return i.rollback(p, e)
@@ -177,7 +216,7 @@ func (i Installer) Install(ctx context.Context, p Plan) error {
 		return i.rollback(p, e)
 	}
 	receiptPath := filepath.Join(p.Dir(), "health.json")
-	child, e := i.Runtime.Launch(p.Target, "--health-receipt", receiptPath, "--health-token", p.Token, "--health-version", p.Version)
+	child, e := i.Runtime.Launch(p.Target, p.launchArgs("--health-receipt", receiptPath, "--health-token", p.Token, "--health-version", p.Version, "--update-result", filepath.Join(p.Dir(), "result.json"))...)
 	if e != nil {
 		return i.rollback(p, fmt.Errorf("launch new EXE: %w", e))
 	}
@@ -193,11 +232,26 @@ func (i Installer) Install(ctx context.Context, p Plan) error {
 	if observer, ok := child.(interface{ Exited() <-chan struct{} }); ok {
 		exited = observer.Exited()
 	}
+	stableFor := i.StableFor
+	if stableFor <= 0 {
+		stableFor = 700 * time.Millisecond
+	}
+	var healthySince time.Time
 	for {
+		select {
+		case <-exited:
+			return i.rollback(p, errors.New("new EXE exited before GUI startup health check"))
+		default:
+		}
 		var r Receipt
 		if filesafe.ReadJSON(receiptPath, &r) == nil && r.Version == p.Version && r.Token == p.Token && strings.EqualFold(r.SHA256, p.NewSHA) {
 			if e = Verify(p.Target, p.NewSHA); e == nil {
-				return i.result(p, "committed", "window created and message loop acknowledged; backup retained")
+				if healthySince.IsZero() {
+					healthySince = time.Now()
+				}
+				if time.Since(healthySince) >= stableFor {
+					return i.result(p, "committed", "GUI startup health verified; EXE and configuration backups retained")
+				}
 			}
 		}
 		select {
@@ -230,11 +284,16 @@ func (i Installer) rollback(p Plan, cause error) error {
 	if e := Verify(restored, p.OldSHA); e != nil {
 		return errors.Join(cause, e, i.result(p, "recovery_required", e.Error()))
 	}
+	if p.DataRoot != "" {
+		if e := RestoreConfig(p.ConfigBackup, p.DataRoot, p.Token); e != nil {
+			return errors.Join(cause, e, i.result(p, "recovery_required", "configuration restore failed; all backups retained"))
+		}
+	}
 	if e := i.rename(restored, p.Target); e != nil {
 		return errors.Join(cause, e, i.result(p, "recovery_required", e.Error()))
 	}
 	e := i.result(p, "rolled_back", cause.Error())
-	_, launchErr := i.Runtime.Launch(p.Target, "--update-result", filepath.Join(p.Dir(), "result.json"))
+	_, launchErr := i.Runtime.Launch(p.Target, p.launchArgs("--update-result", filepath.Join(p.Dir(), "result.json"))...)
 	return errors.Join(cause, e, launchErr)
 }
 
@@ -256,6 +315,11 @@ func (i Installer) Recover(p Plan) error {
 	}
 	if e := Verify(restored, p.OldSHA); e != nil {
 		return e
+	}
+	if p.DataRoot != "" {
+		if e := RestoreConfig(p.ConfigBackup, p.DataRoot, p.Token); e != nil {
+			return e
+		}
 	}
 	if e := i.rename(restored, p.Target); e != nil {
 		return e

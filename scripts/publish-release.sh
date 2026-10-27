@@ -5,13 +5,13 @@ notes_file="${RUNNER_TEMP}/mhx-release-notes.md"
 cat > "$notes_file" <<EOF
 Windows x64 原生图形界面测试版 ${MHX_VERSION}
 
-来自提交 ${GITHUB_SHA}。已执行 Windows 自动测试：GUI 窗口和消息循环、实际 EXE 备份替换、启动超时回滚、哈希篡改拒绝安装、文件占用保护和配置原字节保留。
+来自提交 ${GITHUB_SHA}。已执行Windows自动测试：GUI、EXE备份替换、配置快照、启动超时/退出回滚、失败版本改写配置后的恢复、SHA篡改拒绝和文件占用保护。
 
-雷电自动发现修复：启动时搜索管理程序、独立ADB和本机ADB服务；包含D:\\LDPlayer14候选但不假设存在；有效目录单独保存；检测详情列出已检查路径和失败原因。没有管理程序时也能按真实ADB序列号显示设备，实例编号不明确时停用游戏控制。保留7/10列列表解析及单台/本组启动。Windows测试使用命令行和ADB协议测试替身，不代表真实雷电实机已验证。
+本轮只验收一键更新，保留用户已在真实Windows验收的preview.15雷电检测和启动实现。新版点击“一键检查更新”后自动检查、下载、SHA-256校验、备份、替换、重启和显示结果，无需浏览器、ZIP或命令。没有更新时显示“当前已是最新版本”。
 
-真实 Windows + 雷电 + 游戏登录流程尚未验收。需按 TESTING.md 对每台实例标定并先测单机，再测五开。不含战斗或自动换区。
+首次从preview.15升级仍需旧EXE原有的一次确认；旧15的配置快照由新GUI在健康确认前补建。后续版本取消二次确认，并在替换前备份配置。发布通道只有在真实已发布15的升级及新更新器零确认测试均通过后才推进；后两份JSON报告随后追加。升级后24实例检测/启动使用CI接口模拟，仍需用户新版本实机验收。
 
-请解压到新文件夹，保留 V3.3/V3.4。发行版不会覆盖已有发布资产。
+用户当前只需在preview.15点击更新并完成首次旧确认，等待自动重启。保留所有旧版和备份，不要求手动解压。用户电脑升级验收完成前暂停其他游戏功能开发。发行版不覆盖已有发布资产。
 EOF
 gh release create "$tag" dist/MHXStudio.exe dist/MHXStudio-Windows-x64.zip dist/update.json dist/SHA256SUMS.txt dist/windows-tests.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "MHX Studio ${MHX_VERSION} (preview)" --notes-file "$notes_file" --prerelease --draft
 gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false

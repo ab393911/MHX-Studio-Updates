@@ -70,13 +70,15 @@ func (c *fakeChild) Stop() error             { c.stopped = true; return nil }
 func (c *fakeChild) Exited() <-chan struct{} { return c.exited }
 
 type fakeRuntime struct {
-	p          Plan
-	health     bool
-	launchFail bool
-	parentFail bool
-	earlyExit  bool
-	launches   int
-	child      fakeChild
+	p                Plan
+	health           bool
+	launchFail       bool
+	parentFail       bool
+	earlyExit        bool
+	launches         int
+	child            fakeChild
+	mutateConfig     bool
+	exitAfterReceipt bool
 }
 
 func (r *fakeRuntime) WaitParent(context.Context, int) error {
@@ -97,6 +99,16 @@ func (r *fakeRuntime) Launch(_ string, args ...string) (Child, error) {
 	}
 	if r.health && r.launches == 1 {
 		filesafe.JSON(args[1], Receipt{r.p.Version, r.p.Token, r.p.NewSHA})
+	}
+	if r.launches == 1 && r.mutateConfig {
+		_ = os.WriteFile(filepath.Join(r.p.DataRoot, "config.json"), []byte("failed migration"), 0600)
+		_ = os.MkdirAll(filepath.Join(r.p.DataRoot, "profiles"), 0700)
+		_ = os.WriteFile(filepath.Join(r.p.DataRoot, "profiles", "new.json"), []byte("partial"), 0600)
+	}
+	if r.launches == 1 && r.exitAfterReceipt {
+		ch := make(chan struct{})
+		close(ch)
+		r.child.exited = ch
 	}
 	return &r.child, nil
 }

@@ -32,6 +32,13 @@ jobs:
       version: ${{ steps.build.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+      - name: Preserve the user-verified preview.15 emulator implementation
+        shell: pwsh
+        run: |
+          git fetch --no-tags --depth=1 origin 6fba48321210ce7692a3d11caab00bc7f62d7cc8
+          if ($LASTEXITCODE) { throw 'Cannot fetch accepted emulator source baseline' }
+          git diff --exit-code 6fba48321210ce7692a3d11caab00bc7f62d7cc8 HEAD -- internal/ldplayer internal/automation cmd/mhxstudio/config.go cmd/mhxstudio/emulators_windows.go cmd/mhxstudio/discovery_store.go cmd/mhxstudio/calibration_windows.go cmd/mhxstudio/runtime_windows.go
+          if ($LASTEXITCODE) { throw 'Accepted emulator implementation was changed during updater-only development' }
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.10'
@@ -77,6 +84,8 @@ jobs:
             dist/windows-tests.json
             dist/emulator-gui-preview.png
             dist/adb-fallback-gui-preview.png
+            dist/old-test.exe
+            dist/ldfixture.exe
           if-no-files-found: error
 
   publish:
@@ -116,22 +125,35 @@ jobs:
         with:
           go-version: '1.26.10'
           cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: MHXStudio-Windows-x64
+          path: verification
       - name: Exercise the published previous EXE against the candidate manifest
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           $env:CGO_ENABLED = '0'
-          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.7/MHXStudio.exe' -OutFile dist/previous-release.exe
-          if ((Get-FileHash dist/previous-release.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'c251850d2204b5c9dbd85ba54e1a3d0871c14edec0a601ca010dc1f31673e747') { throw 'Published baseline SHA-256 mismatch' }
-          go run ./cmd/windowsverify -old "$pwd/dist/previous-release.exe" -old-version '3.5.0-preview.7' -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v${{ needs.windows.outputs.version }}/update.json' -version '${{ needs.windows.outputs.version }}' -out dist/live-gui-update.json
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.15/MHXStudio.exe' -OutFile dist/previous-release.exe
+          if ((Get-FileHash dist/previous-release.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'cdad473fea5b7ed1c22d9d364112e5afecf174756b5557a0a7668881153c31d5') { throw 'Published baseline SHA-256 mismatch' }
+          go run ./cmd/windowsverify -old "$pwd/dist/previous-release.exe" -old-version '3.5.0-preview.15' -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v${{ needs.windows.outputs.version }}/update.json' -version '${{ needs.windows.outputs.version }}' -emulator-fixture "$pwd/verification/ldfixture.exe" -out dist/live-gui-update.json
           if ($LASTEXITCODE) { throw 'Live GUI update test failed' }
+      - name: Verify the new updater requires exactly one click and no confirmation
+        shell: pwsh
+        run: |
+          go run ./cmd/windowsverify -old "$pwd/verification/old-test.exe" -old-version '3.4.999' -expect-one-click -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v${{ needs.windows.outputs.version }}/update.json' -version '${{ needs.windows.outputs.version }}' -emulator-fixture "$pwd/verification/ldfixture.exe" -out dist/one-click-gui-update.json
+          if ($LASTEXITCODE) { throw 'One-click GUI update test failed' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: live-gui-update-verification
           path: |
             dist/live-gui-update.json
-            dist/gui-preview.png
+            dist/one-click-gui-update.json
+            dist/legacy-before.png
+            dist/legacy-after.png
+            dist/one-click-before.png
+            dist/one-click-after.png
           if-no-files-found: ignore
 
   promote-channel:

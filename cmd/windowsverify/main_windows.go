@@ -80,12 +80,13 @@ func main() {
 	out := flag.String("out", "dist/windows-tests.json", "")
 	live := flag.String("live-update", "", "")
 	oldVersion := flag.String("old-version", "3.4.999", "")
+	oneClick := flag.Bool("expect-one-click", false, "")
 	flag.Parse()
 	if *live != "" {
 		if *old == "" || *version == "" {
 			fail(errors.New("old EXE and expected version required"))
 		}
-		liveUpdate(*old, *oldVersion, *live, *version, *out)
+		liveUpdate(*old, *oldVersion, *live, *version, *out, *emulatorFixture, *oneClick)
 		return
 	}
 	if *old == "" || *newExe == "" || *version == "" {
@@ -116,7 +117,7 @@ func main() {
 	}
 	scenarios := []string{"success", "startup_timeout", "sha_tamper", "sharing_violation"}
 	if *exitExe != "" {
-		scenarios = append(scenarios, "immediate_exit")
+		scenarios = append(scenarios, "immediate_exit", "config_migration_exit")
 	}
 	for _, scenario := range scenarios {
 		fmt.Println("Native Windows update scenario:", scenario)
@@ -127,7 +128,7 @@ func main() {
 		tx := filepath.Join(folder, ".mhx-updates", "tx-native")
 		fail(os.MkdirAll(tx, 0700))
 		stage := filepath.Join(tx, "package.exe")
-		if scenario == "immediate_exit" {
+		if scenario == "immediate_exit" || scenario == "config_migration_exit" {
 			copyFile(*exitExe, stage)
 		} else {
 			copyFile(*newExe, stage)
@@ -135,6 +136,8 @@ func main() {
 		hash, e := update.Hash(stage)
 		fail(e)
 		p, e := update.NewPlan(target, stage, *version, hash)
+		fail(e)
+		p, e = update.WithConfig(p, filepath.Dir(cfg))
 		fail(e)
 		parentReport := filepath.Join(folder, "parent-smoke.json")
 		parent := start(target, "--smoke-test", parentReport)
@@ -158,7 +161,11 @@ func main() {
 			fail(e)
 			fail(f.Close())
 		}
+		if scenario == "config_migration_exit" {
+			fail(os.Setenv("MHX_TEST_MUTATE_CONFIG", "1"))
+		}
 		helperCmd := start(helper, "--apply-update", filepath.Join(tx, "plan.json"))
+		fail(os.Unsetenv("MHX_TEST_MUTATE_CONFIG"))
 		fail(wait(parent, 20*time.Second))
 		helperErr := wait(helperCmd, 50*time.Second)
 		if lock != 0 {
@@ -175,7 +182,7 @@ func main() {
 			fail(update.Verify(p.Backup, p.OldSHA))
 			fail(waitWindow("知夏 · MHX Studio " + *version))
 			closeTitle("知夏 · MHX Studio " + *version)
-		case "startup_timeout", "immediate_exit":
+		case "startup_timeout", "immediate_exit", "config_migration_exit":
 			if result.Status != "rolled_back" {
 				fail(fmt.Errorf("rollback failed: %+v", result))
 			}
@@ -188,13 +195,26 @@ func main() {
 				fail(fmt.Errorf("preflight protection failed: %+v %v", result, helperErr))
 			}
 			fail(update.Verify(target, p.OldSHA))
+			fail(waitWindow("知夏 · MHX Studio 3.4.999"))
+			closeTitle("知夏 · MHX Studio 3.4.999")
 		}
 		b, e := os.ReadFile(cfg)
 		fail(e)
 		if string(b) != string(sentinel) {
 			fail(errors.New("configuration bytes changed during update"))
 		}
-		results[scenario] = map[string]any{"passed": true, "status": result.Status, "config_unchanged": true, "backup_retained": scenario == "success" || scenario == "startup_timeout" || scenario == "immediate_exit"}
+		configBacked := false
+		if scenario != "sha_tamper" {
+			_, e = update.ReadConfigBackup(p.ConfigBackup, p.DataRoot, p.Token)
+			fail(e)
+			configBacked = true
+		}
+		if scenario == "config_migration_exit" {
+			if _, e = os.Stat(filepath.Join(filepath.Dir(cfg), "profiles", "partial-new.json")); !os.IsNotExist(e) {
+				fail(errors.New("failed migration remains active"))
+			}
+		}
+		results[scenario] = map[string]any{"passed": true, "status": result.Status, "config_unchanged": true, "configuration_snapshot_verified": configBacked, "backup_retained": scenario == "success" || scenario == "startup_timeout" || scenario == "immediate_exit" || scenario == "config_migration_exit"}
 	}
 	// Also prove settings saves preserve unknown fields (unit tests cover detail).
 	results["passed"] = true
