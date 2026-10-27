@@ -75,6 +75,7 @@ func main() {
 	old := flag.String("old", "", "")
 	newExe := flag.String("new", "", "")
 	exitExe := flag.String("exit-fixture", "", "")
+	emulatorFixture := flag.String("emulator-fixture", "", "")
 	version := flag.String("version", "", "")
 	out := flag.String("out", "dist/windows-tests.json", "")
 	live := flag.String("live-update", "", "")
@@ -109,6 +110,9 @@ func main() {
 		fail(errors.New("native GUI smoke test failed"))
 	}
 	results := map[string]any{"native_windows": true, "arch": "amd64", "gui_smoke": sm, "windows_game_tested": false, "version": *version}
+	if *emulatorFixture != "" {
+		results["emulator_gui_fixture"] = emulatorGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
+	}
 	scenarios := []string{"success", "startup_timeout", "sha_tamper", "sharing_violation"}
 	if *exitExe != "" {
 		scenarios = append(scenarios, "immediate_exit")

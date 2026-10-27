@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -16,15 +15,19 @@ import (
 )
 
 type Instance struct {
-	Index      int
-	Name       string
-	TopWindow  uint64
-	BindWindow uint64
-	Android    bool
-	PID        int
-	Serial     string
-	AndroidID  string
+	Index           int
+	Name            string
+	TopWindow       uint64
+	BindWindow      uint64
+	Android         bool
+	PID             int
+	Serial          string
+	AndroidID       string
+	BootID          string
+	ConnectionError string
 }
+
+func (d Instance) Running() bool { return d.PID > 0 || d.TopWindow != 0 || d.BindWindow != 0 }
 
 func ParseList2(text string) ([]Instance, error) {
 	text = strings.TrimPrefix(text, "\ufeff")
@@ -44,11 +47,12 @@ func ParseList2(text string) ([]Instance, error) {
 		if len(row) == 1 && strings.TrimSpace(row[0]) == "" {
 			continue
 		}
-		if len(row) != 7 {
+		// LDPlayer 9/14 can append width, height and DPI to the original seven fields.
+		if len(row) < 7 || len(row) > 10 {
 			return nil, fmt.Errorf("unexpected list2 row with %d fields", len(row))
 		}
 		n, e := strconv.Atoi(strings.TrimSpace(row[0]))
-		if e != nil || n < 0 {
+		if e != nil || n < 0 || n >= 99999 {
 			return nil, errors.New("invalid LDPlayer instance index")
 		}
 		if seen[n] {
@@ -98,7 +102,17 @@ type Runner interface {
 type OSRunner struct{}
 
 func (OSRunner) Run(ctx context.Context, exe string, args ...string) ([]byte, error) {
+	if strings.ContainsAny(exe, `/\`) && !filepath.IsAbs(exe) {
+		p, e := filepath.Abs(exe)
+		if e != nil {
+			return nil, e
+		}
+		exe = p
+	}
 	cmd := exec.CommandContext(ctx, exe, args...)
+	if filepath.IsAbs(exe) {
+		cmd.Dir = filepath.Dir(exe)
+	}
 	hide(cmd)
 	cmd.WaitDelay = 2 * time.Second
 	var stdout limitedBuffer
@@ -158,56 +172,17 @@ func (c Client) Instances(ctx context.Context) ([]Instance, error) {
 	return ParseList2(decodeConsole(b))
 }
 
-// Bind compares Android IDs reported through the instance-index API and ADB.
-// No assumed ADB port or fixed set of five serials is used.
 func (c Client) Discover(ctx context.Context) ([]Instance, error) {
 	all, e := c.Instances(ctx)
 	if e != nil {
 		return nil, e
 	}
-	for _, x := range all {
-		if x.Android && x.PID > 0 {
-			if _, e = c.run(ctx, c.Console, "adb", "--index", strconv.Itoa(x.Index), "--command", "shell settings get secure android_id"); e != nil {
-				return nil, e
-			}
-		}
-	}
-	b, e := c.run(ctx, c.ADB, "devices", "-l")
-	if e != nil {
-		return nil, e
-	}
-	byID := map[string][]string{}
-	for _, s := range ParseDevices(string(b)) {
-		b, e = c.adb(ctx, s, "shell", "settings", "get", "secure", "android_id")
-		if e != nil {
-			continue
-		}
-		id := idFrom(string(b))
-		if id != "" {
-			byID[id] = append(byID[id], s)
-		}
-	}
-	seen := map[string]bool{}
-	for i, x := range all {
-		if !x.Android || x.PID <= 0 {
-			continue
-		}
-		b, e = c.run(ctx, c.Console, "adb", "--index", strconv.Itoa(x.Index), "--command", "shell settings get secure android_id")
-		if e != nil {
-			return nil, e
-		}
-		id := idFrom(string(b))
-		s := byID[id]
-		if id == "" || len(s) != 1 || seen[id] {
-			return nil, fmt.Errorf("instance %d: cannot uniquely verify ADB identity (duplicate clones must be resolved)", x.Index)
-		}
-		seen[id] = true
-		all[i].Serial = s[0]
-		all[i].AndroidID = id
-	}
-	return all, nil
+	return c.Bind(ctx, all)
 }
 func (c Client) Verify(ctx context.Context, d Instance) error {
+	if d.Serial == "" || d.AndroidID == "" {
+		return errors.New("ADB 身份尚未验证；没有进行游戏操作")
+	}
 	all, e := c.Instances(ctx)
 	if e != nil {
 		return e
@@ -228,6 +203,12 @@ func (c Client) Verify(ctx context.Context, d Instance) error {
 	if idFrom(string(b)) != d.AndroidID {
 		return errors.New("ADB identity changed; stopped")
 	}
+	if d.BootID != "" {
+		b, e = c.adb(ctx, d.Serial, "shell", "cat", "/proc/sys/kernel/random/boot_id")
+		if e != nil || bootFrom(string(b)) != d.BootID {
+			return errors.New("Android restarted or ADB binding changed; detect again")
+		}
+	}
 	return nil
 }
 func (c Client) Screenshot(ctx context.Context, d Instance) ([]byte, error) {
@@ -245,32 +226,4 @@ func (c Client) Tap(ctx context.Context, d Instance, x, y int) error {
 	}
 	_, e := c.adb(ctx, d.Serial, "shell", "input", "tap", strconv.Itoa(x), strconv.Itoa(y))
 	return e
-}
-func Find(configured string) (string, string) {
-	var dirs []string
-	if configured != "" {
-		if strings.EqualFold(filepath.Ext(configured), ".exe") {
-			dirs = append(dirs, filepath.Dir(configured))
-		} else {
-			dirs = append(dirs, configured)
-		}
-	}
-	for _, drive := range []string{"C:", "D:", "E:", "F:", "G:"} {
-		for _, s := range []string{`\LDPlayer*`, `\leidian\LDPlayer*`, `\Program Files\LDPlayer*`, `\Program Files\ldplayer*box`, `\雷电模拟器*`} {
-			hits, _ := filepath.Glob(drive + s)
-			dirs = append(dirs, hits...)
-		}
-	}
-	for _, dir := range dirs {
-		for _, n := range []string{"ldconsole.exe", "dnconsole.exe"} {
-			p := filepath.Join(dir, n)
-			a := filepath.Join(dir, "adb.exe")
-			if st, e := os.Stat(p); e == nil && !st.IsDir() {
-				if _, e = os.Stat(a); e == nil {
-					return p, a
-				}
-			}
-		}
-	}
-	return "", ""
 }

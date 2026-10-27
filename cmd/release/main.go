@@ -60,7 +60,7 @@ func main() {
 	fail(e)
 	st, e := os.Stat(*exe)
 	fail(e)
-	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "在线更新、备份和失败回滚；登录标定与闭环测试。Windows 自动测试已执行；真实雷电/游戏尚待用户实机验收。", SourceCommit: *commit, WindowsTested: false}
+	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "修复雷电7/10列实例检测，新增自动查找、自动刷新和单台/本组5台启动。Windows自动测试包含命令行测试替身；真实雷电/游戏尚待实机验收。更新保留配置与旧版备份。", SourceCommit: *commit, WindowsTested: false}
 	fail(m.Validate())
 	fail(os.MkdirAll(*out, 0700))
 	fail(filesafe.JSON(filepath.Join(*out, "update.json"), m))

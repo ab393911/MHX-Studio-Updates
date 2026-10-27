@@ -23,6 +23,7 @@ type proof struct {
 }
 type settings struct {
 	InstallDir        string               `json:"ldplayer_directory"`
+	GroupStart        int                  `json:"group_start_index"`
 	ManifestURL       string               `json:"manifest_url"`
 	Retries           int                  `json:"retries"`
 	MinDelayMS        int                  `json:"min_delay_ms"`
@@ -33,7 +34,7 @@ type settings struct {
 }
 
 func defaults() settings {
-	return settings{ManifestURL: update.DefaultManifestURL, Retries: 3, MinDelayMS: 250, MaxDelayMS: 650, Jobs: map[string][5]string{}, SingleValidations: map[string]proof{}}
+	return settings{ManifestURL: update.DefaultManifestURL, GroupStart: 1, Retries: 3, MinDelayMS: 250, MaxDelayMS: 650, Jobs: map[string][5]string{}, SingleValidations: map[string]proof{}}
 }
 func loadSettings(root string) (settings, error) {
 	c := defaults()
@@ -59,6 +60,9 @@ func loadSettings(root string) (settings, error) {
 	return c, c.Validate()
 }
 func (c settings) Validate() error {
+	if c.GroupStart < 0 || c.GroupStart > 99994 {
+		return errors.New("五开首编号须在 0～99994 之间，且使用雷电列表中的原始编号")
+	}
 	if e := update.HTTPS(c.ManifestURL); e != nil {
 		return e
 	}

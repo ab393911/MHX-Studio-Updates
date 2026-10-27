@@ -53,10 +53,12 @@ jobs:
           if ($LASTEXITCODE) { throw 'Test EXE build failed' }
           go build -trimpath -ldflags "-H windowsgui -s -w" -o dist/exit-test.exe ./cmd/testexit
           if ($LASTEXITCODE) { throw 'Exit fixture build failed' }
+          go build -trimpath -ldflags "-H windowsgui -s -w" -o dist/ldfixture.exe ./cmd/ldfixture
+          if ($LASTEXITCODE) { throw 'LDPlayer CLI fixture build failed' }
       - name: Run native GUI, real EXE replacement and rollback tests
         shell: pwsh
         run: |
-          go run ./cmd/windowsverify -old "$pwd/dist/old-test.exe" -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '${{ steps.build.outputs.version }}' -out dist/windows-tests.json
+          go run ./cmd/windowsverify -old "$pwd/dist/old-test.exe" -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '${{ steps.build.outputs.version }}' -out dist/windows-tests.json
           if ($LASTEXITCODE) { throw 'Native Windows tests failed' }
       - name: Package verified preview
         shell: pwsh
@@ -73,6 +75,7 @@ jobs:
             dist/update.json
             dist/SHA256SUMS.txt
             dist/windows-tests.json
+            dist/emulator-gui-preview.png
           if-no-files-found: error
 
   publish:

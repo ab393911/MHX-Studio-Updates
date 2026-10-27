@@ -96,6 +96,11 @@ type app struct {
 	cal                                               *calibration
 	healthPath, healthToken, healthVersion, smokePath string
 	healthDone                                        bool
+	nextScan                                          time.Time
+	lastInventory                                     string
+	groupSeeded                                       bool
+	backgroundScan                                    bool
+	pendingAction                                     int
 }
 
 var active *app
@@ -167,7 +172,7 @@ func (a *app) build() {
 	a.label("异常重试次数", 20, 168, 125)
 	a.control("EDIT", strconv.Itoa(a.cfg.Retries), 150, 162, 60, 28, wsBorder, 204)
 	a.label("五开首编号", 230, 168, 115)
-	a.control("EDIT", "1", 350, 162, 70, 28, wsBorder, 205)
+	a.control("EDIT", strconv.Itoa(a.cfg.GroupStart), 350, 162, 70, 28, wsBorder, 205)
 	a.button("保存设置", 440, 160, 110, 104)
 	a.button("单机闭环：5角色", 565, 160, 180, 105)
 	a.button("五开闭环测试", 760, 160, 150, 106)
@@ -184,13 +189,15 @@ func (a *app) build() {
 	a.control("EDIT", a.cfg.ManifestURL, 115, 250, 710, 28, wsBorder, 207)
 	a.button("一键检查并更新", 840, 248, 165, 110)
 	a.label("正常截图仅存内存，最多2帧/设备、总计32 MiB；异常截图在本机保留最多20组。", 20, 295, 990)
-	a.button("打开数据目录", 20, 326, 150, 111)
-	a.button("查看验收说明", 185, 326, 150, 112)
-	a.button("检查未完成更新", 350, 326, 180, 113)
-	a.label("识别标定：每页框选两处稳定特征和按钮范围；角色页特征须包含昵称/选中标记。", 20, 373, 1000)
+	a.button("打开数据目录", 20, 326, 140, 111)
+	a.button("查看验收说明", 175, 326, 140, 112)
+	a.button("检查未完成更新", 330, 326, 170, 113)
+	a.button("启动当前模拟器", 515, 326, 190, 114)
+	a.button("启动本组5台", 720, 326, 190, 115)
+	a.control("STATIC", "正在自动查找雷电；已启动但 ADB 未就绪的实例也会显示。", 20, 373, 990, 25, 0, 208)
 	a.control("EDIT", "", 20, 405, 985, 300, wsBorder|0x200000|4|0x40|0x800, 900)
 	a.log("程序已启动。V3.3/V3.4 文件和数据未改动。当前版本未做用户 Windows + 雷电实机验收。")
-	a.log("请先选择 ldconsole.exe 或 dnconsole.exe，检测实例，再标定当前实例。")
+	a.log("启动后自动检测，空闲时每12秒刷新。找不到时可点“选择雷电程序”；停止的实例可直接点击启动。")
 	a.log("配置位置：" + a.root)
 }
 func (a *app) work(f func(context.Context) error) {
@@ -200,17 +207,25 @@ func (a *app) work(f func(context.Context) error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
+	background := a.backgroundScan
 	go func() {
 		err := f(ctx)
 		cancel()
 		a.ui(func() {
 			a.busy.Store(false)
 			a.cancel = nil
-			if err != nil {
+			a.backgroundScan = false
+			if err != nil && !(background && errors.Is(err, context.Canceled)) {
 				a.log("操作停止：" + err.Error())
 			}
 			if a.closing {
 				destroyWindow.Call(a.hwnd)
+				return
+			}
+			if a.pendingAction != 0 {
+				id := a.pendingAction
+				a.pendingAction = 0
+				a.handle(id)
 			}
 		})
 	}()
@@ -224,6 +239,13 @@ func (a *app) save() error {
 		return errors.New("重试次数必须是整数")
 	}
 	c.Retries = n
+	c.GroupStart, e = strconv.Atoi(strings.TrimSpace(text(a.controls[205])))
+	if e != nil {
+		return errors.New("五开首编号必须是整数")
+	}
+	if c.GroupStart != a.cfg.GroupStart {
+		a.groupSeeded = true
+	}
 	if e = c.Save(a.root); e != nil {
 		return e
 	}
@@ -240,48 +262,6 @@ func (a *app) selected() (ldplayer.Instance, error) {
 		return d, errors.New("该实例未就绪或尚未验证 ADB 身份")
 	}
 	return d, nil
-}
-func (a *app) detect() {
-	if e := a.save(); e != nil {
-		a.log(e.Error())
-		return
-	}
-	console, adb := ldplayer.Find(a.cfg.InstallDir)
-	if console == "" {
-		a.log("未找到雷电。点“选择雷电程序”，选择安装目录内 ldconsole.exe 或 dnconsole.exe。")
-		return
-	}
-	client := ldplayer.Client{Console: console, ADB: adb}
-	a.work(func(ctx context.Context) error {
-		all, e := client.Discover(ctx)
-		if e != nil {
-			return e
-		}
-		a.ui(func() {
-			a.client = client
-			a.devices = all
-			send(a.controls[202], 0x14B, 0, 0)
-			first := -1
-			ready := 0
-			for i, d := range all {
-				state := "未运行"
-				if d.Serial != "" {
-					state = "已验证 " + d.Serial
-					ready++
-					if first < 0 {
-						first = i
-					}
-				}
-				comboAdd(a.controls[202], fmt.Sprintf("编号 %d  %s  %s", d.Index, d.Name, state))
-			}
-			if first >= 0 {
-				send(a.controls[202], 0x14E, uintptr(first), 0)
-				setText(a.controls[205], strconv.Itoa(all[first].Index))
-			}
-			a.log(fmt.Sprintf("检测到 %d 个实例，%d 个已运行且身份验证通过。编号直接采用雷电 list2 返回值。", len(all), ready))
-		})
-		return nil
-	})
 }
 func (a *app) bindJob() {
 	d, e := a.selected()
@@ -576,6 +556,14 @@ func (a *app) pendingUpdates() {
 }
 func (a *app) handle(id int) {
 	if a.busy.Load() && id != 107 && id != 111 {
+		if a.backgroundScan && id >= 101 && id <= 115 {
+			a.pendingAction = id
+			if a.cancel != nil {
+				a.cancel()
+			}
+			a.log("正在结束后台检测，随后执行所选操作。")
+			return
+		}
 		a.log("操作进行中，请先停止或等待完成。")
 		return
 	}
@@ -585,6 +573,8 @@ func (a *app) handle(id int) {
 			setText(a.controls[201], filepath.Dir(p))
 			if e := a.save(); e != nil {
 				a.log(e.Error())
+			} else {
+				a.detectInstances(false)
 			}
 		}
 	case 102:
@@ -602,6 +592,7 @@ func (a *app) handle(id int) {
 	case 106:
 		a.cycle(true)
 	case 107:
+		a.pendingAction = 0
 		if a.cancel != nil {
 			a.cancel()
 			a.log("正在停止；不会再开始下一次点击。")
@@ -615,9 +606,13 @@ func (a *app) handle(id int) {
 	case 111:
 		_ = exec.Command("explorer.exe", a.root).Start()
 	case 112:
-		a.info("测试顺序：\n1. 新文件夹运行，保留 V3.3/V3.4。\n2. 选择雷电控制台程序，检测实例。\n3. 人工绑定职业，按每台实例分别标定两处特征与按钮。\n4. 先用“只检查当前识别”核对，再测单机五角色闭环。\n5. 五个实例全部单机通过后，再测五开。\n6. 一键检查更新：确认版本和备份提示后才替换。\n\n本版不执行战斗、银锭交付或自动换区；跳过任务不算完成。\n详细记录见发行包内 TESTING.md。")
+		a.info("测试顺序：\n1. 新文件夹运行，保留旧版。\n2. 程序自动查找雷电并检测实例；找不到时选择控制台程序。\n3. 可选择未启动实例并点“启动当前模拟器”；五开填实际首编号后点“启动本组5台”。\n4. 核对已运行和ADB已验证数量，再人工绑定职业和标定。\n5. 先检查识别，再测单机五角色闭环；五台分别通过后再五开。\n6. 更新先确认，再备份替换。\n\n雷电检测/启动按钮的Windows自动测试使用测试替身；真实雷电仍需实测。\n本版不执行战斗或自动换区；跳过任务不算完成。\n详细步骤见发行包内TESTING.md。")
 	case 113:
 		a.pendingUpdates()
+	case 114:
+		a.startEmulators(false)
+	case 115:
+		a.startEmulators(true)
 	}
 }
 func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
@@ -648,6 +643,13 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 				return 0
 			}
 			if a.busy.Load() {
+				if a.backgroundScan {
+					a.closing = true
+					if a.cancel != nil {
+						a.cancel()
+					}
+					return 0
+				}
 				if a.ask("操作正在运行。停止后退出？") {
 					a.closing = true
 					if a.cancel != nil {
@@ -667,11 +669,7 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 	return r
 }
 func (a *app) tick() {
-	if a.healthDone {
-		return
-	}
-	a.healthDone = true
-	if a.healthPath != "" {
+	if !a.healthDone && a.healthPath != "" {
 		if a.healthVersion != version {
 			a.log("健康检查版本不符，拒绝确认。")
 			return
@@ -688,9 +686,14 @@ func (a *app) tick() {
 			a.log("健康确认写入失败：" + e.Error())
 		}
 	}
+	a.healthDone = true
 	if a.smokePath != "" {
 		_ = filesafe.JSON(a.smokePath, map[string]any{"version": version, "source_commit": sourceCommit, "window_created": a.hwnd != 0, "message_loop": true, "controls": len(a.controls), "windows_game_tested": false})
 		destroyWindow.Call(a.hwnd)
+		return
+	}
+	if !a.busy.Load() && a.cal == nil && !a.closing && time.Now().After(a.nextScan) {
+		a.detectInstances(false)
 	}
 }
 func main() {
@@ -783,6 +786,10 @@ func main() {
 		return
 	}
 	a := &app{controls: map[int]uintptr{}, actions: make(chan func(), 512), root: data, cfg: cfg, cache: automation.NewCache(2, 32<<20), healthPath: receipt, healthToken: token, healthVersion: healthVersion, smokePath: smoke}
+	if receipt != "" {
+		a.nextScan = time.Now().Add(4 * time.Second)
+	}
+	_, a.groupSeeded = cfg.raw["group_start_index"]
 	active = a
 	dpi := user32.NewProc("SetProcessDPIAware")
 	_, _, _ = dpi.Call()
