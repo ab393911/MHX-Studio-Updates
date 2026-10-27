@@ -216,11 +216,23 @@ func Detect(ctx context.Context, plan SearchPlan, runner Runner, onInventory fun
 		return out
 	}
 	if out.Client.Console != "" {
-		if serverErr == nil {
+		if serverErr == nil && out.Client.ADB == "" {
 			out.Client.Server = plan.Address
 		}
 		if bound, e := out.Client.Bind(ctx, inventory); e == nil {
-			out.Instances = bound
+			// A supplemental server may be empty or unrelated to the working
+			// executable's server. Never discard an already verified binding.
+			for i := range out.Instances {
+				if out.Instances[i].Serial != "" {
+					continue
+				}
+				for _, d := range bound {
+					if d.Index == out.Instances[i].Index && d.Serial != "" {
+						out.Instances[i] = d
+						break
+					}
+				}
+			}
 		}
 	}
 	used := map[string]bool{}

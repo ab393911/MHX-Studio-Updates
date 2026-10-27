@@ -176,6 +176,8 @@ func TestBrokenManagerFallsBackToIndependentADBExecutable(t *testing.T) {
 }
 func TestFailedSearchRetainsCheckedPathsAndServiceError(t *testing.T) {
 	p := searchPlan("", "", "", nil, nil, "127.0.0.1:1")
+	p.Installations = nil
+	p.ADBs = nil // the checked D: hint must not depend on the test host's installations
 	d := Detect(context.Background(), p, fallbackRunner{}, nil)
 	foundPath, foundServer := false, false
 	for _, c := range d.Checks {
@@ -188,5 +190,14 @@ func TestFailedSearchRetainsCheckedPathsAndServiceError(t *testing.T) {
 	}
 	if !foundPath || !foundServer || len(d.Instances) != 0 {
 		t.Fatal(d)
+	}
+}
+
+func TestSupplementalEmptyServerDoesNotDiscardVerifiedInstances(t *testing.T) {
+	address := testADBServer(t, "")
+	p := SearchPlan{Address: address, Installations: []Installation{{Console: "console", ADB: "adb"}}}
+	d := Detect(context.Background(), p, bindingRunner{offline: true}, nil)
+	if len(d.Instances) != 2 || d.Instances[0].Serial != "odd-serial" || d.Instances[1].ConnectionError == "" || d.Client.Server != "" {
+		t.Fatal("supplemental scan lost working device", d)
 	}
 }
