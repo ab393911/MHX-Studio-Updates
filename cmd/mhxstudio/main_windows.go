@@ -696,6 +696,12 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 }
 func (a *app) tick() {
 	if !a.healthDone && a.healthPath != "" {
+		visible, _, _ := user32.NewProc("IsWindowVisible").Call(a.hwnd)
+		if visible == 0 {
+			showWindow.Call(a.hwnd, 9)
+			user32.NewProc("UpdateWindow").Call(a.hwnd)
+			return
+		}
 		if a.healthVersion != version {
 			a.log("健康检查版本不符，拒绝确认。")
 			return
@@ -733,7 +739,8 @@ func (a *app) tick() {
 	a.healthDone = true
 	a.pollUpdateResult()
 	if a.smokePath != "" {
-		_ = filesafe.JSON(a.smokePath, map[string]any{"version": version, "source_commit": sourceCommit, "window_created": a.hwnd != 0, "message_loop": true, "controls": len(a.controls), "windows_game_tested": false})
+		visible, _, _ := user32.NewProc("IsWindowVisible").Call(a.hwnd)
+		_ = filesafe.JSON(a.smokePath, map[string]any{"version": version, "source_commit": sourceCommit, "window_created": a.hwnd != 0, "window_visible": visible != 0, "message_loop": true, "controls": len(a.controls), "windows_game_tested": false})
 		destroyWindow.Call(a.hwnd)
 		return
 	}
@@ -860,6 +867,12 @@ func main() {
 	}
 	a.hwnd = h
 	a.build()
+	// The already-published preview.15 helper launches with SW_HIDE. The
+	// first ShowWindow may honor STARTUPINFO, so restore explicitly again.
+	showWindow.Call(h, 1)
+	showWindow.Call(h, 9)
+	user32.NewProc("UpdateWindow").Call(h)
+	user32.NewProc("RedrawWindow").Call(h, 0, 0, 0x185)
 	if result != "" {
 		setText(a.controls[209], "新版本已启动，正在完成健康检查并确认升级结果……")
 		a.pollUpdateResult()

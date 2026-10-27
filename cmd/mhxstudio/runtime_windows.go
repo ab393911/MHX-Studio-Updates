@@ -71,7 +71,8 @@ func (c *windowsChild) Stop() error {
 }
 func (windowsRuntime) Launch(path string, args ...string) (update.Child, error) {
 	cmd := exec.Command(path, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	// This launches the GUI, not a console helper. SW_HIDE would hide the
+	// application after upgrade and rollback.
 	if e := cmd.Start(); e != nil {
 		return nil, e
 	}

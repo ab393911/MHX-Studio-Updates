@@ -134,6 +134,7 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	newTitle := "知夏 · MHX Studio " + expected
 	fail(waitWindow(newTitle))
 	h = findWindow(newTitle)
+	until(h, "restarted GUI is hidden", func() bool { v, _, _ := user.NewProc("IsWindowVisible").Call(h); return v != 0 })
 	var result update.Result
 	var plan update.Plan
 	committed := false
@@ -189,7 +190,7 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	until(h, "latest-version check did not show the expected message", func() bool { return strings.Contains(readText(control(h, 209)), "当前已是最新版本") })
 	fail(captureWindow(h, filepath.Join(filepath.Dir(out), prefix+"-after.png")))
 	closeTitle(newTitle)
-	resultMap := map[string]any{"native_windows": true, "previous_version": oldVersion, "baseline_published": !oneClick, "real_update_button_clicked": true, "update_button_clicks": 1, "confirmation_clicks": confirmations, "one_click_without_confirmation": oneClick, "anonymous_manifest_download": true, "sha256_verified": true, "old_exe_backup_retained": true, "configuration_snapshot_verified": true, "configuration_byte_identical": true, "calibration_byte_identical": true, "new_gui_restarted": true, "explicit_success_message": true, "latest_version_message": true, "post_upgrade_24_instance_detection_fixture": detectionVerified, "post_upgrade_start_and_adb_fixture": launchVerified, "emulator_fixture_only": true, "real_ldplayer_tested": false, "version": expected, "source_commit": m.SourceCommit, "windows_game_tested": false, "passed": true, "completed_at": time.Now().UTC().Format(time.RFC3339)}
+	resultMap := map[string]any{"native_windows": true, "previous_version": oldVersion, "baseline_published": !oneClick, "real_update_button_clicked": true, "update_button_clicks": 1, "confirmation_clicks": confirmations, "one_click_without_confirmation": oneClick, "anonymous_manifest_download": true, "sha256_verified": true, "old_exe_backup_retained": true, "configuration_snapshot_verified": true, "configuration_byte_identical": true, "calibration_byte_identical": true, "new_gui_restarted": true, "new_gui_visible": true, "explicit_success_message": true, "latest_version_message": true, "post_upgrade_24_instance_detection_fixture": detectionVerified, "post_upgrade_start_and_adb_fixture": launchVerified, "emulator_fixture_only": true, "real_ldplayer_tested": false, "version": expected, "source_commit": m.SourceCommit, "windows_game_tested": false, "passed": true, "completed_at": time.Now().UTC().Format(time.RFC3339)}
 	if !oneClick {
 		resultMap["previous_published_version"] = oldVersion
 		resultMap["configuration_backup_timing"] = "legacy_new_gui_before_health"
@@ -210,7 +211,7 @@ func captureWindow(h uintptr, path string) error {
 		return errors.New("unexpected window dimensions")
 	}
 	gdi := syscall.NewLazyDLL("gdi32.dll")
-	dc, _, _ := user.NewProc("GetDC").Call(h)
+	dc, _, _ := user.NewProc("GetWindowDC").Call(h)
 	if dc == 0 {
 		return errors.New("GetDC failed")
 	}
@@ -237,6 +238,16 @@ func captureWindow(h uintptr, path string) error {
 	n, _, _ := gdi.NewProc("GetDIBits").Call(dc, bitmap, 0, uintptr(height), uintptr(unsafe.Pointer(&raw[0])), uintptr(unsafe.Pointer(&header)), 0)
 	if n == 0 {
 		return errors.New("GetDIBits failed")
+	}
+	painted := false
+	for i := 0; i < len(raw); i += 4 {
+		if raw[i] != 0 || raw[i+1] != 0 || raw[i+2] != 0 {
+			painted = true
+			break
+		}
+	}
+	if !painted {
+		return errors.New("GUI capture is entirely black; visibility/rendering verification failed")
 	}
 	img := image.NewRGBA(image.Rect(0, 0, w, height))
 	for y := 0; y < height; y++ {

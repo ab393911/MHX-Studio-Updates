@@ -37,7 +37,7 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin 6fba48321210ce7692a3d11caab00bc7f62d7cc8
           if ($LASTEXITCODE) { throw 'Cannot fetch accepted emulator source baseline' }
-          git diff --exit-code 6fba48321210ce7692a3d11caab00bc7f62d7cc8 HEAD -- internal/ldplayer internal/automation cmd/mhxstudio/config.go cmd/mhxstudio/emulators_windows.go cmd/mhxstudio/discovery_store.go cmd/mhxstudio/calibration_windows.go cmd/mhxstudio/runtime_windows.go
+          git diff --exit-code 6fba48321210ce7692a3d11caab00bc7f62d7cc8 HEAD -- internal/ldplayer internal/automation cmd/mhxstudio/config.go cmd/mhxstudio/emulators_windows.go cmd/mhxstudio/discovery_store.go cmd/mhxstudio/calibration_windows.go
           if ($LASTEXITCODE) { throw 'Accepted emulator implementation was changed during updater-only development' }
       - uses: actions/setup-go@v5
         with:

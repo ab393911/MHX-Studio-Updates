@@ -110,6 +110,9 @@ func main() {
 	if sm["window_created"] != true || sm["message_loop"] != true {
 		fail(errors.New("native GUI smoke test failed"))
 	}
+	if sm["window_visible"] != true {
+		fail(errors.New("native GUI is hidden"))
+	}
 	results := map[string]any{"native_windows": true, "arch": "amd64", "gui_smoke": sm, "windows_game_tested": false, "version": *version}
 	if *emulatorFixture != "" {
 		results["emulator_gui_fixture"] = emulatorGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
