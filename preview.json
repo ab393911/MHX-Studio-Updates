@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "version": "3.5.0-preview.10",
+  "version": "3.5.0-preview.11",
   "platform": "windows-amd64",
-  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.10/MHXStudio.exe",
-  "sha256": "f0399aeb43ec58c2f5d72ceff6cd82d0ad5fa20108c6c7c9c0003b11e8e6987e",
+  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.11/MHXStudio.exe",
+  "sha256": "f3185e107b4e27a74ce61d2b08c2cb29e45bad5b7826640b4aaf8ccf9ce8617c",
   "size": 7260672,
   "notes": "修复雷电7/10列实例检测，新增自动查找、自动刷新和单台/本组5台启动。Windows自动测试包含命令行测试替身；真实雷电/游戏尚待实机验收。更新保留配置与旧版备份。",
-  "source_commit": "cb4be29c546fc82c20e1d032cff2a1886bfec556",
+  "source_commit": "d0f882c9b35415b32924de0e33b4105e933f48ed",
   "windows_game_tested": false
 }
