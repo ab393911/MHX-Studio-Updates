@@ -154,7 +154,7 @@ func (a *app) button(s string, x, y, w, id int) { a.control("BUTTON", s, x, y, w
 func comboAdd(h uintptr, s string)              { sendMessage.Call(h, 0x143, 0, uintptr(unsafe.Pointer(utf(s)))) }
 func comboIndex(h uintptr) int                  { return int(int32(send(h, 0x147, 0, 0))) }
 func (a *app) build() {
-	a.label("MHX Studio "+version+"  |  更新与登录验证版", 20, 15, 1000)
+	a.label("MHX Studio "+version+"  |  雷电自动发现修复与登录验证版", 20, 15, 1000)
 	a.label("战斗未开发；登录流程需标定和实机验收；测试不会记录任务完成或自动换区。", 20, 44, 1000)
 	a.label("雷电目录", 20, 83, 90)
 	a.control("EDIT", a.cfg.InstallDir, 115, 78, 610, 28, wsBorder, 201)
@@ -162,6 +162,7 @@ func (a *app) build() {
 	a.button("检测实例", 895, 77, 110, 102)
 	a.label("当前实例", 20, 126, 90)
 	a.control("COMBOBOX", "", 115, 120, 420, 300, 3|0x200000, 202)
+	send(a.controls[202], 0x160, 870, 0)
 	a.label("职业（人工绑定）", 550, 126, 155)
 	job := a.control("COMBOBOX", "", 710, 120, 140, 200, 3, 203)
 	for _, s := range []string{"合欢", "天音", "青云", "鬼王"} {
@@ -194,10 +195,11 @@ func (a *app) build() {
 	a.button("检查未完成更新", 330, 326, 170, 113)
 	a.button("启动当前模拟器", 515, 326, 190, 114)
 	a.button("启动本组5台", 720, 326, 190, 115)
+	a.button("检测详情", 925, 326, 80, 116)
 	a.control("STATIC", "正在自动查找雷电；已启动但 ADB 未就绪的实例也会显示。", 20, 373, 990, 25, 0, 208)
 	a.control("EDIT", "", 20, 405, 985, 300, wsBorder|0x200000|4|0x40|0x800, 900)
 	a.log("程序已启动。V3.3/V3.4 文件和数据未改动。当前版本未做用户 Windows + 雷电实机验收。")
-	a.log("启动后自动检测，空闲时每12秒刷新。找不到时可点“选择雷电程序”；停止的实例可直接点击启动。")
+	a.log("当前版本 " + version + "：启动后自动搜索管理程序和ADB，空闲时每12秒刷新；已核验路径自动记住。具体路径与原因见“检测详情”。")
 	a.log("配置位置：" + a.root)
 }
 func (a *app) work(f func(context.Context) error) {
@@ -258,6 +260,12 @@ func (a *app) selected() (ldplayer.Instance, error) {
 		return ldplayer.Instance{}, errors.New("请先检测并选择实例")
 	}
 	d := a.devices[i]
+	if d.Unmapped {
+		return d, errors.New("已发现ADB设备，但雷电实例编号尚未核对；没有执行游戏操作")
+	}
+	if a.client.ADB == "" {
+		return d, errors.New("未定位游戏控制用adb.exe；检测结果保留，游戏操作未开始")
+	}
 	if d.Serial == "" {
 		return d, errors.New("该实例未就绪或尚未验证 ADB 身份")
 	}
@@ -555,7 +563,7 @@ func (a *app) pendingUpdates() {
 	}
 }
 func (a *app) handle(id int) {
-	if a.busy.Load() && id != 107 && id != 111 {
+	if a.busy.Load() && id != 107 && id != 111 && id != 116 {
 		if a.backgroundScan && id >= 101 && id <= 115 {
 			a.pendingAction = id
 			if a.cancel != nil {
@@ -613,6 +621,8 @@ func (a *app) handle(id int) {
 		a.startEmulators(false)
 	case 115:
 		a.startEmulators(true)
+	case 116:
+		a.detectionDetails()
 	}
 }
 func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
@@ -626,7 +636,7 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 			// EDIT/COMBOBOX notifications also arrive as WM_COMMAND. Only user
 			// button clicks are actions; internal field refreshes must not log or queue work.
 			id := int(w & 0xffff)
-			if id >= 101 && id <= 115 && w>>16 == 0 {
+			if id >= 101 && id <= 116 && w>>16 == 0 {
 				a.handle(id)
 			}
 			return 0

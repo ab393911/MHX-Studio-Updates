@@ -69,7 +69,7 @@ func (c Client) Bind(ctx context.Context, inventory []Instance) ([]Instance, err
 	for i := range all {
 		all[i].Serial, all[i].AndroidID, all[i].BootID, all[i].ConnectionError = "", "", "", ""
 	}
-	if c.ADB == "" {
+	if c.ADB == "" && c.Server == "" {
 		for i := range all {
 			if all[i].Running() {
 				all[i].ConnectionError = "未找到 adb.exe；可启动模拟器，暂不能控制游戏"
@@ -106,7 +106,21 @@ func (c Client) Bind(ctx context.Context, inventory []Instance) ([]Instance, err
 	if ready == 0 {
 		return all, ctx.Err()
 	}
-	b, e := c.run(ctx, c.ADB, "devices", "-l")
+	var serials []string
+	var e error
+	if c.Server != "" {
+		var ds []ADBDevice
+		ds, e = (ADBServer{c.Server}).Devices(ctx)
+		for _, d := range ds {
+			if d.State == "device" {
+				serials = append(serials, d.Serial)
+			}
+		}
+	} else {
+		var b []byte
+		b, e = c.run(ctx, c.ADB, "devices", "-l")
+		serials = ParseDevices(string(b))
+	}
 	if e != nil {
 		for i, id := range ids {
 			if id.android != "" {
@@ -115,18 +129,24 @@ func (c Client) Bind(ctx context.Context, inventory []Instance) ([]Instance, err
 		}
 		return all, ctx.Err()
 	}
-	serials := ParseDevices(string(b))
 	if len(serials) > 256 {
 		serials = serials[:256]
 	}
 	direct := make([]identity, len(serials))
+	read := func(ctx context.Context, s, command string) (string, error) {
+		if c.Server != "" {
+			return (ADBServer{c.Server}).Identity(ctx, s, command)
+		}
+		b, e := c.adb(ctx, s, "shell", command)
+		return string(b), e
+	}
 	parallel(ctx, len(serials), func(i int) {
-		b, e := c.adb(ctx, serials[i], "shell", "settings", "get", "secure", "android_id")
+		b, e := read(ctx, serials[i], "settings get secure android_id")
 		if e != nil {
 			return
 		}
 		direct[i].android = idFrom(string(b))
-		b, e = c.adb(ctx, serials[i], "shell", "cat", "/proc/sys/kernel/random/boot_id")
+		b, e = read(ctx, serials[i], "cat /proc/sys/kernel/random/boot_id")
 		if e == nil {
 			direct[i].boot = bootFrom(string(b))
 		}
@@ -160,6 +180,12 @@ func (c Client) Bind(ctx context.Context, inventory []Instance) ([]Instance, err
 }
 
 func (d Instance) Status() string {
+	if d.Unmapped {
+		if d.ADBState != "device" {
+			return "ADB " + d.ADBState + " · 编号待核对"
+		}
+		return "ADB 已发现 · 编号待核对"
+	}
 	if d.Serial != "" {
 		return "已运行 · ADB 已验证"
 	}
@@ -173,14 +199,26 @@ func (d Instance) Status() string {
 }
 
 func Summary(all []Instance) string {
-	running, ready := 0, 0
+	running, ready, known, unmapped := 0, 0, 0, 0
 	for _, d := range all {
+		if d.Unmapped {
+			unmapped++
+			continue
+		}
+		known++
 		if d.Running() {
 			running++
 		}
-		if d.Serial != "" {
+		if d.Serial != "" && !d.Unmapped {
 			ready++
 		}
 	}
-	return fmt.Sprintf("检测到 %d 台，已运行 %d 台，ADB 已验证 %d 台", len(all), running, ready)
+	if known == 0 && unmapped > 0 {
+		return fmt.Sprintf("发现 %d 个ADB设备，雷电实例编号待匹配", unmapped)
+	}
+	s := fmt.Sprintf("检测到 %d 台，已运行 %d 台，ADB 已验证 %d 台", known, running, ready)
+	if unmapped > 0 {
+		s += fmt.Sprintf("；另有%d个ADB设备待匹配", unmapped)
+	}
+	return s
 }

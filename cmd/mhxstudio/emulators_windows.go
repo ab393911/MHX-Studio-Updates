@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -34,46 +36,82 @@ func (a *app) detectInstances(manual bool) {
 	a.work(func(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(ctx, 70*time.Second)
 		defer cancel()
-		client, all, source, e := ldplayer.SelectInstallation(ctx, ldplayer.FindInstallations(configured), nil)
-		if e != nil {
+		saved, loadErr := loadDiscovery(a.root)
+		plan := ldplayer.BuildSearchPlan(configured, saved.Directory, saved.ADB)
+		result := ldplayer.Detect(ctx, plan, nil, func(client ldplayer.Client, all []ldplayer.Instance) {
 			a.ui(func() {
-				setText(a.controls[208], "自动检测未完成："+e.Error())
-				if manual || a.lastInventory != "not-found" {
-					a.log(e.Error())
-					a.lastInventory = "not-found"
-				}
-				a.nextScan = time.Now().Add(12 * time.Second)
+				a.showInstances(client, all, false)
+				setText(a.controls[208], ldplayer.Summary(all)+"；正在核对ADB身份。")
 			})
-			return nil
+		})
+		if loadErr != nil {
+			result.Checks = append(result.Checks, ldplayer.Check{Kind: "发现记录", Result: loadErr.Error() + "；原文件保留，继续自动搜索"})
+		}
+		if ctx.Err() == nil {
+			if e := rememberDiscovery(a.root, result); e != nil {
+				result.Reason += "；保存有效路径失败：" + e.Error()
+			}
+		}
+		if e := writeDetectionReport(a.root, version, result); e != nil {
+			result.Reason += "；写入检测报告失败：" + e.Error()
 		}
 		a.ui(func() {
-			a.showInstances(client, all, false)
-			setText(a.controls[208], ldplayer.Summary(all)+"；正在逐台核对 ADB。来源："+source)
+			before := a.lastInventory
+			a.showInstances(result.Client, result.Instances, true)
+			if before != a.lastInventory || manual {
+				if result.Reason != "" {
+					a.log(result.Reason)
+				}
+				if len(result.Instances) == 0 {
+					shown := 0
+					for _, c := range result.Checks {
+						if c.Path != "" {
+							a.log("已检查：" + c.Path + "；" + c.Result)
+							shown++
+							if shown >= 8 {
+								break
+							}
+						}
+					}
+					a.log("完整搜索路径和错误请点“检测详情”；可继续使用“选择雷电程序”作为备用。")
+					for _, c := range result.Checks {
+						if c.Kind == "ADB本地服务" {
+							a.log("ADB服务检查：" + c.Path + "；" + c.Result)
+						}
+					}
+				}
+			}
+			if len(result.Instances) == 0 {
+				setText(a.controls[208], "未发现实例；已尝试管理程序与ADB，具体原因见“检测详情”。")
+			}
+			a.nextScan = time.Now().Add(12 * time.Second)
 		})
-		bound, bindErr := client.Bind(ctx, all)
-		a.ui(func() { a.showInstances(client, bound, true); a.nextScan = time.Now().Add(12 * time.Second) })
-		return bindErr
+		return ctx.Err()
 	})
 }
 
 func (a *app) showInstances(client ldplayer.Client, all []ldplayer.Instance, final bool) {
-	previous := -1
+	previous := ""
 	if strings.EqualFold(a.client.Console, client.Console) {
 		i := comboIndex(a.controls[202])
 		if i >= 0 && i < len(a.devices) {
-			previous = a.devices[i].Index
+			previous = a.devices[i].Key()
 		}
 	}
 	a.client, a.devices = client, all
 	currentDir := strings.TrimSpace(text(a.controls[201]))
-	if currentDir == "" || strings.EqualFold(currentDir, a.cfg.InstallDir) || strings.EqualFold(currentDir, filepath.Dir(client.Console)) {
+	if client.Console != "" && (currentDir == "" || strings.EqualFold(currentDir, a.cfg.InstallDir) || strings.EqualFold(currentDir, filepath.Dir(client.Console))) {
 		setText(a.controls[201], filepath.Dir(client.Console))
 	}
 	send(a.controls[202], 0x14B, 0, 0)
 	selected, firstRunning, firstReady := -1, -1, -1
 	for i, d := range all {
-		comboAdd(a.controls[202], fmt.Sprintf("编号 %d  %s  %s", d.Index, d.Name, d.Status()))
-		if d.Index == previous {
+		if d.Unmapped {
+			comboAdd(a.controls[202], fmt.Sprintf("ADB设备 %s  %s", d.Serial, d.Status()))
+		} else {
+			comboAdd(a.controls[202], fmt.Sprintf("编号 %d  %s  %s  %s", d.Index, d.Name, d.Status(), d.Serial))
+		}
+		if d.Key() == previous {
 			selected = i
 		}
 		if d.Running() && firstRunning < 0 {
@@ -94,7 +132,7 @@ func (a *app) showInstances(client ldplayer.Client, all []ldplayer.Instance, fin
 	}
 	if selected >= 0 {
 		send(a.controls[202], 0x14E, uintptr(selected), 0)
-		if !a.groupSeeded {
+		if !a.groupSeeded && !all[selected].Unmapped {
 			if strings.TrimSpace(text(a.controls[205])) == strconv.Itoa(a.cfg.GroupStart) {
 				setText(a.controls[205], strconv.Itoa(all[selected].Index))
 			}
@@ -109,7 +147,11 @@ func (a *app) showInstances(client ldplayer.Client, all []ldplayer.Instance, fin
 		}{client.Console, all})
 		sig := string(b)
 		if sig != a.lastInventory {
-			a.log(ldplayer.Summary(all) + "。控制台：" + client.Console)
+			location := client.Console
+			if location == "" {
+				location = "未定位；ADB设备按实际序列号显示"
+			}
+			a.log(ldplayer.Summary(all) + "。控制台：" + location)
 			for _, d := range all {
 				if d.ConnectionError != "" {
 					a.log(fmt.Sprintf("编号 %d：%s", d.Index, d.ConnectionError))
@@ -126,8 +168,7 @@ func (a *app) startEmulators(five bool) {
 		return
 	}
 	if a.client.Console == "" || len(a.devices) == 0 {
-		a.log("先自动检测实例列表，找到列表后再启动指定实例。")
-		a.detectInstances(false)
+		a.log("没有已核验的雷电管理程序，不能启动未运行的实例。已运行设备仍可通过ADB发现；具体已检查路径见“检测详情”。")
 		return
 	}
 	var indices []int
@@ -139,6 +180,10 @@ func (a *app) startEmulators(five bool) {
 		i := comboIndex(a.controls[202])
 		if i < 0 || i >= len(a.devices) {
 			a.log("请从当前实例列表选择要启动的模拟器。")
+			return
+		}
+		if a.devices[i].Unmapped {
+			a.log("该ADB设备的雷电编号尚未核对，未发送启动命令；请查看“检测详情”。")
 			return
 		}
 		indices = []int{a.devices[i].Index}
@@ -161,4 +206,15 @@ func (a *app) startEmulators(five bool) {
 		}
 		return e
 	})
+}
+
+func (a *app) detectionDetails() {
+	path := filepath.Join(a.root, "diagnostics", "detection.txt")
+	if _, e := os.Stat(path); e != nil {
+		a.log("检测报告尚未生成，请等待本轮检测完成。")
+		return
+	}
+	if e := exec.Command("notepad.exe", path).Start(); e != nil {
+		a.log("打开检测报告失败：" + e.Error() + "；路径：" + path)
+	}
 }

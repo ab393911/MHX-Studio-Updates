@@ -25,9 +25,19 @@ type Instance struct {
 	AndroidID       string
 	BootID          string
 	ConnectionError string
+	Unmapped        bool
+	ADBState        string
 }
 
-func (d Instance) Running() bool { return d.PID > 0 || d.TopWindow != 0 || d.BindWindow != 0 }
+func (d Instance) Running() bool {
+	return (d.Unmapped && d.ADBState == "device") || d.PID > 0 || d.TopWindow != 0 || d.BindWindow != 0
+}
+func (d Instance) Key() string {
+	if d.Unmapped {
+		return "adb:" + d.Serial
+	}
+	return fmt.Sprintf("index:%d", d.Index)
+}
 
 func ParseList2(text string) ([]Instance, error) {
 	text = strings.TrimPrefix(text, "\ufeff")
@@ -139,6 +149,7 @@ type Client struct {
 	Console string
 	ADB     string
 	Runner  Runner
+	Server  string // optional read-only discovery via an existing local ADB server
 }
 
 func (c Client) run(ctx context.Context, exe string, args ...string) ([]byte, error) {
@@ -180,6 +191,12 @@ func (c Client) Discover(ctx context.Context) ([]Instance, error) {
 	return c.Bind(ctx, all)
 }
 func (c Client) Verify(ctx context.Context, d Instance) error {
+	if d.Unmapped || c.Console == "" {
+		return errors.New("已发现 ADB 设备，但雷电实例编号未核对；没有进行游戏操作")
+	}
+	if c.ADB == "" {
+		return errors.New("设备身份已发现，但未定位游戏控制用 adb.exe；没有进行游戏操作")
+	}
 	if d.Serial == "" || d.AndroidID == "" {
 		return errors.New("ADB 身份尚未验证；没有进行游戏操作")
 	}

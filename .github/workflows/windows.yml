@@ -76,6 +76,7 @@ jobs:
             dist/SHA256SUMS.txt
             dist/windows-tests.json
             dist/emulator-gui-preview.png
+            dist/adb-fallback-gui-preview.png
           if-no-files-found: error
 
   publish:
@@ -120,9 +121,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           $env:CGO_ENABLED = '0'
-          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.1/MHXStudio.exe' -OutFile dist/previous-release.exe
-          if ((Get-FileHash dist/previous-release.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'bab41749ca5dea6814d123af93dae5754bbdd047c4174e4c34440da8adbbca03') { throw 'Published baseline SHA-256 mismatch' }
-          go run ./cmd/windowsverify -old "$pwd/dist/previous-release.exe" -old-version '3.5.0-preview.1' -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v${{ needs.windows.outputs.version }}/update.json' -version '${{ needs.windows.outputs.version }}' -out dist/live-gui-update.json
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.7/MHXStudio.exe' -OutFile dist/previous-release.exe
+          if ((Get-FileHash dist/previous-release.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'c251850d2204b5c9dbd85ba54e1a3d0871c14edec0a601ca010dc1f31673e747') { throw 'Published baseline SHA-256 mismatch' }
+          go run ./cmd/windowsverify -old "$pwd/dist/previous-release.exe" -old-version '3.5.0-preview.7' -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v${{ needs.windows.outputs.version }}/update.json' -version '${{ needs.windows.outputs.version }}' -out dist/live-gui-update.json
           if ($LASTEXITCODE) { throw 'Live GUI update test failed' }
       - uses: actions/upload-artifact@v4
         if: always()

@@ -17,6 +17,7 @@ import (
 type vm struct {
 	Index            int
 	Running, Offline bool
+	Serial           string
 }
 
 func die(e error) {
@@ -26,6 +27,10 @@ func die(e error) {
 	}
 }
 func main() {
+	if len(os.Args) == 4 && os.Args[1] == "--serve-adb" {
+		serveADB(os.Args[2], os.Args[3])
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "--hold" {
 		for {
 			time.Sleep(time.Minute)

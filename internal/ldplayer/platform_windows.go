@@ -24,7 +24,7 @@ func systemDirectories() []installDirectory {
 		for e = syscall.Process32First(snapshot, &p); e == nil; e = syscall.Process32Next(snapshot, &p) {
 			name := strings.ToLower(syscall.UTF16ToString(p.ExeFile[:]))
 			switch name {
-			case "dnplayer.exe", "ldplayer.exe", "ldconsole.exe", "dnconsole.exe", "dnmultiplayer.exe", "ldmultiplayer.exe", "ldvboxheadless.exe":
+			case "dnplayer.exe", "ldplayer.exe", "ldconsole.exe", "dnconsole.exe", "dnmultiplayer.exe", "ldmultiplayer.exe", "ldvboxheadless.exe", "adb.exe":
 				h, e := syscall.OpenProcess(0x1000, false, p.ProcessID)
 				if e != nil {
 					continue

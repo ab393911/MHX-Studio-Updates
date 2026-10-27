@@ -26,7 +26,8 @@
 
 - cmd/mhxstudio：原生 Windows GUI；独立数据目录；主程序一键更新；识别标定、单机/五开登录测试入口。
 - internal/update：HTTPS 清单、严格版本比较、大小与 SHA-256 校验、Windows x64 PE 检查、唯一备份、独立更新进程、GUI 启动回执、失败回滚和事务记录。
-- internal/ldplayer：list2 动态实例、窗口句柄/进程信息、通过 Android ID 核对 ADB 绑定。拒绝克隆身份冲突，不假定端口。
+- internal/ldplayer：list2动态实例、窗口句柄/进程信息、Android ID加boot ID核对ADB绑定；新增独立ADB和本机ADB智能套接字发现。无法证明编号时只显示设备，不猜端口对应编号。
+- cmd/mhxstudio/discovery_store.go：自动保存已经核验的发现路径，原config.json保持原位；检测详情报告列出检查路径与错误。
 - internal/automation：两处图像特征、角色选中和角色昵称核验、按钮范围内微小随机点击、可配置重试、有限内存截图、任务完成换区闸门。
 - .github/workflows/windows.yml：Linux 测试、Windows 原生测试、EXE 构建、追加发布版本、匿名下载复核、独立 updates 分支清单。
 
