@@ -21,7 +21,9 @@ func control(h uintptr, id int) uintptr {
 }
 func readText(h uintptr) string {
 	b := make([]uint16, 12000)
-	user.NewProc("GetWindowTextW").Call(h, uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)))
+	// GetWindowTextW intentionally does not read another process's edit text.
+	// WM_GETTEXT is a system-marshalled message and works for these controls.
+	user.NewProc("SendMessageW").Call(h, 0xD, uintptr(len(b)), uintptr(unsafe.Pointer(&b[0])))
 	end := 0
 	for end < len(b) && b[end] != 0 {
 		end++
@@ -31,7 +33,7 @@ func readText(h uintptr) string {
 func writeText(h uintptr, s string) {
 	p, e := syscall.UTF16PtrFromString(s)
 	fail(e)
-	user.NewProc("SetWindowTextW").Call(h, uintptr(unsafe.Pointer(p)))
+	user.NewProc("SendMessageW").Call(h, 0xC, 0, uintptr(unsafe.Pointer(p)))
 }
 func click(h uintptr, id int) {
 	button := control(h, id)
