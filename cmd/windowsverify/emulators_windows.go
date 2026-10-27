@@ -81,8 +81,11 @@ func emulatorGUI(exe, fixture, version, outDir string) map[string]any {
 	if _, e = os.Stat(filepath.Join(data, "config.json")); !os.IsNotExist(e) {
 		fail(errors.New("automatic discovery must not write configuration"))
 	}
-	if readText(control(h, 201)) != install {
-		fail(errors.New("wrong installation selected"))
+	actual := readText(control(h, 201))
+	wantDir, wantErr := os.Stat(install)
+	gotDir, gotErr := os.Stat(actual)
+	if wantErr != nil || gotErr != nil || !os.SameFile(wantDir, gotDir) {
+		fail(fmt.Errorf("wrong installation selected: got %q, expected same directory as %q", actual, install))
 	}
 	count, _, _ := user.NewProc("SendMessageW").Call(control(h, 202), 0x146, 0, 0)
 	if count != 5 {
