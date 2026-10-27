@@ -117,7 +117,7 @@ func (a *app) showInstances(client ldplayer.Client, all []ldplayer.Instance, fin
 		if d.Running() && firstRunning < 0 {
 			firstRunning = i
 		}
-		if d.Serial != "" && firstReady < 0 {
+		if d.Serial != "" && !d.Unmapped && firstReady < 0 {
 			firstReady = i
 		}
 	}
@@ -154,7 +154,11 @@ func (a *app) showInstances(client ldplayer.Client, all []ldplayer.Instance, fin
 			a.log(ldplayer.Summary(all) + "。控制台：" + location)
 			for _, d := range all {
 				if d.ConnectionError != "" {
-					a.log(fmt.Sprintf("编号 %d：%s", d.Index, d.ConnectionError))
+					if d.Unmapped {
+						a.log("ADB设备 " + d.Serial + "：" + d.ConnectionError)
+					} else {
+						a.log(fmt.Sprintf("编号 %d：%s", d.Index, d.ConnectionError))
+					}
 				}
 			}
 			a.lastInventory = sig

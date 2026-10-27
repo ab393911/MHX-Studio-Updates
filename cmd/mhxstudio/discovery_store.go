@@ -76,7 +76,11 @@ func writeDetectionReport(root, version string, d ldplayer.Detection) error {
 	}
 	fmt.Fprintln(&b, "\r\n实例与ADB映射：")
 	for _, i := range d.Instances {
-		fmt.Fprintf(&b, "编号=%d；编号未匹配=%t；名称=%s；ADB=%s；状态=%s；原因=%s\r\n", i.Index, i.Unmapped, i.Name, i.Serial, i.Status(), i.ConnectionError)
+		number := fmt.Sprint(i.Index)
+		if i.Unmapped {
+			number = "待核对"
+		}
+		fmt.Fprintf(&b, "编号=%s；名称=%s；ADB=%s；状态=%s；原因=%s\r\n", number, i.Name, i.Serial, i.Status(), i.ConnectionError)
 	}
 	return filesafe.Write(filepath.Join(dir, "detection.txt"), []byte("\ufeff"+b.String()), 0600)
 }

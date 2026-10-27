@@ -199,6 +199,9 @@ func adbFallbackGUI(exe, fixture, version, outDir string) map[string]any {
 	until(h, "native ADB fallback did not populate the list", func() bool {
 		return strings.Contains(readText(control(h, 208)), "发现 3 个ADB设备，雷电实例编号待匹配")
 	})
+	if !strings.Contains(readText(control(h, 202)), "emulator-19752") {
+		fail(errors.New("fallback default selection did not prefer an online device"))
+	}
 	var report struct {
 		Source, Reason string
 		Checks         []struct{ Kind, Path, Result string }
