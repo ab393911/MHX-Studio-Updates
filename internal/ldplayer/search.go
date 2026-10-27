@@ -276,9 +276,8 @@ func Detect(ctx context.Context, plan SearchPlan, runner Runner, onInventory fun
 		}
 		out.Instances = append(out.Instances, d)
 		added++
-		if d.BootID != "" {
-			usedIdentity[key] = true
-		}
+		// Without a verified console index, equal identities do not prove two
+		// serials are aliases. Keep both visible and prohibit game control.
 	}
 	if added > 0 {
 		out.Reason = "已通过ADB发现设备；无法独立证明实例编号的设备按序列号显示，不猜测编号或执行游戏操作。"

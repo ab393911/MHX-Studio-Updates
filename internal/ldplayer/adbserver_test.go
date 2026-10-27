@@ -128,6 +128,19 @@ func TestFallbackFindsDevicesWithoutAnyExecutable(t *testing.T) {
 		t.Fatal(Summary(d.Instances))
 	}
 }
+
+func TestUnmappedDuplicateIdentitiesDoNotHideActualADBSerials(t *testing.T) {
+	address := testADBServer(t, "clone-a\tdevice\nclone-b\tdevice\n")
+	d := Detect(context.Background(), SearchPlan{Address: address}, nil, nil)
+	if len(d.Instances) != 2 || d.Instances[0].Serial != "clone-a" || d.Instances[1].Serial != "clone-b" {
+		t.Fatal("duplicate identities hid actual devices", d.Instances)
+	}
+	for _, v := range d.Instances {
+		if !v.Unmapped || v.Index != -1 {
+			t.Fatal("duplicate identity assigned a guessed index", v)
+		}
+	}
+}
 func TestNativeADBMapsKnownIndicesByIdentityWithoutPortFormula(t *testing.T) {
 	address := testADBServer(t, "odd-serial\tdevice\n127.0.0.1:21999\tdevice\n")
 	c := Client{Console: "console", Server: address, Runner: bindingRunner{clones: true}}
