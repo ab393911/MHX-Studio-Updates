@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "version": "3.5.0-preview.16",
+  "version": "3.5.0-preview.15",
   "platform": "windows-amd64",
-  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.16/MHXStudio.exe",
-  "sha256": "b965f28a31fddd5eea092edc03e808b6a353c4795444f725cd450f35b7153978",
-  "size": 7371264,
-  "notes": "一键在线更新验收版：新版本取消更新二次确认，增加配置快照、回滚恢复及重启后成功提示；保留preview.15雷电检测和启动。首次从旧preview.15升级仍需其原确认框，配置快照由新程序在健康确认前补建；后续升级在替换前备份。",
-  "source_commit": "08bd05010f4f89081ac35548957d17d0203cd427",
+  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.15/MHXStudio.exe",
+  "sha256": "cdad473fea5b7ed1c22d9d364112e5afecf174756b5557a0a7668881153c31d5",
+  "size": 7315968,
+  "notes": "优先修复雷电自动发现：搜索管理程序、独立ADB及本机ADB服务，记住已核验目录，提供检测详情。不猜测实例编号。Windows自动测试使用接口模拟，真实雷电尚待实机验收；更新保留配置与旧版备份。",
+  "source_commit": "6fba48321210ce7692a3d11caab00bc7f62d7cc8",
   "windows_game_tested": false
 }
