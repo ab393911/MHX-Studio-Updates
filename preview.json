@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "version": "3.5.0-preview.11",
+  "version": "3.5.0-preview.12",
   "platform": "windows-amd64",
-  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.11/MHXStudio.exe",
-  "sha256": "f3185e107b4e27a74ce61d2b08c2cb29e45bad5b7826640b4aaf8ccf9ce8617c",
-  "size": 7260672,
-  "notes": "修复雷电7/10列实例检测，新增自动查找、自动刷新和单台/本组5台启动。Windows自动测试包含命令行测试替身；真实雷电/游戏尚待实机验收。更新保留配置与旧版备份。",
-  "source_commit": "d0f882c9b35415b32924de0e33b4105e933f48ed",
+  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.12/MHXStudio.exe",
+  "sha256": "8e2be8d37991134ced95cde0baab4261eb1bb8045c3dca4ba18b6868a26506d8",
+  "size": 7315456,
+  "notes": "优先修复雷电自动发现：搜索管理程序、独立ADB及本机ADB服务，记住已核验目录，提供检测详情。不猜测实例编号。Windows自动测试使用接口模拟，真实雷电尚待实机验收；更新保留配置与旧版备份。",
+  "source_commit": "1630c88c920be68035760927c5a05186167fa03b",
   "windows_game_tested": false
 }
