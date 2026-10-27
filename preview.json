@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "version": "3.5.0-preview.12",
+  "version": "3.5.0-preview.13",
   "platform": "windows-amd64",
-  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.12/MHXStudio.exe",
-  "sha256": "8e2be8d37991134ced95cde0baab4261eb1bb8045c3dca4ba18b6868a26506d8",
-  "size": 7315456,
+  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.13/MHXStudio.exe",
+  "sha256": "643154d0b38eca2be939be1c3af0c8587f2347a811a64caefd2a10903cd21711",
+  "size": 7315968,
   "notes": "优先修复雷电自动发现：搜索管理程序、独立ADB及本机ADB服务，记住已核验目录，提供检测详情。不猜测实例编号。Windows自动测试使用接口模拟，真实雷电尚待实机验收；更新保留配置与旧版备份。",
-  "source_commit": "1630c88c920be68035760927c5a05186167fa03b",
+  "source_commit": "60495fcc07531b5b1bc56d4aef536d249cf3426d",
   "windows_game_tested": false
 }
