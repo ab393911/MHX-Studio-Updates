@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "version": "3.5.0-preview.17",
+  "version": "3.5.0-preview.19",
   "platform": "windows-amd64",
-  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.17/MHXStudio.exe",
-  "sha256": "49269a937ad125723f5488f5690ac9aa42b5a260dcadb04c4dec5c794f3aed8a",
-  "size": 7372800,
-  "notes": "\u4e00\u952e\u5728\u7ebf\u66f4\u65b0\u9a8c\u6536\u7248\uff1a\u65b0\u7248\u672c\u53d6\u6d88\u66f4\u65b0\u4e8c\u6b21\u786e\u8ba4\uff0c\u589e\u52a0\u914d\u7f6e\u5feb\u7167\u3001\u56de\u6eda\u6062\u590d\u53ca\u91cd\u542f\u540e\u6210\u529f\u63d0\u793a\uff1b\u4fdd\u7559preview.15\u96f7\u7535\u68c0\u6d4b\u548c\u542f\u52a8\u3002\u9996\u6b21\u4ece\u65e7preview.15\u5347\u7ea7\u4ecd\u9700\u5176\u539f\u786e\u8ba4\u6846\uff0c\u914d\u7f6e\u5feb\u7167\u7531\u65b0\u7a0b\u5e8f\u5728\u5065\u5eb7\u786e\u8ba4\u524d\u8865\u5efa\uff1b\u540e\u7eed\u5347\u7ea7\u5728\u66ff\u6362\u524d\u5907\u4efd\u3002",
-  "source_commit": "f6ac38e5ea5d1e5ff1e6f13e20c0298363d7ae66",
+  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.19/MHXStudio.exe",
+  "sha256": "ab2fb36814a87d375dc3b45490eabefd81bae1d73a0390a9b2553b9044db9b16",
+  "size": 7426048,
+  "notes": "单台游戏启动/指定角色登录测试版：先确认绑定游戏入口，复用现有页面标定，未知画面停止；角色身份无法核验时不报告完全成功。保留已验收preview.17更新、雷电发现及单台/五台启动，保留配置和标定。新增游戏功能仅通过自动测试，待真实轻享实机验收；不含战斗、换区或五台游戏自动化。",
+  "source_commit": "4089802dcfa41d7d352f66da031d234a8d2b836b",
   "windows_game_tested": false
 }
