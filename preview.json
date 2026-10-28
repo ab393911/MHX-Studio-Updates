@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "version": "3.5.0-preview.19",
+  "version": "3.5.0-preview.21",
   "platform": "windows-amd64",
-  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.19/MHXStudio.exe",
-  "sha256": "ab2fb36814a87d375dc3b45490eabefd81bae1d73a0390a9b2553b9044db9b16",
-  "size": 7426048,
-  "notes": "单台游戏启动/指定角色登录测试版：先确认绑定游戏入口，复用现有页面标定，未知画面停止；角色身份无法核验时不报告完全成功。保留已验收preview.17更新、雷电发现及单台/五台启动，保留配置和标定。新增游戏功能仅通过自动测试，待真实轻享实机验收；不含战斗、换区或五台游戏自动化。",
-  "source_commit": "4089802dcfa41d7d352f66da031d234a8d2b836b",
+  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.21/MHXStudio.exe",
+  "sha256": "b8c5d2c7bace05be05a332cba6afbc584600adee011635af6d509104aec05aa8",
+  "size": 7657472,
+  "notes": "交接集中测试版：内置截图候选识别与广告外框关闭、保留本机身份标定；新增自选五台启动/已绑定游戏启动、持久化五开计划与本地订单、手动额度核对。新增功能待真实游戏验收。海嘟嘟仅战术预检，任务执行、交易行买卖和真实发货未开放；订单/进度库纳入后续升级备份回滚。保留preview.19已验收的更新、雷电、ADB和包名启动。",
+  "source_commit": "5adac275078a81d1ccb8902d738ebd3e938ae80d",
   "windows_game_tested": false
 }
