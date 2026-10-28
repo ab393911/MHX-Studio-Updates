@@ -18,7 +18,10 @@ type EnterResult struct {
 	IdentityVerified     bool `json:"identity_verified"`
 }
 type LoginStatus struct{ Page, Step string }
-type EnterOptions struct{ OnStatus func(LoginStatus) }
+type EnterOptions struct {
+	OnStatus    func(LoginStatus)
+	InitialWait time.Duration
+}
 
 // Recognize uses one frame for all comparisons. A selected-row template can
 // overlap its generic role-list page, and a named character can overlap the
@@ -108,6 +111,27 @@ func (e *Engine) EnterRole(ctx context.Context, role int, opt EnterOptions) (res
 		if _, ok := e.Profile.Buttons[key]; !ok {
 			return result, fmt.Errorf("缺少按钮范围标定 %s", key)
 		}
+	}
+	if opt.InitialWait > 0 {
+		if opt.InitialWait > 45*time.Second {
+			return result, errors.New("startup wait exceeds safety bound")
+		}
+		wait, cancel := context.WithTimeout(ctx, opt.InitialWait)
+		status("loading", "等待游戏启动页面，按截图状态判断，不点击")
+		for {
+			img, er := e.image(wait)
+			if er == nil {
+				_, er = e.Profile.Recognize(img)
+			}
+			if er == nil {
+				break
+			}
+			if er = pause(wait, 350*time.Millisecond); er != nil {
+				cancel()
+				return result, fmt.Errorf("游戏启动后页面未确认：%w", er)
+			}
+		}
+		cancel()
 	}
 	state, err := e.loginObserve(ctx, status)
 	if err != nil {

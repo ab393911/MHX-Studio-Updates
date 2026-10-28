@@ -112,7 +112,7 @@ func main() {
 			fmt.Printf("aaaaaaaa-bbbb-4ccc-8ddd-%012d\n", n)
 			return
 		}
-		if gameCommand(root, command) {
+		if gameCommand(root, command, n) {
 			return
 		}
 	}

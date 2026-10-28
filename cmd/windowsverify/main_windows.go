@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
+	"github.com/ab393911/MHX-Studio-Updates/internal/studio"
 	"github.com/ab393911/MHX-Studio-Updates/internal/update"
 )
 
@@ -53,6 +54,16 @@ func closeTitle(title string) {
 		user.NewProc("PostMessageW").Call(h, 0x10, 0, 0)
 		end := time.Now().Add(8 * time.Second)
 		for time.Now().Before(end) {
+			if dlg := findWindow("MHX Studio"); dlg != 0 {
+				var owner, windowPID uint32
+				user.NewProc("GetWindowThreadProcessId").Call(h, uintptr(unsafe.Pointer(&windowPID)))
+				user.NewProc("GetWindowThreadProcessId").Call(dlg, uintptr(unsafe.Pointer(&owner)))
+				if owner != 0 && owner == windowPID {
+					if yes := control(dlg, 6); yes != 0 {
+						user.NewProc("SendMessageW").Call(yes, 0xF5, 0, 0)
+					}
+				}
+			}
 			if findWindow(title) == 0 {
 				return
 			}
@@ -118,8 +129,14 @@ func main() {
 		results["emulator_gui_fixture"] = emulatorGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 		results["adb_fallback_gui_fixture"] = adbFallbackGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 		results["single_game_gui_fixture"] = gameGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
+		results["studio_gui_fixture"] = studioGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 	}
 	scenarios := []string{"success", "startup_timeout", "sha_tamper", "sharing_violation"}
+	ledger, e := studio.Open(filepath.Dir(cfg))
+	fail(e)
+	sentinelOrder, e := ledger.CreateOrder("native-preserved-buyer", 40000)
+	fail(e)
+	fail(ledger.Close())
 	if *exitExe != "" {
 		scenarios = append(scenarios, "immediate_exit", "config_migration_exit")
 	}
@@ -218,7 +235,16 @@ func main() {
 				fail(errors.New("failed migration remains active"))
 			}
 		}
+		ledger, e = studio.Open(filepath.Dir(cfg))
+		fail(e)
+		kept, e := ledger.Order(sentinelOrder.ID)
+		fail(e)
+		if kept.Total != 40000 || kept.Confirmed != 0 || kept.Held != 0 {
+			fail(errors.New("progress/order database changed during native update/rollback"))
+		}
+		fail(ledger.Close())
 		results[scenario] = map[string]any{"passed": true, "status": result.Status, "config_unchanged": true, "configuration_snapshot_verified": configBacked, "backup_retained": scenario == "success" || scenario == "startup_timeout" || scenario == "immediate_exit" || scenario == "config_migration_exit"}
+		results[scenario].(map[string]any)["studio_order_database_preserved"] = true
 	}
 	// Also prove settings saves preserve unknown fields (unit tests cover detail).
 	results["passed"] = true

@@ -18,6 +18,7 @@ import (
 	"unsafe"
 
 	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
+	"github.com/ab393911/MHX-Studio-Updates/internal/studio"
 	"github.com/ab393911/MHX-Studio-Updates/internal/update"
 )
 
@@ -63,6 +64,16 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	fail(e)
 	profileBefore, e := os.ReadFile(profile)
 	fail(e)
+	studioSeeded := oldVersion == "3.4.999"
+	studioOrderID := ""
+	if studioSeeded {
+		s, e := studio.Open(dataRoot)
+		fail(e)
+		o, e := s.CreateOrder("ci-update-preserved", 90000)
+		fail(e)
+		studioOrderID = o.ID
+		fail(s.Close())
+	}
 	target := filepath.Join(root, "Program", "MHXStudio.exe")
 	copyFile(old, target)
 	oldHash, e := update.Hash(target)
@@ -173,6 +184,27 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	if !bytes.Equal(profileBefore, profileAfter) {
 		fail(errors.New("GUI update changed calibration bytes"))
 	}
+	studioPreserved := false
+	if studioSeeded {
+		s, e := studio.Open(dataRoot)
+		fail(e)
+		o, e := s.Order(studioOrderID)
+		fail(e)
+		if o.Total != 90000 || o.Confirmed != 0 || o.Held != 0 {
+			fail(errors.New("studio database not preserved"))
+		}
+		fail(s.Close())
+		snapshot, e := update.ReadConfigBackup(plan.ConfigBackupPath(), dataRoot, plan.Token)
+		fail(e)
+		for _, f := range snapshot.Files {
+			if f.Path == studio.FileName {
+				studioPreserved = true
+			}
+		}
+		if !studioPreserved {
+			fail(errors.New("studio database omitted from pre-replacement backup"))
+		}
+	}
 	until(h, "new GUI did not display explicit update success", func() bool {
 		return strings.Contains(readText(control(h, 209)), "更新成功：当前版本 "+expected)
 	})
@@ -213,6 +245,8 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		resultMap["previous_published_version"] = oldVersion
 	}
 	resultMap["window_and_critical_buttons_on_screen"] = true
+	resultMap["studio_data_seeded"] = studioSeeded
+	resultMap["studio_database_preserved"] = studioPreserved
 	fail(filesafe.JSON(out, resultMap))
 	fmt.Println("Live GUI update passed:", expected, "one click:", oneClick, "legacy confirmations:", confirmations)
 }

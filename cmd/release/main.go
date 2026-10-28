@@ -60,7 +60,7 @@ func main() {
 	fail(e)
 	st, e := os.Stat(*exe)
 	fail(e)
-	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "单台游戏启动/指定角色登录测试版：先确认绑定游戏入口，复用现有页面标定，未知画面停止；角色身份无法核验时不报告完全成功。保留已验收preview.17更新、雷电发现及单台/五台启动，保留配置和标定。新增游戏功能仅通过自动测试，待真实轻享实机验收；不含战斗、换区或五台游戏自动化。", SourceCommit: *commit, WindowsTested: false}
+	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "交接集中测试版：内置截图候选识别与广告外框关闭、保留本机身份标定；新增自选五台启动/已绑定游戏启动、持久化五开计划与本地订单、手动额度核对。新增功能待真实游戏验收。海嘟嘟仅战术预检，任务执行、交易行买卖和真实发货未开放；订单/进度库纳入后续升级备份回滚。保留preview.19已验收的更新、雷电、ADB和包名启动。", SourceCommit: *commit, WindowsTested: false}
 	fail(m.Validate())
 	fail(os.MkdirAll(*out, 0700))
 	fail(filesafe.JSON(filepath.Join(*out, "update.json"), m))
@@ -85,6 +85,8 @@ func main() {
 	add("docs/ONLINE_UPDATE_ACCEPTANCE.md", "ONLINE_UPDATE_ACCEPTANCE.md")
 	add("docs/SINGLE_GAME_ACCEPTANCE.md", "SINGLE_GAME_ACCEPTANCE.md")
 	add("docs/DELIVERY_RULES.md", "DELIVERY_RULES.md")
+	add("docs/HANDOFF_ACCEPTANCE_20261029.md", "HANDOFF_ACCEPTANCE_20261029.md")
+	add("docs/HANDOFF_EVIDENCE_REPLAY.json", "HANDOFF_EVIDENCE_REPLAY.json")
 	add(filepath.Join(*out, "update.json"), "update.json")
 	add(filepath.Join(*out, "SHA256SUMS.txt"), "SHA256SUMS.txt")
 	if *report != "" {

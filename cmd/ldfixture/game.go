@@ -18,8 +18,11 @@ type gameState struct {
 	Starts, Taps                        int
 }
 
-func gameCommand(root, command string) bool {
-	path := filepath.Join(root, "game-fixture.json")
+func gameCommand(root, command string, index int) bool {
+	path := filepath.Join(root, fmt.Sprintf("game-fixture-%d.json", index))
+	if _, e := os.Stat(path); os.IsNotExist(e) {
+		path = filepath.Join(root, "game-fixture.json")
+	}
 	var g gameState
 	if filesafe.ReadJSON(path, &g) != nil {
 		return false

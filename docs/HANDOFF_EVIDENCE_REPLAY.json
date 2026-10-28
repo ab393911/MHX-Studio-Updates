@@ -1,0 +1,155 @@
+{
+  "count": 183,
+  "five_profession_verified": false,
+  "matches": [
+    {
+      "matches": [
+        "market_buy"
+      ],
+      "source_id": 1
+    },
+    {
+      "matches": [
+        "formation"
+      ],
+      "source_id": 16
+    },
+    {
+      "matches": [
+        "fortune"
+      ],
+      "source_id": 17
+    },
+    {
+      "matches": [
+        "stronghold"
+      ],
+      "source_id": 47
+    },
+    {
+      "matches": [
+        "gift"
+      ],
+      "source_id": 74
+    },
+    {
+      "matches": [
+        "talisman"
+      ],
+      "source_id": 75
+    },
+    {
+      "matches": [
+        "cargo"
+      ],
+      "source_id": 89
+    },
+    {
+      "matches": [
+        "talisman"
+      ],
+      "source_id": 102
+    },
+    {
+      "matches": [
+        "market_listing"
+      ],
+      "source_id": 110
+    },
+    {
+      "matches": [
+        "roles",
+        "selected_1"
+      ],
+      "source_id": 126
+    },
+    {
+      "matches": [
+        "notice"
+      ],
+      "source_id": 143
+    },
+    {
+      "matches": [
+        "roles",
+        "selected_1"
+      ],
+      "source_id": 144
+    },
+    {
+      "matches": [
+        "roles",
+        "selected_1"
+      ],
+      "source_id": 145
+    },
+    {
+      "matches": [
+        "game"
+      ],
+      "source_id": 146
+    },
+    {
+      "matches": [
+        "menu"
+      ],
+      "source_id": 148
+    },
+    {
+      "matches": [
+        "settings"
+      ],
+      "source_id": 149
+    },
+    {
+      "matches": [
+        "tree"
+      ],
+      "source_id": 150
+    },
+    {
+      "matches": [
+        "roles",
+        "selected_1"
+      ],
+      "source_id": 151
+    },
+    {
+      "matches": [
+        "notice"
+      ],
+      "source_id": 154
+    },
+    {
+      "matches": [
+        "roles",
+        "selected_1"
+      ],
+      "source_id": 158
+    },
+    {
+      "matches": [
+        "advert"
+      ],
+      "source_id": 170
+    },
+    {
+      "matches": [
+        "daily"
+      ],
+      "source_id": 174
+    },
+    {
+      "matches": [
+        "life_prompt"
+      ],
+      "source_id": 182
+    }
+  ],
+  "passed": true,
+  "profession_candidate": "",
+  "profession_limitation": "职业形状/颜色证据不唯一",
+  "real_game_tested": false,
+  "real_screenshot_offline_replay": true,
+  "source_zip_sha256": "be45501d1f08d67ae4a76802e086b727081a39dca590a3cd4373a5ddab06ae42"
+}

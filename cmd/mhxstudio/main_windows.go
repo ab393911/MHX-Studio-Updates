@@ -24,6 +24,7 @@ import (
 	"github.com/ab393911/MHX-Studio-Updates/internal/automation"
 	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
 	"github.com/ab393911/MHX-Studio-Updates/internal/ldplayer"
+	"github.com/ab393911/MHX-Studio-Updates/internal/studio"
 	"github.com/ab393911/MHX-Studio-Updates/internal/update"
 )
 
@@ -108,6 +109,11 @@ type app struct {
 	gameSelector                                      *gameSelector
 	roleInstanceKey                                   string
 	placedCalibration, placedSelector                 uintptr
+	workbench                                         *workbench
+	stateStore                                        *studio.Store
+	pendingStudioAction                               int
+	lastProofCleanupDay                               string
+	stateOpenFailed                                   bool
 }
 
 var active *app
@@ -161,8 +167,8 @@ func (a *app) button(s string, x, y, w, id int) { a.control("BUTTON", s, x, y, w
 func comboAdd(h uintptr, s string)              { sendMessage.Call(h, 0x143, 0, uintptr(unsafe.Pointer(utf(s)))) }
 func comboIndex(h uintptr) int                  { return int(int32(send(h, 0x147, 0, 0))) }
 func (a *app) build() {
-	a.label("MHX Studio "+version+"  |  单台启动游戏与指定角色测试版", 20, 15, 1000)
-	a.label("保留已验收更新及雷电功能；本轮只测单台登录，游戏功能尚待实机验收。", 20, 44, 1000)
+	a.label("MHX Studio "+version+"  |  截图识别、五开计划与本地订单测试版", 20, 15, 1000)
+	a.label("保留已验收更新、雷电与游戏包名启动；新游戏功能仍待实机验收，战斗与真实发货未开放。", 20, 44, 1000)
 	a.label("雷电目录", 20, 83, 90)
 	a.control("EDIT", a.cfg.InstallDir, 115, 78, 610, 28, wsBorder, 201)
 	a.button("选择雷电程序", 740, 77, 140, 101)
@@ -182,10 +188,8 @@ func (a *app) build() {
 	a.label("五开首编号", 230, 168, 115)
 	a.control("EDIT", strconv.Itoa(a.cfg.GroupStart), 350, 162, 70, 28, wsBorder, 205)
 	a.button("保存设置", 440, 160, 110, 104)
-	a.button("单机闭环：5角色", 670, 160, 170, 105)
-	a.button("五开闭环测试", 855, 160, 150, 106)
-	user32.NewProc("EnableWindow").Call(a.controls[105], 0)
-	user32.NewProc("EnableWindow").Call(a.controls[106], 0)
+	a.button("截图/职业预检", 670, 160, 170, 105)
+	a.button("五开工作台", 855, 160, 150, 106)
 	a.button("停止", 565, 160, 90, 107)
 	a.label("标定页面", 20, 213, 90)
 	cal := a.control("COMBOBOX", "", 115, 205, 500, 380, 3|0x200000, 206)
@@ -220,7 +224,7 @@ func (a *app) build() {
 	a.button("标定指引", 865, 405, 140, 121)
 	a.control("STATIC", "游戏状态：未检查；选择实例和目标角色后开始。", 20, 448, 985, 40, 0, 211)
 	a.control("EDIT", "", 20, 495, 985, 210, wsBorder|0x200000|4|0x40|0x800, 900)
-	a.log("preview.17 更新、雷电发现、单台/五台启动与ADB已由用户实机验收；本版新增游戏功能尚待实机验收。")
+	a.log("preview.19及此前的在线更新、雷电发现、单台/五台启动、ADB和游戏包名启动已由用户实机验收；新增功能另行验收。")
 	a.log("当前版本 " + version + "：启动后自动搜索管理程序和ADB，空闲时每12秒刷新；已核验路径自动记住。具体路径与原因见“检测详情”。")
 	a.log("配置位置：" + a.root)
 }
@@ -263,6 +267,11 @@ func (a *app) work(f func(context.Context) error) {
 				id := a.pendingAction
 				a.pendingAction = 0
 				a.handle(id)
+				return
+			}
+			if id := a.pendingStudioAction; id != 0 && a.workbench != nil {
+				a.pendingStudioAction = 0
+				a.workbench.proc(a.workbench.hwnd, wmCommand, uintptr(id), 0)
 			}
 		})
 	}()
@@ -357,7 +366,7 @@ func (a *app) errorCapture(d ldplayer.Instance, b []byte, err error) {
 			_ = filesafe.Write(filepath.Join(dir, base+".png"), b, 0600)
 		}
 	}
-	_ = filesafe.JSON(filepath.Join(dir, base+".json"), map[string]any{"instance": d.Index, "error": err.Error(), "version": version})
+	_ = filesafe.JSON(filepath.Join(dir, base+".json"), map[string]any{"instance": d.Index, "instance_name": d.Name, "adb_serial": d.Serial, "android_id": d.AndroidID, "boot_id": d.BootID, "screenshot_sha256": fmt.Sprintf("%x", sha256.Sum256(b)), "resources": "not_read", "counters": "not_read", "captured_at": time.Now().UTC().Format(time.RFC3339Nano), "error": err.Error(), "version": version})
 	entries, _ := filepath.Glob(filepath.Join(dir, "error-*.json"))
 	if len(entries) > 20 {
 		for _, p := range entries[:len(entries)-20] {
@@ -481,6 +490,11 @@ func (a *app) checkRecognition() {
 		return
 	}
 	p, e := loadProfile(a.root, d.Index)
+	if e != nil {
+		a.log(e.Error())
+		return
+	}
+	p, e = effectiveProfile(p)
 	if e != nil {
 		a.log(e.Error())
 		return
@@ -636,11 +650,12 @@ func (a *app) handle(id int) {
 			a.log("设置已保存，未知配置字段保留。")
 		}
 	case 105:
-		a.info("当前阶段只验收单台、单个指定角色。请使用“启动游戏并进入角色”。")
+		a.evidenceCheck()
 	case 106:
-		a.info("五台游戏自动化暂缓，待单台实机验收后再开放。模拟器五台批量启动仍可使用。")
+		a.openWorkbench()
 	case 107:
 		a.pendingAction = 0
+		a.pendingStudioAction = 0
 		if a.cancel != nil {
 			a.cancel()
 			a.log("正在停止；不会再开始下一次点击。")
@@ -656,7 +671,7 @@ func (a *app) handle(id int) {
 	case 111:
 		_ = exec.Command("explorer.exe", a.root).Start()
 	case 112:
-		a.info("preview.17基础功能已由用户实机验收：在线升级、雷电24实例发现、单台和五台启动、ADB核验。\n新增只测试单台游戏启动与指定角色登录；先绑定当前游戏，再标定页面。\n未知或冲突画面停止，不执行任务、创建角色或换区。\n后续版本始终使用“一键检查更新”，保留配置及标定。\n真实机器故障回滚仍未验收。")
+		a.info("preview.19及此前在线更新、雷电24实例、单台/五台启动、ADB和包名启动已由用户实机通过。\n新版新增内置候选识别、广告外框关闭和五开工作台；已有本机标定优先。\n工作台可自选五台、打开已绑定游戏、保存区服/批次计划及记账订单，不自动执行任务、战斗或真实发货。\n角色昵称未核验时只报告部分成功；职业候选不确定时保留人工绑定。\n所有升级继续只点“一键检查更新”，原设置、标定和进度/订单数据保留。真实机器故障回滚仍未验收。")
 	case 113:
 		a.pendingUpdates()
 	case 114:
@@ -686,6 +701,9 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 	}
 	if a != nil && a.gameSelector != nil && h == a.gameSelector.hwnd {
 		return a.gameSelector.proc(h, m, w, l)
+	}
+	if a != nil && a.workbench != nil && h == a.workbench.hwnd {
+		return a.workbench.proc(h, m, w, l)
 	}
 	if a != nil && h == a.hwnd {
 		switch m {
@@ -749,6 +767,10 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 }
 func (a *app) tick() {
 	if !a.healthDone && a.healthPath != "" {
+		if e := studio.VerifyFile(a.root); e != nil {
+			a.log("进度/订单数据库健康检查失败，拒绝确认升级：" + e.Error())
+			return
+		}
 		visible, _, _ := user32.NewProc("IsWindowVisible").Call(a.hwnd)
 		if visible == 0 {
 			showWindow.Call(a.hwnd, 9)
@@ -798,6 +820,9 @@ func (a *app) tick() {
 		return
 	}
 	if a.updateResultPath != "" && !a.updateResultDone {
+		return
+	}
+	if a.maintainStudio() {
 		return
 	}
 	if !a.busy.Load() && a.cal == nil && a.gameSelector == nil && !a.closing && time.Now().After(a.nextScan) {
@@ -894,6 +919,11 @@ func main() {
 		return
 	}
 	a := &app{controls: map[int]uintptr{}, actions: make(chan func(), 512), root: data, cfg: cfg, cache: automation.NewCache(2, 32<<20), healthPath: receipt, healthToken: token, healthVersion: healthVersion, smokePath: smoke}
+	defer func() {
+		if a.stateStore != nil {
+			_ = a.stateStore.Close()
+		}
+	}()
 	if result == "" && receipt != "" {
 		result = filepath.Join(filepath.Dir(receipt), "result.json")
 	}

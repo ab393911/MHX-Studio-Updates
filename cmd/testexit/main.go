@@ -20,5 +20,8 @@ func main() {
 		_ = os.WriteFile(filepath.Join(root, "config.json"), []byte("failed native migration"), 0600)
 		_ = os.MkdirAll(filepath.Join(root, "profiles"), 0700)
 		_ = os.WriteFile(filepath.Join(root, "profiles", "partial-new.json"), []byte("partial"), 0600)
+		_ = os.WriteFile(filepath.Join(root, "studio.sqlite3"), []byte("failed native database migration"), 0600)
+		_ = os.WriteFile(filepath.Join(root, "studio.sqlite3-wal"), []byte("failed wal"), 0600)
+		_ = os.WriteFile(filepath.Join(root, "studio.sqlite3-shm"), []byte("failed shm"), 0600)
 	}
 }

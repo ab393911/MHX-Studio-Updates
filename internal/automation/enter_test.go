@@ -149,3 +149,33 @@ func TestWrongResolutionRejected(t *testing.T) {
 		t.Fatal("unknown image accepted")
 	}
 }
+
+type startupDevice struct {
+	d                   *visualSimulator
+	captures, earlyTaps int
+}
+
+func (d *startupDevice) Capture(ctx context.Context) ([]byte, error) {
+	d.captures++
+	if d.captures < 3 {
+		return d.d.images["settings"], ctx.Err()
+	}
+	return d.d.Capture(ctx)
+}
+func (d *startupDevice) Tap(ctx context.Context, x, y int) error {
+	if d.captures < 3 {
+		d.earlyTaps++
+	}
+	return d.d.Tap(ctx, x, y)
+}
+func TestColdStartWaitsForKnownPageWithoutClickingLoadingScreen(t *testing.T) {
+	d := simulator(t)
+	delete(d.profile.Pages, "settings")
+	device := &startupDevice{d: d}
+	eng := enterEngine(d)
+	eng.Device = device
+	r, e := eng.EnterRole(context.Background(), 1, EnterOptions{InitialWait: 2 * time.Second})
+	if e != nil || !r.IdentityVerified || device.earlyTaps != 0 {
+		t.Fatal(r, e, device)
+	}
+}

@@ -1,15 +1,15 @@
 # MHX Studio
 
-Windows x64原生GUI，面向雷电单台游戏启动与指定角色登录测试。后续版本只通过软件内“一键检查更新”升级，自动校验、备份、保留配置/页面标定、健康检查及失败恢复。
+基于用户实机验收的preview.19继续开发。后续升级只点击软件内“一键检查更新”，自动下载、SHA-256、备份、替换、重启与健康检查，保留配置、职业、包名绑定、标定及新进度/订单库。
 
-用户真实验收基线preview.17：软件内升级、雷电24实例发现、单台启动、全关闭后五台批量启动、ADB。V3.3游戏内返回登录并重新进入角色路径为人工ADB已测；新游戏全自动功能待实机验收。
+本批提供截图候选与单台登录增强、自选任意五台启动和已绑定游戏启动、持久化小组/区服/批次计划、本地仅记账订单与额度核对。海嘟嘟仅战术预检；游戏任务执行、交易行买卖和真实发货未开放。职业候选不确定时不覆盖人工绑定，角色身份不明不报告完全成功。
 
-- [本轮单台测试步骤与准确状态](docs/SINGLE_GAME_ACCEPTANCE.md)
-- [长期开发及交付规则](docs/DELIVERY_RULES.md)
-- [自动测试范围](docs/TESTING.md)
-- [在线更新机制及验收](docs/ONLINE_UPDATE_ACCEPTANCE.md)
-- [源码盘点](docs/SOURCE_INVENTORY.md)
+- [交接实现/验收矩阵与具体未决问题](docs/HANDOFF_ACCEPTANCE_20261029.md)
+- [183张截图离线回放报告](docs/HANDOFF_EVIDENCE_REPLAY.json)
+- [长期交付规则](docs/DELIVERY_RULES.md)
+- [测试说明](docs/TESTING.md)
+- [在线更新机制](docs/ONLINE_UPDATE_ACCEPTANCE.md)
 
-[默认更新清单](https://raw.githubusercontent.com/ab393911/MHX-Studio-Updates/updates/preview.json) · [发布文件及测试报告](https://github.com/ab393911/MHX-Studio-Updates/releases)
+[默认更新清单](https://raw.githubusercontent.com/ab393911/MHX-Studio-Updates/updates/preview.json) · [发布与测试报告](https://github.com/ab393911/MHX-Studio-Updates/releases)
 
-不包含任务、战斗、自动换区、创建角色或五台游戏自动化。真实机器故障回滚尚未验收。
+源码完成、离线/自动测试、Windows界面测试、真实雷电实机分别记录。真实故障回滚仍未验收。

@@ -8,8 +8,10 @@ jq -e '.new_gui_visible == true' dist/one-click-gui-update.json > /dev/null
 jq -e '.window_and_critical_buttons_on_screen == true' dist/live-gui-update.json > /dev/null
 jq -e '.window_and_critical_buttons_on_screen == true' dist/one-click-gui-update.json > /dev/null
 jq -e '.single_game_gui_fixture.main_and_critical_buttons_on_screen == true and .single_game_gui_fixture.calibration_window_on_screen == true and .single_game_gui_fixture.game_selector_on_screen == true' dist/windows-tests.json > /dev/null
-jq -e '.baseline_published == true and .previous_version == "3.5.0-preview.17" and .one_click_without_confirmation == true and .confirmation_clicks == 0 and .post_upgrade_five_launch_and_adb_fixture == true and .game_settings_byte_preserved == true' dist/live-gui-update.json > /dev/null
+jq -e '.baseline_published == true and .previous_version == "3.5.0-preview.19" and .one_click_without_confirmation == true and .confirmation_clicks == 0 and .post_upgrade_five_launch_and_adb_fixture == true and .game_settings_byte_preserved == true' dist/live-gui-update.json > /dev/null
 jq -e '.passed == true and .startup_timeout.passed == true and .immediate_exit.passed == true and .config_migration_exit.passed == true and .sha_tamper.passed == true and .sharing_violation.passed == true and .emulator_gui_fixture.cold_five_launch_and_adb_verified == true and .single_game_gui_fixture.passed == true and .single_game_gui_fixture.real_game_tested == false' dist/windows-tests.json > /dev/null
+jq -e '.studio_gui_fixture.passed == true and .studio_gui_fixture.no_real_delivery == true and .studio_gui_fixture.no_fake_task_completion == true and .studio_gui_fixture.selected_five_games_open_without_taps == true and .config_migration_exit.studio_order_database_preserved == true' dist/windows-tests.json > /dev/null
+jq -e '.studio_data_seeded == true and .studio_database_preserved == true' dist/one-click-gui-update.json > /dev/null
 go run ./cmd/release -verify "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${MHX_VERSION}/update.json" -commit "$GITHUB_SHA" -version "$MHX_VERSION"
 # The updates ref is a separate channel branch. Main and every previous release remain intact.
 if ! gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/updates" > /dev/null 2>&1; then

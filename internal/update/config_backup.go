@@ -26,7 +26,13 @@ type ConfigSnapshot struct {
 }
 
 func configName(name string) bool {
-	return name == "config.json" || name == "ldplayer-discovery.json" || (strings.HasPrefix(name, "profiles/") && strings.HasSuffix(name, ".json"))
+	return name == "studio.sqlite3" || name == "studio.sqlite3-wal" || name == "studio.sqlite3-shm" || name == "config.json" || name == "ldplayer-discovery.json" || (strings.HasPrefix(name, "profiles/") && strings.HasSuffix(name, ".json"))
+}
+func configFileLimit(name string) int64 {
+	if strings.HasPrefix(name, "studio.sqlite3") {
+		return 64 << 20
+	}
+	return 8 << 20
 }
 func configPath(root, name string) (string, error) {
 	if !configName(name) || strings.Contains(name, "\\") || strings.Contains(name, ":") || strings.HasPrefix(name, "/") || filepath.ToSlash(filepath.Clean(filepath.FromSlash(name))) != name {
@@ -48,7 +54,7 @@ func configPath(root, name string) (string, error) {
 }
 func configFiles(root string) ([]string, error) {
 	var out []string
-	for _, name := range []string{"config.json", "ldplayer-discovery.json"} {
+	for _, name := range []string{"config.json", "ldplayer-discovery.json", "studio.sqlite3", "studio.sqlite3-wal", "studio.sqlite3-shm"} {
 		p, e := configPath(root, name)
 		if e != nil {
 			return nil, e
@@ -139,7 +145,7 @@ func BackupConfig(root, dest, token string) error {
 		if e != nil {
 			return e
 		}
-		if !st.Mode().IsRegular() || st.Size() > 8<<20 {
+		if !st.Mode().IsRegular() || st.Size() > configFileLimit(name) {
 			return fmt.Errorf("configuration file too large or invalid: %s", name)
 		}
 		total += st.Size()
@@ -179,7 +185,7 @@ func ReadConfigBackup(dir, root, token string) (ConfigSnapshot, error) {
 		if _, e := configPath(root, f.Path); e != nil {
 			return m, e
 		}
-		if seen[strings.ToLower(f.Path)] || !hashRE.MatchString(f.SHA256) || f.Size < 0 || f.Size > 8<<20 {
+		if seen[strings.ToLower(f.Path)] || !hashRE.MatchString(f.SHA256) || f.Size < 0 || f.Size > configFileLimit(f.Path) {
 			return m, errors.New("invalid configuration snapshot entry")
 		}
 		seen[strings.ToLower(f.Path)] = true

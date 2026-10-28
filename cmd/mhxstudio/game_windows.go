@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/ab393911/MHX-Studio-Updates/internal/automation"
+	"github.com/ab393911/MHX-Studio-Updates/internal/evidence"
 	"github.com/ab393911/MHX-Studio-Updates/internal/gameapp"
 	"github.com/ab393911/MHX-Studio-Updates/internal/ldplayer"
 )
@@ -114,6 +115,13 @@ func (a *app) startGame(enter bool) {
 		a.log(e.Error())
 		return
 	}
+	if enter {
+		profile, e = effectiveProfile(profile)
+		if e != nil {
+			a.log(e.Error())
+			return
+		}
+	}
 	client, cfg := a.client, a.cfg
 	a.work(func(ctx context.Context) (err error) {
 		shell := gameShell{client, d}
@@ -163,8 +171,17 @@ func (a *app) startGame(enter bool) {
 			a.logAsync("仅启动游戏完成：ADB身份及游戏前台已核验；未声称登录或角色成功。")
 			return nil
 		}
-		eng := automation.Engine{Device: device, Profile: profile, Options: automation.Options{Retries: cfg.Retries, MinDelayMS: cfg.MinDelayMS, MaxDelayMS: cfg.MaxDelayMS, StateTimeout: 30 * time.Second, OnLog: func(s string) { a.logAsync(fmt.Sprintf("[%d] %s", d.Index, s)) }}}
-		result, err := eng.EnterRole(ctx, role, automation.EnterOptions{OnStatus: func(s automation.LoginStatus) { a.gameStatus(d, role, s.Page, s.Step) }})
+		catalog, err := evidence.Load()
+		if err != nil {
+			return err
+		}
+		loginDevice := &evidence.LoginDevice{Device: device, Catalog: catalog, Retries: cfg.Retries, MinDelayMS: cfg.MinDelayMS, MaxDelayMS: cfg.MaxDelayMS, OnLog: a.logAsync}
+		eng := automation.Engine{Device: loginDevice, Profile: profile, Options: automation.Options{Retries: cfg.Retries, MinDelayMS: cfg.MinDelayMS, MaxDelayMS: cfg.MaxDelayMS, StateTimeout: 30 * time.Second, OnLog: func(s string) { a.logAsync(fmt.Sprintf("[%d] %s", d.Index, s)) }}}
+		startupWait := time.Duration(0)
+		if !launch.AlreadyForeground {
+			startupWait = 40 * time.Second
+		}
+		result, err := eng.EnterRole(ctx, role, automation.EnterOptions{InitialWait: startupWait, OnStatus: func(s automation.LoginStatus) { a.gameStatus(d, role, catalog.Label(s.Page), s.Step) }})
 		if err != nil {
 			return err
 		}
@@ -334,6 +351,11 @@ func (a *app) loginCalibrationGuide() {
 		a.log(e.Error())
 		return
 	}
+	p, e = effectiveProfile(p)
+	if e != nil {
+		a.log(e.Error())
+		return
+	}
 	r := comboIndex(a.controls[210]) + 1
 	keys := []string{"notice", "tree", "roles", fmt.Sprintf("selected_%d", r), fmt.Sprintf("game_%d", r)}
 	next := -1
@@ -357,5 +379,5 @@ func (a *app) loginCalibrationGuide() {
 		missing = "\n本角色所需基础页面已有标定，请先点“只检查当前识别”验证。"
 	}
 	rows := []int{95, 169, 240, 311, 382}
-	a.info(fmt.Sprintf("实例%d，目标角色%d。每个实际页面点“截图并框选标定”：两处稳定特征 + 一个按钮范围。\n待标定：%s\n\n参考中心：公告(480,480)、动画页(750,405)、本角色行(140,%d)、角色进入(850,488)、游戏菜单(930,320)。仅作找按钮参考，未经截图核验不点击。\n\n角色选中标定须包含本行高亮/昵称；游戏内标定须包含本角色昵称。没有实际出现的动画页可略过。\n缺少模板时会停止，不会按参考坐标盲点。", d.Index, r, missing, rows[r-1]))
+	a.info(fmt.Sprintf("实例%d，目标角色%d。每个实际页面点“截图并框选标定”：两处稳定特征 + 一个按钮范围。\n待标定：%s\n\n参考中心：公告(480,480)、动画页(750,405)、本角色行(140,%d)、角色进入(850,488)、游戏菜单(930,320)。仅作找按钮参考，未经截图核验不点击。\n\n角色选中标定须包含本行高亮/昵称；游戏内标定须包含本角色昵称。没有实际出现的动画页可略过。\n内置候选模板用于页面与选中边框；当前角色昵称仍需本机标定。缺少可靠身份依据时只报告部分成功。", d.Index, r, missing, rows[r-1]))
 }
