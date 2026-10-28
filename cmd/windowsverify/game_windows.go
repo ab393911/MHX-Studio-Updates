@@ -103,6 +103,9 @@ func gameGUI(exe, fixture, version, outDir string) map[string]any {
 	title := "知夏 · MHX Studio " + version
 	fail(waitWindow(title))
 	h := findWindow(title)
+	until(h, "main window exceeds desktop work area", func() bool {
+		return onScreen(h) && onScreen(control(h, 107)) && onScreen(control(h, 110)) && onScreen(control(h, 117)) && onScreen(control(h, 118))
+	})
 	until(h, "game test did not discover bound instance", func() bool { return strings.Contains(readText(control(h, 208)), "ADB 已验证 1 台") })
 	until(h, "target role setting was not restored", func() bool { return readText(control(h, 210)) == "3" })
 	click(h, 118)
@@ -120,6 +123,14 @@ func gameGUI(exe, fixture, version, outDir string) map[string]any {
 		fail(fmt.Errorf("wrong target or extra launch %+v", g))
 	}
 	fail(captureWindow(h, filepath.Join(outDir, "single-game-gui-preview.png")))
+	click(h, 108)
+	calTitle := "实例 6 标定 · 公告页：黄色踏入仙途"
+	fail(waitWindow(calTitle))
+	cal := findWindow(calTitle)
+	until(h, "calibration window or save button exceeds desktop", func() bool { return onScreen(cal) && onScreen(control(cal, 302)) })
+	fail(captureWindow(cal, filepath.Join(outDir, "calibration-gui-preview.png")))
+	closeTitle(calTitle)
+	gameIdle(h)
 	click(h, 117)
 	until(h, "already-in-target state was not reused", func() bool { return strings.Contains(readText(control(h, 900)), "当前已在目标角色内") })
 	gameIdle(h)
@@ -175,6 +186,7 @@ func gameGUI(exe, fixture, version, outDir string) map[string]any {
 	selector := fmt.Sprintf("确认轻享游戏 · 实例%d", 6)
 	fail(waitWindow(selector))
 	dlg := findWindow(selector)
+	until(h, "game selector exceeds desktop work area", func() bool { return onScreen(dlg) && onScreen(control(dlg, 401)) })
 	click(dlg, 401)
 	until(h, "human-confirmed game binding not saved", func() bool {
 		return findWindow(selector) == 0 && strings.Contains(readText(control(h, 900)), "已由用户确认游戏")
@@ -198,5 +210,5 @@ func gameGUI(exe, fixture, version, outDir string) map[string]any {
 	}
 	closeTitle(title)
 	fail(wait(app, 10*time.Second))
-	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "synthetic_960x540_screens": true, "actual_launch_and_enter_buttons": true, "package_selection_and_binding": true, "unknown_candidates_never_trial_launched": true, "existing_running_game_not_restarted": true, "target_role_selected_and_stays_in_game": true, "identity_template_verified": true, "unknown_page_stops_without_tap": true, "exception_screenshot_only": true, "stop_button_cancels_wait": true, "target_role_and_binding_persisted": true, "calibration_byte_identical": true}
+	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "main_and_critical_buttons_on_screen": true, "calibration_window_on_screen": true, "game_selector_on_screen": true, "synthetic_960x540_screens": true, "actual_launch_and_enter_buttons": true, "package_selection_and_binding": true, "unknown_candidates_never_trial_launched": true, "existing_running_game_not_restarted": true, "target_role_selected_and_stays_in_game": true, "identity_template_verified": true, "unknown_page_stops_without_tap": true, "exception_screenshot_only": true, "stop_button_cancels_wait": true, "target_role_and_binding_persisted": true, "calibration_byte_identical": true}
 }

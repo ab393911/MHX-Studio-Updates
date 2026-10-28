@@ -138,6 +138,7 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	newTitle := "知夏 · MHX Studio " + expected
 	fail(waitWindow(newTitle))
 	h = findWindow(newTitle)
+	until(h, "new version or updater button exceeds desktop work area", func() bool { return onScreen(h) && onScreen(control(h, 110)) && onScreen(control(h, 107)) })
 	until(h, "restarted GUI is hidden", func() bool { v, _, _ := user.NewProc("IsWindowVisible").Call(h); return v != 0 })
 	var result update.Result
 	var plan update.Plan
@@ -211,6 +212,7 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	if published {
 		resultMap["previous_published_version"] = oldVersion
 	}
+	resultMap["window_and_critical_buttons_on_screen"] = true
 	fail(filesafe.JSON(out, resultMap))
 	fmt.Println("Live GUI update passed:", expected, "one click:", oneClick, "legacy confirmations:", confirmations)
 }

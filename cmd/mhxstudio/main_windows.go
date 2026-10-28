@@ -107,6 +107,7 @@ type app struct {
 	startupBackupDone                                 bool
 	gameSelector                                      *gameSelector
 	roleInstanceKey                                   string
+	placedCalibration, placedSelector                 uintptr
 }
 
 var active *app
@@ -181,11 +182,11 @@ func (a *app) build() {
 	a.label("五开首编号", 230, 168, 115)
 	a.control("EDIT", strconv.Itoa(a.cfg.GroupStart), 350, 162, 70, 28, wsBorder, 205)
 	a.button("保存设置", 440, 160, 110, 104)
-	a.button("单机闭环：5角色", 565, 160, 180, 105)
-	a.button("五开闭环测试", 760, 160, 150, 106)
+	a.button("单机闭环：5角色", 670, 160, 170, 105)
+	a.button("五开闭环测试", 855, 160, 150, 106)
 	user32.NewProc("EnableWindow").Call(a.controls[105], 0)
 	user32.NewProc("EnableWindow").Call(a.controls[106], 0)
-	a.button("停止", 925, 160, 80, 107)
+	a.button("停止", 565, 160, 90, 107)
 	a.label("标定页面", 20, 213, 90)
 	cal := a.control("COMBOBOX", "", 115, 205, 500, 380, 3|0x200000, 206)
 	for _, s := range calibrationNames {
@@ -646,6 +647,7 @@ func (a *app) handle(id int) {
 			setText(a.controls[211], "已请求停止，等待当前ADB调用安全退出；不会开始下一步点击。")
 		}
 	case 108:
+		a.placedCalibration = 0
 		a.startCalibration()
 	case 109:
 		a.checkRecognition()
@@ -703,10 +705,14 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 				select {
 				case f := <-a.actions:
 					f()
+					a.fitOpenWindows()
 				default:
 					return 0
 				}
 			}
+		case 5:
+			a.fitClientControls()
+			return 0
 		case wmTimer:
 			a.tick()
 			return 0
@@ -907,13 +913,15 @@ func main() {
 		messageBox.Call(0, uintptr(unsafe.Pointer(utf(err.Error()))), uintptr(unsafe.Pointer(utf("窗口注册失败"))), 0x10)
 		return
 	}
-	h, _, err := createWindow.Call(0, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(utf("知夏 · MHX Studio "+version))), 0x00CF0000|wsVisible, 80, 40, 1050, 780, 0, 0, inst, 0)
+	x, y, width, height := fittedBounds(1050, 780)
+	h, _, err := createWindow.Call(0, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(utf("知夏 · MHX Studio "+version))), 0x00CF0000|wsVisible, uintptr(x), uintptr(y), uintptr(width), uintptr(height), 0, 0, inst, 0)
 	if h == 0 {
 		messageBox.Call(0, uintptr(unsafe.Pointer(utf(err.Error()))), uintptr(unsafe.Pointer(utf("窗口创建失败"))), 0x10)
 		return
 	}
 	a.hwnd = h
 	a.build()
+	a.fitClientControls()
 	// The already-published preview.15 helper launches with SW_HIDE. The
 	// first ShowWindow may honor STARTUPINFO, so restore explicitly again.
 	showWindow.Call(h, 1)

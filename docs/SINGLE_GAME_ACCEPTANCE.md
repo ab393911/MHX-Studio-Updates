@@ -52,3 +52,5 @@ Android官方ADB工具说明：https://developer.android.com/tools/adb
 Android包管理器入口查询实现：https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-8.1.0_r68/services/core/java/com/android/server/pm/PackageManagerShellCommand.java
 
 不依赖Python、Java、外部OCR、用户命令行或下载SDK。仅使用雷电自带ADB。没有假设特定游戏包名、端口或实例编号。
+
+窗口适配：主程序按Windows实际工作区居中并缩小外框，日志随客户区调整；“停止”放在主窗口较靠左的固定位置。标定截图保持960×540原比例，标定和游戏选择窗口也移入工作区。原页面模板与雷电/更新实现保持不变。

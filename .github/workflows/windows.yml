@@ -85,6 +85,7 @@ jobs:
             dist/emulator-gui-preview.png
             dist/adb-fallback-gui-preview.png
             dist/single-game-gui-preview.png
+            dist/calibration-gui-preview.png
             dist/old-test.exe
             dist/ldfixture.exe
           if-no-files-found: error
