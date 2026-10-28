@@ -204,6 +204,9 @@ func (p *workbench) startSelected(games bool) {
 	client, cfg := p.app.client, p.app.cfg
 	p.app.work(func(ctx context.Context) (err error) {
 		defer func() {
+			if err != nil && ctx.Err() != nil {
+				err = ctx.Err()
+			}
 			if err != nil {
 				p.app.ui(func() {
 					if p.app.workbench == p {
@@ -482,6 +485,8 @@ func (a *app) evidenceCheck() {
 		}
 		if j, e := c.FiveProfessions(im); e == nil {
 			a.logAsync("形状与颜色联合识别：五个角色均为" + j + "。职业绑定未自动修改。")
+		} else if c.Match(im, "roles") {
+			a.logAsync("职业候选未确认：" + e.Error() + "；保留已有人工职业绑定。")
 		}
 		return nil
 	})

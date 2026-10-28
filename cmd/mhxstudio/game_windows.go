@@ -25,6 +25,9 @@ type gameShell struct {
 
 func (s gameShell) Shell(ctx context.Context, args ...string) ([]byte, error) {
 	if e := s.client.Verify(ctx, s.device); e != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, e
 	}
 	sub, cancel := context.WithTimeout(ctx, 12*time.Second)
@@ -48,6 +51,9 @@ func (d *gameDevice) Capture(ctx context.Context) ([]byte, error) {
 		return nil, e
 	}
 	b, e := d.boundDevice.Capture(ctx)
+	if e != nil && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if e == nil {
 		d.last = b
 	}
@@ -57,7 +63,11 @@ func (d *gameDevice) Tap(ctx context.Context, x, y int) error {
 	if e := gameapp.RequireForeground(ctx, d.shell, d.pkg); e != nil {
 		return e
 	}
-	return d.boundDevice.Tap(ctx, x, y)
+	e := d.boundDevice.Tap(ctx, x, y)
+	if e != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return e
 }
 func (a *app) restoreTargetRole() {
 	d, e := a.selected()
@@ -127,6 +137,9 @@ func (a *app) startGame(enter bool) {
 		shell := gameShell{client, d}
 		device := &gameDevice{boundDevice: boundDevice{client, d, a.cache}, shell: shell, pkg: b.Package}
 		defer func() {
+			if err != nil && ctx.Err() != nil {
+				err = ctx.Err()
+			}
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					a.gameStatus(d, role, "已停止", "用户中止，未开始下一步动作")

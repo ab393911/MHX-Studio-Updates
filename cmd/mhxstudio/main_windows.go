@@ -243,6 +243,9 @@ func (a *app) work(f func(context.Context) error) {
 	}
 	go func() {
 		err := f(ctx)
+		if err != nil && ctx.Err() != nil {
+			err = ctx.Err()
+		}
 		cancel()
 		a.ui(func() {
 			a.busy.Store(false)
