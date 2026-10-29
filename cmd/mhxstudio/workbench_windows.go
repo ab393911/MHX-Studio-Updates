@@ -30,6 +30,10 @@ type workbench struct {
 }
 
 func (a *app) openWorkbench() {
+	if a.healthPath != "" && !a.healthDone {
+		a.log("更新健康检查尚未完成，请等待。")
+		return
+	}
 	if a.workbench != nil {
 		showWindow.Call(a.workbench.hwnd, 9)
 		return
@@ -160,7 +164,13 @@ func (p *workbench) refresh() {
 	plan, e := p.app.stateStore.LatestPlan()
 	if e == nil {
 		phase, pe := p.app.stateStore.Next(plan.ID, time.Now())
-		lines = append(lines, "计划 "+plan.ID, "下一阶段："+studio.PhaseLabel(phase))
+		lines = append(lines, "计划 "+plan.ID)
+		if pe == nil {
+			lines = append(lines, "下一阶段："+studio.PhaseLabel(phase))
+		}
+		if pe == studio.ErrPlanComplete {
+			lines = append(lines, "本计划启用任务均已核验结束。")
+		}
 		if pe != nil {
 			lines = append(lines, "保护状态："+pe.Error())
 		}
@@ -317,7 +327,7 @@ func (p *workbench) createPlan(appendBatch bool) {
 			servers = append(servers, s)
 		}
 	}
-	plan := studio.Plan{ID: studio.ID(), Day: studio.Day(time.Now()), Batches: []studio.Batch{{Actors: actors, Servers: servers}}, Modules: append([]string(nil), studio.Modules...)}
+	plan := studio.Plan{ID: studio.ID(), Day: studio.Day(time.Now()), Batches: []studio.Batch{{Actors: actors, Servers: servers}}, Modules: studio.EnabledModules()}
 	if appendBatch {
 		old, er := p.app.stateStore.LatestPlan()
 		e = er

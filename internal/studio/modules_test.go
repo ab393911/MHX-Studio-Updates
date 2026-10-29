@@ -81,18 +81,16 @@ func TestHaiduduRequiresBothCharacterAndPetAndHonorsDeadlineAndMissingFallbacks(
 		t.Fatal("strategy applied to another boss")
 	}
 }
-func TestArenaLossIsNeverRecordedAsVictoryAndPassZeroVitalitySkips(t *testing.T) {
-	win, e := ArenaResult(8, 9, false, true)
-	if e != nil || win {
-		t.Fatal(win, e)
-	}
-	if ArenaDecision(9, true, nil).State != Skip {
-		t.Fatal("10th challenge scheduled")
-	}
+func TestBattlePassWorkRemainsIndependentOfRemovedDailyTasks(t *testing.T) {
 	if PassDecision(true, false, false, 0, 0, 200, 100).State != Skip {
 		t.Fatal("zero vitality worked")
 	}
-	if TowerDecision(false, false).State != Review {
-		t.Fatal("unknown red dot skipped")
+	d := PassDecision(true, false, false, 250, 0, 200, 100)
+	if d.State != Pending || len(d.Actions) == 0 || d.Actions[0] != "work_one_observed_unit" {
+		t.Fatal(d)
+	}
+	d = PassDecision(true, true, true, 0, 200, 200, 100)
+	if d.State != Pending || d.Actions[0] != "claim_verified_task_reward" {
+		t.Fatal(d)
 	}
 }

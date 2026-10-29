@@ -33,7 +33,7 @@ func main() {
 	f.Close()
 	c, e := evidence.Load()
 	fail(e)
-	report := map[string]any{"source_zip_sha256": c.ZipSHA, "real_screenshot_offline_replay": true, "real_game_tested": false, "count": len(rows) - 1}
+	report := map[string]any{"source_zip_sha256": c.ZipSHA, "real_screenshot_offline_replay": true, "real_game_tested": false, "count": len(rows) - 1, "scope_revision": "2026-10-29-remove-nine"}
 	var found []map[string]any
 	images := map[int]image.Image{}
 	for _, r := range rows[1:] {

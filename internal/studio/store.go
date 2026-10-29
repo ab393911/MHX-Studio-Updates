@@ -81,10 +81,16 @@ func Open(root string) (*Store, error) {
 		if e != nil {
 			return e
 		}
-		if len(r) != 1 || r[0][0] != "1" {
+		if len(r) != 1 {
+			return errors.New("invalid studio schema metadata")
+		}
+		if r[0][0] == "1" {
+			return migrateScope(d)
+		}
+		if r[0][0] != "2" {
 			return errors.New("unsupported studio database schema; original retained")
 		}
-		return nil
+		return verifyScope(d)
 	})
 	if e != nil {
 		s.Close()
@@ -121,10 +127,16 @@ func VerifyFile(root string) error {
 	if e != nil {
 		return e
 	}
-	if len(r) != 1 || r[0][0] != "1" {
-		return errors.New("unsupported studio schema")
+	if len(r) != 1 {
+		return errors.New("invalid studio schema metadata")
 	}
-	return nil
+	if r[0][0] == "1" {
+		return verifyLegacy(d)
+	}
+	if r[0][0] == "2" {
+		return verifyScope(d)
+	}
+	return errors.New("unsupported studio schema")
 }
 func (s *Store) Close() error {
 	s.mu.Lock()

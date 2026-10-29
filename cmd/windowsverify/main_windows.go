@@ -84,6 +84,8 @@ func waitWindow(title string) error {
 }
 func main() {
 	old := flag.String("old", "", "")
+	published19 := flag.String("published19", "", "")
+	published21 := flag.String("published21", "", "")
 	newExe := flag.String("new", "", "")
 	exitExe := flag.String("exit-fixture", "", "")
 	emulatorFixture := flag.String("emulator-fixture", "", "")
@@ -245,6 +247,16 @@ func main() {
 		fail(ledger.Close())
 		results[scenario] = map[string]any{"passed": true, "status": result.Status, "config_unchanged": true, "configuration_snapshot_verified": configBacked, "backup_retained": scenario == "success" || scenario == "startup_timeout" || scenario == "immediate_exit" || scenario == "config_migration_exit"}
 		results[scenario].(map[string]any)["studio_order_database_preserved"] = true
+	}
+	if *published19 != "" {
+		folder := filepath.Join(filepath.Dir(*out), "preview19-direct")
+		fail(os.MkdirAll(folder, 0700))
+		results["preview19_direct_gui_upgrade"] = localGUIUpgrade(*published19, "3.5.0-preview.19", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
+	}
+	if *published21 != "" {
+		folder := filepath.Join(filepath.Dir(*out), "preview21-migration")
+		fail(os.MkdirAll(folder, 0700))
+		results["preview21_scope_gui_upgrade"] = localGUIUpgrade(*published21, "3.5.0-preview.21", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
 	}
 	// Also prove settings saves preserve unknown fields (unit tests cover detail).
 	results["passed"] = true

@@ -56,8 +56,12 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		defer func() { _ = host.Process.Kill(); _ = host.Wait() }()
 		fail(filesafe.JSON(filepath.Join(dataRoot, "ldplayer-discovery.json"), map[string]string{"directory": install, "adb": filepath.Join(install, "adb.exe")}))
 	}
+	jobs := map[string]any{}
+	for i, job := range []string{"合欢", "天音", "青云", "鬼王", "鬼王"} {
+		jobs[fmt.Sprint(i+1)] = []string{job, job, job, job, job}
+	}
 	cfgPath := filepath.Join(dataRoot, "config.json")
-	fail(filesafe.JSON(cfgPath, map[string]any{"ldplayer_directory": install, "group_start_index": 1, "manifest_url": manifest, "retries": 7, "min_delay_ms": 250, "max_delay_ms": 650, "jobs": map[string]any{}, "single_validations": map[string]any{}, "future_unknown_field": map[string]any{"keep": true}, "target_roles": map[string]int{"1": 4}, "game_bindings": map[string]any{"1": map[string]any{"package": "com.fixture.confirmed", "activity": ".Main", "android_id": "abcdef0123456789", "user_confirmed": true}}}))
+	fail(filesafe.JSON(cfgPath, map[string]any{"ldplayer_directory": install, "group_start_index": 1, "manifest_url": manifest, "retries": 7, "min_delay_ms": 250, "max_delay_ms": 650, "jobs": jobs, "single_validations": map[string]any{}, "future_unknown_field": map[string]any{"keep": true}, "target_roles": map[string]int{"1": 4}, "game_bindings": map[string]any{"1": map[string]any{"package": "com.fixture.confirmed", "activity": ".Main", "android_id": "abcdef0123456789", "user_confirmed": true}}}))
 	profile := filepath.Join(dataRoot, "profiles", "1.json")
 	fail(filesafe.JSON(profile, map[string]any{"future_calibration_sentinel": "preserve bytes"}))
 	before, e := os.ReadFile(cfgPath)
@@ -86,6 +90,10 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		until(h, "published baseline did not detect 24 instances", func() bool {
 			return strings.Contains(readText(control(h, 208)), "检测到 24 台，已运行 5 台，ADB 已验证 5 台")
 		})
+	}
+	legacyPlanID, legacyOrderID := "", ""
+	if oldVersion == "3.5.0-preview.21" {
+		legacyPlanID, legacyOrderID = seedPublished21Plan(h)
 	}
 	time.Sleep(200 * time.Millisecond)
 	prefix := "legacy"
@@ -205,6 +213,9 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 			fail(errors.New("studio database omitted from pre-replacement backup"))
 		}
 	}
+	if legacyPlanID != "" {
+		verifyMigrated21UI(h, dataRoot, legacyPlanID, legacyOrderID)
+	}
 	until(h, "new GUI did not display explicit update success", func() bool {
 		return strings.Contains(readText(control(h, 209)), "更新成功：当前版本 "+expected)
 	})
@@ -247,6 +258,26 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	resultMap["window_and_critical_buttons_on_screen"] = true
 	resultMap["studio_data_seeded"] = studioSeeded
 	resultMap["studio_database_preserved"] = studioPreserved
+	if legacyPlanID != "" {
+		resultMap["studio_data_seeded_by_published21_gui"] = true
+		resultMap["legacy_plan_scope_migrated"] = true
+		resultMap["legacy_phase_ids_preserved"] = true
+		resultMap["record_only_order_preserved"] = true
+		resultMap["removed_board_entries_absent"] = true
+		resultMap["battle_pass_retained"] = true
+		snapshot, e := update.ReadConfigBackup(plan.ConfigBackupPath(), dataRoot, plan.Token)
+		fail(e)
+		included := false
+		for _, f := range snapshot.Files {
+			if f.Path == studio.FileName {
+				included = true
+			}
+		}
+		if !included {
+			fail(errors.New("legacy database omitted from upgrade backup"))
+		}
+		resultMap["studio_database_preserved"] = true
+	}
 	fail(filesafe.JSON(out, resultMap))
 	fmt.Println("Live GUI update passed:", expected, "one click:", oneClick, "legacy confirmations:", confirmations)
 }

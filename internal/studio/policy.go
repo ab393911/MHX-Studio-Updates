@@ -111,50 +111,6 @@ func ListingPrice(v Listing) (int64, error) {
 	return p, nil
 }
 
-type Card struct {
-	ID, Title string
-	Content   string
-	Done      bool
-}
-
-func DailyRefresh(cards []Card, attempt int) ([]string, error) {
-	if len(cards) != 3 || attempt < 0 || attempt >= 50 {
-		return nil, errors.New("日课停止本轮")
-	}
-	targets := map[string]bool{"仙闻点赞": true, "使用一次生活技能": true, "仙盟行商": true}
-	seen := map[string]bool{}
-	seenTargets := map[string]bool{}
-	var refresh []string
-	for _, c := range cards {
-		if c.ID == "" || seen[c.ID] {
-			return nil, errors.New("日课卡片身份无效")
-		}
-		seen[c.ID] = true
-		body := strings.NewReplacer("\n", "", "\r", "", " ", "").Replace(c.Content)
-		title := c.Title
-		if title == "行商" && body == "完成仙盟行商任务" {
-			title = "仙盟行商"
-		}
-		if title == "生活" && body == "使用一次生活技能" {
-			title = "使用一次生活技能"
-		}
-		if title == "仙闻" && body == "在仙闻中点赞" {
-			title = "仙闻点赞"
-		}
-		if targets[title] && !c.Done {
-			if seenTargets[title] {
-				return nil, errors.New("日课目标重复，需核查卡片内容")
-			}
-			seenTargets[title] = true
-		}
-		if c.Done || targets[title] {
-			continue
-		}
-		refresh = append(refresh, c.ID)
-	}
-	return refresh, nil
-}
-
 type RestartFacts struct {
 	Persisted, SafeBoundary, TradingUncertain, InBattle, EnableComputer bool
 	EmulatorFailures, ComputerReboots                                   int

@@ -23,15 +23,15 @@ func TestSkippedTaskBlocksServerChange(t *testing.T) {
 	p := Progress{Entries: map[string]string{}}
 	for i := 1; i <= 5; i++ {
 		for r := 1; r <= 5; r++ {
-			p.Entries[Key(i, "server-A", r, "daily")] = "verified_complete"
+			p.Entries[Key(i, "server-A", r, "market")] = "verified_complete"
 		}
 	}
 	ids := []int{1, 2, 3, 4, 5}
-	if !p.CanChangeServer(ids, "server-A", []string{"daily"}) {
+	if !p.CanChangeServer(ids, "server-A", []string{"market"}) {
 		t.Fatal("complete blocked")
 	}
-	p.Entries[Key(5, "server-A", 5, "daily")] = "skipped"
-	if p.CanChangeServer(ids, "server-A", []string{"daily"}) {
+	p.Entries[Key(5, "server-A", 5, "market")] = "skipped"
+	if p.CanChangeServer(ids, "server-A", []string{"market"}) {
 		t.Fatal("skipped accepted as completed")
 	}
 	if p.CanChangeServer(nil, "", nil) {

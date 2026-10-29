@@ -40,12 +40,6 @@
     },
     {
       "matches": [
-        "cargo"
-      ],
-      "source_id": 89
-    },
-    {
-      "matches": [
         "talisman"
       ],
       "source_id": 102
@@ -132,18 +126,6 @@
         "advert"
       ],
       "source_id": 170
-    },
-    {
-      "matches": [
-        "daily"
-      ],
-      "source_id": 174
-    },
-    {
-      "matches": [
-        "life_prompt"
-      ],
-      "source_id": 182
     }
   ],
   "passed": true,
@@ -151,5 +133,6 @@
   "profession_limitation": "职业形状/颜色证据不唯一",
   "real_game_tested": false,
   "real_screenshot_offline_replay": true,
+  "scope_revision": "2026-10-29-remove-nine",
   "source_zip_sha256": "be45501d1f08d67ae4a76802e086b727081a39dca590a3cd4373a5ddab06ae42"
 }

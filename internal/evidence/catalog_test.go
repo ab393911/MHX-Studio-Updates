@@ -30,7 +30,7 @@ func TestCatalogValidAndLocalCalibrationWins(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(c.Pages) != 22 || len(c.Icons) != 4 {
+	if len(c.Pages) != 19 || len(c.Icons) != 4 {
 		t.Fatal(c)
 	}
 	local := automation.NewProfile()
@@ -114,5 +114,17 @@ func TestSolidColorCannotVerifyProfession(t *testing.T) {
 	}
 	if _, _, e := c.Profession(img, img.Bounds()); e == nil {
 		t.Fatal("color alone accepted as profession")
+	}
+}
+
+func TestRemovedDailyCargoAndCultivationCannotAppearInCurrentCandidates(t *testing.T) {
+	c, e := Load()
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, p := range c.Pages {
+		if p.Key == "daily" || p.Key == "cargo" || p.Key == "life_prompt" {
+			t.Fatal("removed candidate retained", p.Key)
+		}
 	}
 }

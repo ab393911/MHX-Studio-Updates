@@ -18,7 +18,21 @@ const (
 	Review  TaskState = "NEEDS_REVIEW"
 )
 
-var Modules = []string{"team", "eight_star", "fortune", "stronghold_prepare", "haidudu", "assets", "market", "tower", "daily", "arena", "battle_pass"}
+// EnabledModules returns a copy so callers cannot mutate the active scope.
+func EnabledModules() []string {
+	return []string{"team", "eight_star", "fortune", "stronghold_prepare", "haidudu", "assets", "market", "battle_pass"}
+}
+func moduleEnabled(m string) bool {
+	for _, v := range EnabledModules() {
+		if m == v {
+			return true
+		}
+	}
+	return false
+}
+func legacyModules() []string {
+	return []string{"team", "eight_star", "fortune", "stronghold_prepare", "haidudu", "assets", "market", "tower", "daily", "arena", "battle_pass"}
+}
 
 type Actor struct {
 	Instance   int    `json:"instance"`
@@ -34,6 +48,9 @@ type Plan struct {
 	Day     string   `json:"day"`
 	Batches []Batch  `json:"batches"`
 	Modules []string `json:"modules"`
+	// PhaseLayout preserves the original physical phase IDs of migrated plans.
+	PhaseLayout       []string `json:"phase_layout,omitempty"`
+	HistoricalBatches int      `json:"historical_batches,omitempty"`
 }
 type Phase struct {
 	Number, Batch, Slot int
@@ -50,14 +67,17 @@ type Task struct {
 
 func validJob(j string) bool { return j == "合欢" || j == "天音" || j == "青云" || j == "鬼王" }
 func (p Plan) Validate() error {
-	if !validText(p.ID) || len(p.Batches) == 0 || len(p.Batches) > 50 || len(p.Modules) == 0 || len(p.Modules) > len(Modules) {
+	if !orderedSubset(p.Modules, EnabledModules()) {
+		return errors.New("enabled modules out of scope or order")
+	}
+	if !validText(p.ID) || len(p.Batches) == 0 || len(p.Batches) > 50 || len(p.Modules) == 0 || len(p.Modules) > len(EnabledModules()) {
 		return errors.New("invalid plan")
 	}
 	if _, e := time.Parse("2006-01-02", p.Day); e != nil {
 		return e
 	}
 	known := map[string]bool{}
-	for _, m := range Modules {
+	for _, m := range EnabledModules() {
 		known[m] = true
 	}
 	seenM := map[string]bool{}
@@ -95,13 +115,23 @@ func (p Plan) Validate() error {
 	}
 	return nil
 }
+func (p Plan) layoutForBatch(batch int) []string {
+	if batch < p.HistoricalBatches && len(p.PhaseLayout) != 0 {
+		return p.PhaseLayout
+	}
+	return p.Modules
+}
 func (p Plan) Phases() []Phase {
 	var out []Phase
+	number := 0
 	for bi, b := range p.Batches {
 		for _, server := range b.Servers {
 			for slot := 1; slot <= 5; slot++ {
-				for _, m := range p.Modules {
-					out = append(out, Phase{Number: len(out), Batch: bi, Slot: slot, Server: server, Module: m, Actors: b.Actors})
+				for _, m := range p.layoutForBatch(bi) {
+					if moduleEnabled(m) {
+						out = append(out, Phase{Number: number, Batch: bi, Slot: slot, Server: server, Module: m, Actors: b.Actors})
+					}
+					number++
 				}
 			}
 		}
@@ -113,6 +143,9 @@ func ActorKey(identity, server string, slot int) string {
 	return string(b)
 }
 func (s *Store) CreatePlan(p Plan) error {
+	if len(p.PhaseLayout) != 0 || p.HistoricalBatches != 0 {
+		return errors.New("only migration may assign a historical phase layout")
+	}
 	if e := p.Validate(); e != nil {
 		return e
 	}
@@ -144,6 +177,12 @@ func (s *Store) Plan(id string) (Plan, error) {
 		return p, errors.New("plan not found")
 	}
 	e = json.Unmarshal([]byte(r[0][0]), &p)
+	if e == nil && p.ID != id {
+		e = errors.New("stored plan identity mismatch")
+	}
+	if e == nil {
+		e = p.validateStored()
+	}
 	return p, e
 }
 func (s *Store) AppendBatch(id string, b Batch) error {
@@ -159,26 +198,40 @@ func (s *Store) AppendBatch(id string, b Batch) error {
 		if e = json.Unmarshal([]byte(rows[0][0]), &p); e != nil {
 			return e
 		}
-		busy, _, e := d.query("SELECT COUNT(*) FROM tasks WHERE plan=? AND (state<>'PENDING' OR attempt>0)", id)
+		if len(p.Modules) == 0 {
+			return errors.New("该计划已全部归档，请建立新的启用任务计划")
+		}
+		busy, _, e := d.query("SELECT COUNT(*) FROM tasks WHERE plan=? AND enabled=1 AND (state<>'PENDING' OR attempt>0)", id)
 		if e != nil {
 			return e
 		}
 		if busy[0][0] != "0" {
 			return errors.New("计划已执行，不能变更批次结构")
 		}
-		before := len(p.Phases())
+		before := len(p.Batches)
 		p.Batches = append(p.Batches, b)
-		if e = p.Validate(); e != nil {
+		if e = p.validateStored(); e != nil {
 			return e
 		}
-		raw, e := json.Marshal(p)
+		var fields map[string]json.RawMessage
+		if e = json.Unmarshal([]byte(rows[0][0]), &fields); e != nil {
+			return e
+		}
+		fields["batches"], e = json.Marshal(p.Batches)
+		if e != nil {
+			return e
+		}
+		raw, e := json.Marshal(fields)
 		if e != nil {
 			return e
 		}
 		if _, _, e = d.query("UPDATE plans SET config=? WHERE id=?", string(raw), id); e != nil {
 			return e
 		}
-		for _, ph := range p.Phases()[before:] {
+		for _, ph := range p.Phases() {
+			if ph.Batch < before {
+				continue
+			}
 			for _, a := range ph.Actors {
 				if _, _, e = d.query("INSERT INTO tasks(plan,phase,actor,module,updated) VALUES(?,?,?,?,?)", id, num(int64(ph.Number)), ActorKey(a.Identity, ph.Server, ph.Slot), ph.Module, num(time.Now().Unix())); e != nil {
 					return e
@@ -198,48 +251,107 @@ func (s *Store) LatestPlan() (Plan, error) {
 	}
 	return s.Plan(r[0][0])
 }
-func (s *Store) Next(id string, now time.Time) (Phase, error) {
-	p, e := s.Plan(id)
+
+var ErrPlanComplete = errors.New("all specified servers in all batches are complete")
+
+func planInDB(d *nativeDB, id string) (Plan, error) {
+	var p Plan
+	rows, _, e := d.query("SELECT config FROM plans WHERE id=?", id)
 	if e != nil {
-		return Phase{}, e
+		return p, e
 	}
-	count, ce := s.read("SELECT COUNT(*) FROM tasks WHERE plan=?", id)
-	if ce != nil {
-		return Phase{}, ce
+	if len(rows) != 1 {
+		return p, errors.New("plan not found")
 	}
-	if integer(count[0][0]) != int64(len(p.Phases())*5) {
-		return Phase{}, errors.New("任务账本不完整，暂停而非误报完成")
+	if e = json.Unmarshal([]byte(rows[0][0]), &p); e != nil {
+		return p, e
 	}
-	r, e := s.read("SELECT MIN(phase) FROM tasks WHERE plan=? AND state NOT IN ('VERIFIED_DONE','CHECKED_SKIP')", id)
-	if e != nil {
-		return Phase{}, e
+	if p.ID != id {
+		return p, errors.New("stored plan identity mismatch")
 	}
-	if len(r) == 0 || r[0][0] == "" {
-		return Phase{}, errors.New("all specified servers in all batches are complete")
-	}
-	n := int(integer(r[0][0]))
-	phases := p.Phases()
-	if n < 0 || n >= len(phases) {
-		return Phase{}, errors.New("invalid stored phase")
-	}
-	phase := phases[n]
-	// Midnight boundary is intentionally conservative until the user confirms
-	// the ambiguous "current machine" versus five-person group boundary.
-	started, se := s.read("SELECT COUNT(*) FROM tasks WHERE plan=? AND phase>=? AND phase<? AND (state<>'PENDING' OR attempt>0)", id, num(int64(n-n%len(p.Modules))), num(int64(n-n%len(p.Modules)+len(p.Modules))))
-	if se != nil {
-		return phase, se
-	}
-	if Day(now) != p.Day && n%len(p.Modules) == 0 && started[0][0] == "0" {
-		return phase, errors.New("NEW_DAY_PENDING：当前小组已安全收尾，跨日边界待确认；不开始新小组")
-	}
-	rows, e := s.read("SELECT actor,state,attempt,evidence,reason FROM tasks WHERE plan=? AND phase=? ORDER BY actor", id, num(int64(n)))
-	if e != nil {
-		return phase, e
-	}
-	for _, v := range rows {
-		phase.Tasks = append(phase.Tasks, Task{Actor: v[0], State: TaskState(v[1]), Attempt: int(integer(v[2])), Evidence: v[3], Reason: v[4]})
-	}
-	return phase, nil
+	return p, p.validateStored()
+}
+func (s *Store) Next(id string, now time.Time) (phase Phase, err error) {
+	err = s.tx(func(d *nativeDB) error {
+		p, e := planInDB(d, id)
+		if e != nil {
+			return e
+		}
+		if e = validateLedger(d, p); e != nil {
+			return e
+		}
+		r, _, e := d.query("SELECT MIN(phase) FROM tasks WHERE plan=? AND enabled=1 AND state NOT IN ('VERIFIED_DONE','CHECKED_SKIP')", id)
+		if e != nil {
+			return e
+		}
+		if len(r) == 0 || r[0][0] == "" {
+			return ErrPlanComplete
+		}
+		n := int(integer(r[0][0]))
+		found := false
+		for _, ph := range p.Phases() {
+			if ph.Number == n {
+				phase = ph
+				found = true
+				break
+			}
+		}
+		if !found {
+			return errors.New("invalid stored phase")
+		}
+		start, width := p.groupBounds(phase)
+		started, _, e := d.query("SELECT COUNT(*) FROM tasks WHERE plan=? AND enabled=1 AND phase>=? AND phase<? AND (state<>'PENDING' OR attempt>0)", id, num(int64(start)), num(int64(start+width)))
+		if e != nil {
+			return e
+		}
+		if Day(now) != p.Day && phase.Module == p.Modules[0] && started[0][0] == "0" {
+			return errors.New("NEW_DAY_PENDING：当前小组已安全收尾，跨日边界待确认；不开始新小组")
+		}
+		rows, _, e := d.query("SELECT actor,state,attempt,evidence,reason FROM tasks WHERE plan=? AND phase=? AND enabled=1 ORDER BY actor", id, num(int64(n)))
+		if e != nil {
+			return e
+		}
+		for _, v := range rows {
+			phase.Tasks = append(phase.Tasks, Task{Actor: v[0], State: TaskState(v[1]), Attempt: int(integer(v[2])), Evidence: v[3], Reason: v[4]})
+		}
+		return nil
+	})
+	return
+}
+
+// GroupComplete counts only enabled modules, but verifies the entire ledger so
+// a missing task cannot turn an incomplete character/group into a completed one.
+func (s *Store) GroupComplete(id string, batch int, server string, slot int) (done bool, err error) {
+	err = s.tx(func(d *nativeDB) error {
+		p, e := planInDB(d, id)
+		if e != nil {
+			return e
+		}
+		if e = validateLedger(d, p); e != nil {
+			return e
+		}
+		found := false
+		done = true
+		for _, ph := range p.Phases() {
+			if ph.Batch != batch || ph.Server != server || ph.Slot != slot {
+				continue
+			}
+			found = true
+			rows, _, e := d.query("SELECT COUNT(*) FROM tasks WHERE plan=? AND phase=? AND enabled=1 AND state NOT IN ('VERIFIED_DONE','CHECKED_SKIP')", id, num(int64(ph.Number)))
+			if e != nil {
+				return e
+			}
+			if rows[0][0] != "0" {
+				done = false
+			}
+		}
+		if !found {
+			done = false
+			return errors.New("unknown group")
+		}
+		return nil
+	})
+	return
 }
 func (s *Store) SetTask(id string, phase int, actor string, to TaskState, evidence, reason string, maxRetries int) error {
 	if maxRetries < 0 || maxRetries > 20 {
@@ -252,12 +364,32 @@ func (s *Store) SetTask(id string, phase int, actor string, to TaskState, eviden
 		return errors.New("failure or retry exhaustion is not a checked skip")
 	}
 	return s.tx(func(d *nativeDB) error {
-		r, _, e := d.query("SELECT state,attempt FROM tasks WHERE plan=? AND phase=? AND actor=?", id, num(int64(phase)), actor)
+		r, _, e := d.query("SELECT state,attempt,module,enabled FROM tasks WHERE plan=? AND phase=? AND actor=?", id, num(int64(phase)), actor)
 		if e != nil {
 			return e
 		}
 		if len(r) != 1 {
 			return errors.New("task not found")
+		}
+		if r[0][3] != "1" || !moduleEnabled(r[0][2]) {
+			return errors.New("archived task is read-only and cannot execute")
+		}
+		p, e := planInDB(d, id)
+		if e != nil {
+			return e
+		}
+		matched := false
+		for _, ph := range p.Phases() {
+			if ph.Number == phase && ph.Module == r[0][2] {
+				for _, a := range ph.Actors {
+					if ActorKey(a.Identity, ph.Server, ph.Slot) == actor {
+						matched = true
+					}
+				}
+			}
+		}
+		if !matched {
+			return errors.New("task identity does not match its immutable phase")
 		}
 		from := TaskState(r[0][0])
 		attempt := integer(r[0][1])
@@ -268,7 +400,7 @@ func (s *Store) SetTask(id string, phase int, actor string, to TaskState, eviden
 			return errors.New("verified terminal task cannot be rewritten")
 		}
 		if to == Running {
-			earliest, _, e := d.query("SELECT MIN(phase) FROM tasks WHERE plan=? AND state NOT IN ('VERIFIED_DONE','CHECKED_SKIP')", id)
+			earliest, _, e := d.query("SELECT MIN(phase) FROM tasks WHERE plan=? AND enabled=1 AND state NOT IN ('VERIFIED_DONE','CHECKED_SKIP')", id)
 			if e != nil {
 				return e
 			}
@@ -302,7 +434,7 @@ func (s *Store) SetTask(id string, phase int, actor string, to TaskState, eviden
 }
 func (s *Store) RecoverInterrupted() error {
 	return s.tx(func(d *nativeDB) error {
-		for _, q := range []string{"UPDATE tasks SET state='NEEDS_REVIEW',reason='interrupted_reconcile_game' WHERE state='RUNNING'", "UPDATE transfers SET state='NEEDS_REVIEW' WHERE state='DISPATCHED'"} {
+		for _, q := range []string{"UPDATE tasks SET state='NEEDS_REVIEW',reason='interrupted_reconcile_game' WHERE enabled=1 AND state='RUNNING'", "UPDATE transfers SET state='NEEDS_REVIEW' WHERE state='DISPATCHED'"} {
 			if _, _, e := d.query(q); e != nil {
 				return e
 			}
@@ -316,7 +448,7 @@ func PhaseLabel(p Phase) string {
 }
 
 func ModuleLabel(m string) string {
-	v := map[string]string{"team": "组队", "eight_star": "八星打符与幻形", "fortune": "聚福激活", "stronghold_prepare": "据点准备", "haidudu": "海嘟嘟", "assets": "银锭与功绩统计", "market": "交易行", "tower": "锁灵塔", "daily": "日课", "arena": "群英榜", "battle_pass": "仙盟战令"}
+	v := map[string]string{"team": "组队", "eight_star": "八星打符与幻形", "fortune": "聚福激活", "stronghold_prepare": "据点准备", "haidudu": "海嘟嘟", "assets": "银锭与功绩统计", "market": "交易行", "battle_pass": "仙盟战令"}
 	if s, ok := v[m]; ok {
 		return s
 	}

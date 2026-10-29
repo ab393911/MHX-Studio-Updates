@@ -1,7 +1,5 @@
 package studio
 
-import "errors"
-
 // Decisions consume verified observations, never raw click acknowledgements.
 // UI readers/executors are intentionally separate and unavailable where the
 // handoff does not supply an unambiguous success/identity/resource observation.
@@ -143,42 +141,6 @@ func FortuneDecision(v FortuneObservation) Decision {
 		return Decision{State: Skip, Reason: "resource_insufficient"}
 	}
 	return Decision{State: Pending, Actions: append([]string{"exchange_exact_observed_deficit"}, actions...)}
-}
-func TowerDecision(redKnown, red bool) Decision {
-	if !redKnown {
-		return uncertain("锁灵塔红点状态不确定")
-	}
-	if !red {
-		return Decision{State: Skip, Reason: "no_red_dot"}
-	}
-	return Decision{State: Pending, Actions: []string{"open_tower", "locate_chest_across_frames", "verify_reward", "return_to_verified_main"}}
-}
-
-type Opponent struct {
-	ID       string
-	Bonus    int
-	Verified bool
-}
-
-func ArenaDecision(counter int, counterKnown bool, opponents []Opponent) Decision {
-	if !counterKnown || counter < 0 || counter > 9 {
-		return uncertain("今日挑战次数未核验")
-	}
-	if counter == 9 {
-		return Decision{State: Skip, Reason: "no_attempts"}
-	}
-	for _, o := range opponents {
-		if o.Verified && o.Bonus == 10 && o.ID != "" {
-			return Decision{State: Pending, Actions: []string{"challenge_verified_" + o.ID, "enable_auto", "verify_result_and_counter_increment"}}
-		}
-	}
-	return uncertain("没有已核验+10对手，不按位置盲点")
-}
-func ArenaResult(before, after int, win bool, resultKnown bool) (bool, error) {
-	if !resultKnown || before < 0 || before >= 9 || after != before+1 {
-		return false, errors.New("结算/次数变化未核验")
-	}
-	return win, nil
 }
 func PassDecision(verified, done, claimRed bool, vitality, progress, goal, costPerWork int64) Decision {
 	if !verified || vitality < 0 || progress < 0 || goal <= 0 || progress > goal {

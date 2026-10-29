@@ -2,7 +2,7 @@ name: Windows x64 tests and preview release
 
 on:
   push:
-    branches: [main, codex/mhx-studio-recovery]
+    branches: [main, codex/mhx-studio-recovery, codex/mhx-remove-nine-20261029]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -62,10 +62,17 @@ jobs:
           if ($LASTEXITCODE) { throw 'Exit fixture build failed' }
           go build -trimpath -ldflags "-H windowsgui -s -w" -o dist/ldfixture.exe ./cmd/ldfixture
           if ($LASTEXITCODE) { throw 'LDPlayer CLI fixture build failed' }
+      - name: Download immutable published baselines for direct upgrade tests
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.19/MHXStudio.exe' -OutFile dist/published19.exe
+          if ((Get-FileHash dist/published19.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'ab2fb36814a87d375dc3b45490eabefd81bae1d73a0390a9b2553b9044db9b16') { throw 'preview.19 baseline hash mismatch' }
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.21/MHXStudio.exe' -OutFile dist/published21.exe
+          if ((Get-FileHash dist/published21.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'b8c5d2c7bace05be05a332cba6afbc584600adee011635af6d509104aec05aa8') { throw 'preview.21 baseline hash mismatch' }
       - name: Run native GUI, real EXE replacement and rollback tests
         shell: pwsh
         run: |
-          go run ./cmd/windowsverify -old "$pwd/dist/old-test.exe" -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '${{ steps.build.outputs.version }}' -out dist/windows-tests.json
+          go run ./cmd/windowsverify -old "$pwd/dist/old-test.exe" -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '${{ steps.build.outputs.version }}' -published19 "$pwd/dist/published19.exe" -published21 "$pwd/dist/published21.exe" -out dist/windows-tests.json
           if ($LASTEXITCODE) { throw 'Native Windows tests failed' }
       - name: Package verified preview
         shell: pwsh
@@ -87,6 +94,8 @@ jobs:
             dist/single-game-gui-preview.png
             dist/calibration-gui-preview.png
             dist/studio-gui-preview.png
+            dist/preview19-direct/
+            dist/preview21-migration/
             dist/old-test.exe
             dist/ldfixture.exe
           if-no-files-found: error

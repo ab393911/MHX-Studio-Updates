@@ -810,8 +810,15 @@ func (a *app) tick() {
 			a.startupBackupDone = true
 			a.log("配置快照已核对：" + backup)
 		}
+		// The updater has verified the original snapshot. Migrate atomically before
+		// issuing health; failure leaves the receipt absent and triggers rollback.
+		if e = studio.MigrateExisting(a.root); e != nil {
+			a.log("进度范围迁移失败，拒绝确认升级：" + e.Error())
+			return
+		}
 		if e = filesafe.JSON(a.healthPath, update.Receipt{Version: version, Token: a.healthToken, SHA256: hash}); e != nil {
 			a.log("健康确认写入失败：" + e.Error())
+			return
 		}
 	}
 	a.healthDone = true

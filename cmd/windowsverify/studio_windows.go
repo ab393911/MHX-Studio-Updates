@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -104,6 +105,9 @@ func studioGUI(exe, fixture, version, out string) map[string]any {
 	}
 	plan, e := s.LatestPlan()
 	fail(e)
+	if !slices.Equal(plan.Modules, studio.EnabledModules()) || len(plan.Phases()) != 80 {
+		fail(fmt.Errorf("removed tasks still scheduled %+v", plan.Modules))
+	}
 	if len(plan.Batches) != 1 || len(plan.Batches[0].Servers) != 2 || plan.Batches[0].Actors[0].Instance != 2 {
 		fail(fmt.Errorf("plan mismatch %+v", plan))
 	}
@@ -127,5 +131,5 @@ func studioGUI(exe, fixture, version, out string) map[string]any {
 	gameIdle(h)
 	closeTitle(title)
 	fail(wait(app, 10*time.Second))
-	return map[string]any{"passed": true, "fixture_only": true, "real_game_tested": false, "real_ldplayer_tested": false, "arbitrary_five_selection": true, "selected_start_and_adb": true, "selected_five_games_open_without_taps": true, "sqlite_plan_and_order_persisted": true, "no_fake_task_completion": true, "no_real_delivery": true, "capacity_327000_345_is_30000": true, "restart_preserves_plan_and_order": true, "workbench_on_screen": true}
+	return map[string]any{"passed": true, "fixture_only": true, "real_game_tested": false, "real_ldplayer_tested": false, "arbitrary_five_selection": true, "selected_start_and_adb": true, "selected_five_games_open_without_taps": true, "sqlite_plan_and_order_persisted": true, "no_fake_task_completion": true, "no_real_delivery": true, "capacity_327000_345_is_30000": true, "restart_preserves_plan_and_order": true, "enabled_scope_only": true, "battle_pass_retained": true, "workbench_on_screen": true}
 }

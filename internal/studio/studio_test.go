@@ -336,7 +336,7 @@ func TestPathTraversalAndSymlinkCannotDeleteOtherFolders(t *testing.T) {
 		t.Fatal("symlink followed")
 	}
 }
-func TestMarketAndDailyPoliciesDoNotConfusePricePositionOrCurrency(t *testing.T) {
+func TestMarketPoliciesDoNotConfusePricePositionOrCurrency(t *testing.T) {
 	base := Listing{ItemID: "safe", Currency: "silver_ingot", PriceSource: "price", Quantity: 188, MarketLowest: 100, PriceUnit: 1, GameMin: 1, UserFloor: 50, Verified: true, ExcludedID: "excluded_specific_item"}
 	n, e := ListingPrice(base)
 	if e != nil || n != 99 {
@@ -351,13 +351,7 @@ func TestMarketAndDailyPoliciesDoNotConfusePricePositionOrCurrency(t *testing.T)
 	if _, e = ListingPrice(base); e == nil {
 		t.Fatal("wrong currency")
 	}
-	ids, e := DailyRefresh([]Card{{ID: "r", Title: "随机任务"}, {ID: "l", Title: "仙闻", Content: "在仙闻中点赞"}, {ID: "m", Title: "生活", Content: "使用一次生活技能", Done: true}}, 0)
-	if e != nil || len(ids) != 1 || ids[0] != "r" {
-		t.Fatal(ids, e)
-	}
-	if _, e = DailyRefresh(make([]Card, 3), 50); e == nil {
-		t.Fatal("refresh limit ignored")
-	}
+
 }
 
 func TestAppendBatchIsAtomicAndCannotRewriteExecutedPlan(t *testing.T) {
