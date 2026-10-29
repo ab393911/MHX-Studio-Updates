@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: mhx-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/mhx-remove-nine-20261029' }}
 
 jobs:
   portable-tests:

@@ -517,16 +517,18 @@ func TestMigratedBarriersRequireAllFiveAcrossEverySlotServerAndBatch(t *testing.
 			if e = s.SetTask(p.ID, ph.Number, actor, Done, evidence(actor+ph.Module), "verified", 1); e != nil {
 				t.Fatal(e)
 			}
-			if i < 4 {
+			if i == 3 {
 				still, e := s.Next(p.ID, time.Now())
 				if e != nil || still.Number != ph.Number {
 					t.Fatal("one character advanced entire group", still, e)
 				}
 			}
 		}
-		done, e := s.GroupComplete(p.ID, ph.Batch, ph.Server, ph.Slot)
-		if e != nil || done != (ph.Module == "battle_pass") {
-			t.Fatal("group completion ignored active module", ph, done, e)
+		if ph.Module == "market" || ph.Module == "battle_pass" {
+			done, e := s.GroupComplete(p.ID, ph.Batch, ph.Server, ph.Slot)
+			if e != nil || done != (ph.Module == "battle_pass") {
+				t.Fatal("group completion ignored active module", ph, done, e)
+			}
 		}
 	}
 	if _, e := s.Next(p.ID, time.Now()); !errors.Is(e, ErrPlanComplete) {

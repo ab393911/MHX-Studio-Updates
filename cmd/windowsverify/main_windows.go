@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"syscall"
 	"time"
 	"unsafe"
@@ -83,6 +84,9 @@ func waitWindow(title string) error {
 	return fmt.Errorf("GUI not found: %s", title)
 }
 func main() {
+	debug.SetTraceback("all")
+	watchdog := time.AfterFunc(8*time.Minute, func() { panic("native verifier exceeded 8 minutes; refusing an unbounded or incomplete pass") })
+	defer watchdog.Stop()
 	old := flag.String("old", "", "")
 	published19 := flag.String("published19", "", "")
 	published21 := flag.String("published21", "", "")

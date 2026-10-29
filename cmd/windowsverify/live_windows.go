@@ -23,6 +23,15 @@ import (
 )
 
 func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneClick bool) {
+	priorAppData, hadAppData := os.LookupEnv("LOCALAPPDATA")
+	defer func() {
+		if hadAppData {
+			_ = os.Setenv("LOCALAPPDATA", priorAppData)
+		} else {
+			_ = os.Unsetenv("LOCALAPPDATA")
+		}
+	}()
+	fmt.Println("GUI upgrade begins:", oldVersion, "->", expected)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	m, newer, e := update.Check(ctx, update.Client(), manifest, oldVersion)

@@ -30,8 +30,8 @@ type workbench struct {
 }
 
 func (a *app) openWorkbench() {
-	if a.healthPath != "" && !a.healthDone {
-		a.log("更新健康检查尚未完成，请等待。")
+	if (a.healthPath != "" && !a.healthDone) || (a.updateResultPath != "" && !a.updateResultDone) {
+		a.log("更新健康检查或提交确认尚未完成，请等待。")
 		return
 	}
 	if a.workbench != nil {
@@ -169,9 +169,13 @@ func (p *workbench) refresh() {
 			lines = append(lines, "下一阶段："+studio.PhaseLabel(phase))
 		}
 		if pe == studio.ErrPlanComplete {
-			lines = append(lines, "本计划启用任务均已核验结束。")
+			if len(plan.Modules) == 0 {
+				lines = append(lines, "该旧计划仅含已停用任务，已归档；没有执行或核验游戏任务。")
+			} else {
+				lines = append(lines, "本计划启用任务均已核验结束。")
+			}
 		}
-		if pe != nil {
+		if pe != nil && pe != studio.ErrPlanComplete {
 			lines = append(lines, "保护状态："+pe.Error())
 		}
 		for _, t := range phase.Tasks {

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
@@ -26,10 +27,23 @@ import (
 // Only the test runner trusts this ephemeral loopback certificate. Production
 // updater HTTPS/TLS validation is unchanged. No release or channel is created.
 func localGUIUpgrade(old, oldVersion, newExe, version, fixture, out string) map[string]any {
+	fmt.Println("Preparing private HTTPS candidate for published baseline:", oldVersion)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	binary, e := os.ReadFile(newExe)
 	fail(e)
 	hash, e := update.Hash(newExe)
 	fail(e)
+	self, e := exec.CommandContext(ctx, newExe, "--self-test").Output()
+	fail(e)
+	var meta struct {
+		Version string `json:"version"`
+		Commit  string `json:"source_commit"`
+	}
+	fail(json.Unmarshal(self, &meta))
+	if meta.Version != version || len(meta.Commit) != 40 {
+		fail(fmt.Errorf("candidate metadata mismatch %s", self))
+	}
 	var manifest update.Manifest
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -44,7 +58,7 @@ func localGUIUpgrade(old, oldVersion, newExe, version, fixture, out string) map[
 		}
 	}))
 	defer server.Close()
-	manifest = update.Manifest{Schema: 1, Version: version, Platform: "windows-amd64", URL: server.URL + "/MHXStudio.exe", SHA256: hash, Size: int64(len(binary)), SourceCommit: "development-branch", WindowsTested: false}
+	manifest = update.Manifest{Schema: 1, Version: version, Platform: "windows-amd64", URL: server.URL + "/MHXStudio.exe", SHA256: hash, Size: int64(len(binary)), SourceCommit: meta.Commit, WindowsTested: false}
 	cert := server.Certificate()
 	thumb := sha1.Sum(cert.Raw)
 	thumbText := hex.EncodeToString(thumb[:])
@@ -53,15 +67,18 @@ func localGUIUpgrade(old, oldVersion, newExe, version, fixture, out string) map[
 	defer os.RemoveAll(temp)
 	certPath := filepath.Join(temp, "loopback.cer")
 	fail(os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}), 0600))
-	if b, e := exec.Command("certutil", "-user", "-addstore", "Root", certPath).CombinedOutput(); e != nil {
+	if b, e := exec.CommandContext(ctx, "certutil", "-user", "-addstore", "Root", certPath).CombinedOutput(); e != nil {
 		fail(fmt.Errorf("test TLS trust import: %w %s", e, b))
 	}
 	defer func() {
-		if b, e := exec.Command("certutil", "-user", "-delstore", "Root", thumbText).CombinedOutput(); e != nil {
+		cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		if b, e := exec.CommandContext(cleanup, "certutil", "-user", "-delstore", "Root", thumbText).CombinedOutput(); e != nil {
 			fail(fmt.Errorf("test TLS trust cleanup: %w %s", e, b))
 		}
 	}()
 	// Go's Windows verifier and the published EXE use the regular system chain.
+	fmt.Println("Private HTTPS trust ready:", oldVersion)
 	liveUpdate(old, oldVersion, server.URL+"/update.json", version, out, fixture, true)
 	var report map[string]any
 	fail(filesafe.ReadJSON(out, &report))
