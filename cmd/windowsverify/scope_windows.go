@@ -90,10 +90,11 @@ func localGUIUpgrade(old, oldVersion, newExe, version, fixture, out string) map[
 }
 
 func seedPublished21Plan(h uintptr) (string, string) {
+	fmt.Println("Creating original plan/order through published preview.21 workbench")
 	gameIdle(h)
 	click(h, 106)
 	title := "MHX Studio 工作台 · 五开计划与订单"
-	fail(waitWindow(title))
+	until(h, "workbench did not open for published21 seed or migrated verification", func() bool { return findWindow(title) != 0 })
 	p := findWindow(title)
 	for i := 0; i < 5; i++ {
 		user.NewProc("SendMessageW").Call(control(p, 510), 0x185, 1, uintptr(i))
@@ -113,15 +114,17 @@ func seedPublished21Plan(h uintptr) (string, string) {
 	}
 	closeTitle(title)
 	gameIdle(h)
+	fmt.Println("Original preview.21 plan/order created")
 	return match[1], order[1]
 }
 func verifyMigrated21UI(h uintptr, dataRoot, planID, orderID string) {
+	fmt.Println("Verifying migrated preview.21 workbench after visible update success")
 	// Opening the real workbench must display only active tasks. All states remain
 	// pending: creating/upgrading a plan is never recorded as actual game success.
 	gameIdle(h)
 	click(h, 106)
 	title := "MHX Studio 工作台 · 五开计划与订单"
-	fail(waitWindow(title))
+	until(h, "workbench did not open for published21 seed or migrated verification", func() bool { return findWindow(title) != 0 })
 	p := findWindow(title)
 	until(h, "migrated order/plan missing", func() bool {
 		return strings.Contains(readText(control(p, 515)), planID) && strings.Contains(readText(control(p, 515)), orderID)

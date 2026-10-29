@@ -535,3 +535,49 @@ func TestMigratedBarriersRequireAllFiveAcrossEverySlotServerAndBatch(t *testing.
 		t.Fatal(e)
 	}
 }
+
+func TestMissingFinancialTablesAreNeverSilentlyRecreatedByMigration(t *testing.T) {
+	for _, table := range []string{"budgets", "orders", "transfers", "outbox"} {
+		t.Run(table, func(t *testing.T) {
+			s := legacyFixture(t, t.TempDir(), legacyFullPlan("missing-finance"))
+			_, _, proof := seedMoney(t, s)
+			originalProof, e := os.ReadFile(proof)
+			if e != nil {
+				t.Fatal(e)
+			}
+			_, _, e = s.db.query("PRAGMA foreign_keys=OFF")
+			if e != nil {
+				t.Fatal(e)
+			}
+			_, _, e = s.db.query("DROP TABLE " + table)
+			if e != nil {
+				t.Fatal(e)
+			}
+			root := s.Root
+			s.Close()
+			if e = VerifyFile(root); e == nil {
+				t.Fatal("missing table passed startup health")
+			}
+			if _, e = Open(root); e == nil {
+				t.Fatal("missing financial table recreated as empty")
+			}
+			d, e := openNative(filepath.Join(root, FileName), true)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer d.close()
+			r, _, e := d.query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", table)
+			if e != nil || r[0][0] != "0" {
+				t.Fatal("missing table silently recreated", e)
+			}
+			r, _, e = d.query("SELECT version FROM schema_info")
+			if e != nil || r[0][0] != "1" {
+				t.Fatal("invalid financial ledger migrated", e)
+			}
+			b, e := os.ReadFile(proof)
+			if e != nil || !slices.Equal(b, originalProof) {
+				t.Fatal("proof changed", e)
+			}
+		})
+	}
+}

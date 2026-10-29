@@ -48,7 +48,12 @@ func Open(root string) (*Store, error) {
 		return nil, errors.New("invalid data directory")
 	}
 	p := filepath.Join(root, FileName)
-	if st, e := os.Lstat(p); e == nil && (!st.Mode().IsRegular() || st.Mode()&os.ModeSymlink != 0) {
+	st, statErr := os.Lstat(p)
+	fresh := os.IsNotExist(statErr)
+	if statErr != nil && !fresh {
+		return nil, statErr
+	}
+	if !fresh && (!st.Mode().IsRegular() || st.Mode()&os.ModeSymlink != 0) {
 		return nil, errors.New("invalid SQLite path")
 	}
 	d, e := openNative(p, false)
@@ -72,10 +77,14 @@ func Open(root string) (*Store, error) {
 		}
 	}
 	e = s.tx(func(d *nativeDB) error {
-		for _, q := range schema {
-			if _, _, e := d.query(q); e != nil {
-				return e
+		if fresh {
+			for _, q := range schema {
+				if _, _, e := d.query(q); e != nil {
+					return e
+				}
 			}
+		} else if e := validateBaseTables(d); e != nil {
+			return e
 		}
 		r, _, e := d.query("SELECT version FROM schema_info")
 		if e != nil {
@@ -116,6 +125,9 @@ func VerifyFile(root string) error {
 		return e
 	}
 	defer d.close()
+	if e = validateBaseTables(d); e != nil {
+		return e
+	}
 	r, _, e := d.query("PRAGMA quick_check")
 	if e != nil {
 		return e

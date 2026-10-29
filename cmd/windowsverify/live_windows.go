@@ -222,12 +222,14 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 			fail(errors.New("studio database omitted from pre-replacement backup"))
 		}
 	}
-	if legacyPlanID != "" {
-		verifyMigrated21UI(h, dataRoot, legacyPlanID, legacyOrderID)
-	}
 	until(h, "new GUI did not display explicit update success", func() bool {
 		return strings.Contains(readText(control(h, 209)), "更新成功：当前版本 "+expected)
 	})
+	// A committed result file can precede the GUI's poll of that result.
+	// The workbench intentionally refuses writes until its success status is ready.
+	if legacyPlanID != "" {
+		verifyMigrated21UI(h, dataRoot, legacyPlanID, legacyOrderID)
+	}
 	detectionVerified := false
 	launchVerified := false
 	fiveVerified := false

@@ -16,7 +16,7 @@
 - tasks新增enabled字段。旧tower/daily/arena只改enabled=0，不改phase、actor、module、state、attempt、evidence、reason、updated，不伪造完成或条件跳过。
 - plan_scope_history保存旧config原字节；当前config保留未知字段。phase_layout与historical_batches记下历史编号布局，保留阶段存在空洞；旧战令10不会变成旧锁灵塔7，下一角色11仍是11。
 - 新建计划仅有8阶段。向迁移后的未执行计划追加批次时，新批次只生成8阶段，旧阶段编号不动，不为新批次创建停用任务。
-- Next、SetTask、GroupComplete、恢复和工作台均只读取启用任务。每次推进核对实际任务身份/模块/编号/启用状态及完整性，缺行、错身份、未知模块暂停。仅有停用任务的旧计划归档，不报告实际游戏成功。
+- Next、SetTask、GroupComplete、恢复和工作台均只读取启用任务。每次推进核对实际任务身份/模块/编号/启用状态及完整性，缺行、错身份、未知模块暂停。已有数据库缺少订单/配额/流水表时拒绝初始化空表，避免把缺失财物记录误当零余额。仅有停用任务的旧计划归档，不报告实际游戏成功。
 - 不修改budgets/orders/transfers/outbox及凭证。迁移后正常恢复仍将启用RUNNING及已DISPATCHED交易转待核查，未决交易继续锁额度，不重发。已停用RUNNING记录原样归档。
 
 ## 在线更新

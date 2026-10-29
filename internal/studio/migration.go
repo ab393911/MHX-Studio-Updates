@@ -256,3 +256,18 @@ func (p Plan) groupBounds(ph Phase) (start, width int) {
 	}
 	return 0, 0
 }
+
+// Missing financial tables must never be silently recreated as empty ledgers.
+// Initialization is allowed only when the database file did not exist at Open.
+func validateBaseTables(d *nativeDB) error {
+	for _, name := range []string{"schema_info", "plans", "tasks", "budgets", "orders", "transfers", "outbox", "events"} {
+		r, _, e := d.query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", name)
+		if e != nil {
+			return e
+		}
+		if len(r) != 1 || r[0][0] != "1" {
+			return fmt.Errorf("existing database is missing %s; original retained, no empty replacement created", name)
+		}
+	}
+	return nil
+}
