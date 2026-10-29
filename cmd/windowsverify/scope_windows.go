@@ -24,7 +24,7 @@ import (
 	"github.com/ab393911/MHX-Studio-Updates/internal/update"
 )
 
-// Only the test runner trusts this ephemeral loopback certificate. Production
+// Only the disposable CI machine trusts this ephemeral loopback certificate. Production
 // updater HTTPS/TLS validation is unchanged. No release or channel is created.
 func localGUIUpgrade(old, oldVersion, newExe, version, fixture, out string) map[string]any {
 	fmt.Println("Preparing private HTTPS candidate for published baseline:", oldVersion)
@@ -67,13 +67,13 @@ func localGUIUpgrade(old, oldVersion, newExe, version, fixture, out string) map[
 	defer os.RemoveAll(temp)
 	certPath := filepath.Join(temp, "loopback.cer")
 	fail(os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}), 0600))
-	if b, e := exec.CommandContext(ctx, "certutil", "-user", "-addstore", "Root", certPath).CombinedOutput(); e != nil {
+	if b, e := exec.CommandContext(ctx, "certutil", "-f", "-addstore", "Root", certPath).CombinedOutput(); e != nil {
 		fail(fmt.Errorf("test TLS trust import: %w %s", e, b))
 	}
 	defer func() {
 		cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
 		defer stop()
-		if b, e := exec.CommandContext(cleanup, "certutil", "-user", "-delstore", "Root", thumbText).CombinedOutput(); e != nil {
+		if b, e := exec.CommandContext(cleanup, "certutil", "-delstore", "Root", thumbText).CombinedOutput(); e != nil {
 			fail(fmt.Errorf("test TLS trust cleanup: %w %s", e, b))
 		}
 	}()
