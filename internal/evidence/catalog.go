@@ -315,3 +315,14 @@ func (c Catalog) ServerPage(server string) (automation.Page, error) {
 	}
 	return automation.Page{}, errors.New("区服特征未内置")
 }
+
+// RoleBackButton is inside the visible top-left arrow on screenshot 144. The
+// controller must first verify the role page twice and then verify tree/server.
+func (c Catalog) RoleBackButton() automation.Rect {
+	for _, p := range c.Pages {
+		if p.Key == "roles" && p.SourceID == 144 {
+			return automation.Rect{X: 24, Y: 8, W: 32, H: 26}
+		}
+	}
+	return automation.Rect{}
+}

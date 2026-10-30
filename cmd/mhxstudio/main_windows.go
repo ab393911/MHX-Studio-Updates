@@ -26,6 +26,7 @@ import (
 	"github.com/ab393911/MHX-Studio-Updates/internal/ldplayer"
 	"github.com/ab393911/MHX-Studio-Updates/internal/studio"
 	"github.com/ab393911/MHX-Studio-Updates/internal/update"
+	"github.com/ab393911/MHX-Studio-Updates/internal/vision"
 )
 
 var version = "3.5.0-preview.0"
@@ -115,6 +116,9 @@ type app struct {
 	pendingStudioAction                               int
 	lastProofCleanupDay                               string
 	stateOpenFailed                                   bool
+	startupAttempted                                  bool
+	startupAt                                         time.Time
+	ocr                                               *vision.NativeReader
 }
 
 var active *app
@@ -613,6 +617,9 @@ func (a *app) pendingUpdates() {
 	}
 }
 func (a *app) handle(id int) {
+	if id != 111 && id != 116 {
+		a.cancelOnOpen()
+	}
 	if a.updateResultPath != "" && !a.updateResultDone && id != 111 && id != 116 {
 		a.log("正在确认升级结果，请稍候。")
 		return
@@ -839,7 +846,10 @@ func (a *app) tick() {
 	if a.maintainStudio() {
 		return
 	}
-	if !a.busy.Load() && a.cal == nil && a.gameSelector == nil && !a.closing && time.Now().After(a.nextScan) {
+	if a.tryOnOpen() {
+		return
+	}
+	if !a.busy.Load() && a.cal == nil && a.gameSelector == nil && a.loginPanel == nil && !a.closing && time.Now().After(a.nextScan) {
 		a.detectInstances(false)
 	}
 }
@@ -934,6 +944,9 @@ func main() {
 	}
 	a := &app{controls: map[int]uintptr{}, actions: make(chan func(), 512), root: data, cfg: cfg, cache: automation.NewCache(2, 32<<20), healthPath: receipt, healthToken: token, healthVersion: healthVersion, smokePath: smoke}
 	defer func() {
+		if a.ocr != nil {
+			_ = a.ocr.Close()
+		}
 		if a.stateStore != nil {
 			_ = a.stateStore.Close()
 		}

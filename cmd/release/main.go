@@ -89,6 +89,8 @@ func main() {
 	add("docs/HANDOFF_EVIDENCE_REPLAY.json", "HANDOFF_EVIDENCE_REPLAY.json")
 	add("docs/SCOPE_REMOVAL_20261029.md", "SCOPE_REMOVAL_20261029.md")
 	add("docs/GROUP_LOGIN_ACCEPTANCE.md", "GROUP_LOGIN_ACCEPTANCE.md")
+	add("docs/ON_OPEN_TEAM_ACCEPTANCE.md", "ON_OPEN_TEAM_ACCEPTANCE.md")
+	add("docs/CURRENT_FLOW.md", "CURRENT_FLOW.md")
 	add(filepath.Join(*out, "update.json"), "update.json")
 	add(filepath.Join(*out, "SHA256SUMS.txt"), "SHA256SUMS.txt")
 	if *report != "" {

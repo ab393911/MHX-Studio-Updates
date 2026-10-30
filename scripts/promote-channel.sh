@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Assert the live GUI report is for these exact release bytes and source.
+jq -e '.capability_present == true and .generated_text_verified == true and .real_game_tested == false' dist/native-ocr-capability.json > /dev/null
 jq -e --arg version "$MHX_VERSION" --arg sha "$GITHUB_SHA" '.passed == true and .version == $version and .source_commit == $sha and .configuration_byte_identical == true and .windows_game_tested == false' dist/live-gui-update.json > /dev/null
 jq -e --arg version "$MHX_VERSION" --arg sha "$GITHUB_SHA" '.passed == true and .version == $version and .source_commit == $sha and .one_click_without_confirmation == true and .confirmation_clicks == 0 and .configuration_snapshot_verified == true and .post_upgrade_24_instance_detection_fixture == true and .post_upgrade_start_and_adb_fixture == true' dist/one-click-gui-update.json > /dev/null
 jq -e '.new_gui_visible == true' dist/live-gui-update.json > /dev/null
@@ -15,6 +16,7 @@ jq -e '.studio_data_seeded == true and .studio_database_preserved == true' dist/
 jq -e --arg sha "$GITHUB_SHA" '.preview19_direct_gui_upgrade.passed == true and .preview19_direct_gui_upgrade.source_commit == $sha and .preview19_direct_gui_upgrade.previous_version == "3.5.0-preview.19" and .preview19_direct_gui_upgrade.confirmation_clicks == 0 and .preview21_scope_gui_upgrade.passed == true and .preview21_scope_gui_upgrade.source_commit == $sha and .preview21_scope_gui_upgrade.legacy_plan_scope_migrated == true and .preview21_scope_gui_upgrade.legacy_phase_ids_preserved == true and .preview21_scope_gui_upgrade.studio_database_preserved == true and .preview21_scope_gui_upgrade.battle_pass_retained == true' dist/windows-tests.json > /dev/null
 jq -e '.group_login_gui_fixture.passed == true and .group_login_gui_fixture.fixture_only == true and .group_login_gui_fixture.real_game_tested == false and .group_login_gui_fixture.visible_server_label_required == true and .group_login_gui_fixture.final_five_recheck == true and .group_login_gui_fixture.stop_cancels_all_and_no_new_taps == true and .group_login_gui_fixture.no_fake_task_completion == true' dist/windows-tests.json > /dev/null
 jq -e '.group_login_gui_fixture.delivery_ledger_gui == true and .group_login_gui_fixture.pending_sender_message_blocks_role_change == true and .group_login_gui_fixture.no_real_delivery == true' dist/windows-tests.json > /dev/null
+jq -e '.group_login_gui_fixture.on_open_gui.passed == true and .group_login_gui_fixture.on_open_gui.no_button_click_after_reopen == true and .group_login_gui_fixture.on_open_gui.cold_five_start_adb_game_role == true and .group_login_gui_fixture.on_open_gui.real_game_tested == false' dist/windows-tests.json > /dev/null
 go run ./cmd/release -verify "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${MHX_VERSION}/update.json" -commit "$GITHUB_SHA" -version "$MHX_VERSION"
 # The updates ref is a separate channel branch. Main and every previous release remain intact.
 if ! gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/updates" > /dev/null 2>&1; then

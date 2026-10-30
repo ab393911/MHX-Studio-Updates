@@ -86,7 +86,9 @@ func gameCommand(root, command string, index int) bool {
 					die(fmt.Errorf("bad tree tap"))
 				}
 			case "roles", "selected_1", "selected_2", "selected_3", "selected_4", "selected_5":
-				if x >= 125 && x <= 155 {
+				if x >= 24 && x < 56 && y >= 8 && y < 34 {
+					g.Page = "tree"
+				} else if x >= 125 && x <= 155 {
 					ys := []int{95, 169, 240, 311, 382}
 					n := 0
 					for i, cy := range ys {

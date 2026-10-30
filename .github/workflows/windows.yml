@@ -2,7 +2,7 @@ name: Windows x64 tests and preview release
 
 on:
   push:
-    branches: [main, codex/mhx-studio-recovery, codex/mhx-remove-nine-20261029, codex/mhx-group-login-20261030]
+    branches: [main, codex/mhx-studio-recovery, codex/mhx-remove-nine-20261029, codex/mhx-group-login-20261030, codex/mhx-startup-flow-20261030]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: mhx-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/mhx-remove-nine-20261029' || github.ref == 'refs/heads/codex/mhx-group-login-20261030' }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/mhx-remove-nine-20261029' || github.ref == 'refs/heads/codex/mhx-group-login-20261030' || github.ref == 'refs/heads/codex/mhx-startup-flow-20261030' }}
 
 jobs:
   portable-tests:
@@ -45,6 +45,8 @@ jobs:
           cache: false
       - run: go vet ./...
       - run: go test -count=1 ./...
+        env:
+          MHX_OCR_REPORT: ${{ github.workspace }}\dist\native-ocr-capability.json
       - name: Build Windows x64 GUI and previous-version test binary
         id: build
         shell: pwsh
@@ -89,6 +91,7 @@ jobs:
             dist/update.json
             dist/SHA256SUMS.txt
             dist/windows-tests.json
+            dist/native-ocr-capability.json
             dist/emulator-gui-preview.png
             dist/adb-fallback-gui-preview.png
             dist/single-game-gui-preview.png
@@ -96,6 +99,8 @@ jobs:
             dist/studio-gui-preview.png
             dist/group-login-gui-preview.png
             dist/delivery-ledger-gui-preview.png
+            dist/on-open-settings-gui-preview.png
+            dist/on-open-running-gui-preview.png
             dist/preview19-direct/
             dist/preview21-migration/
             dist/old-test.exe

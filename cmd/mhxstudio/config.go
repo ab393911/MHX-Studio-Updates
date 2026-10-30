@@ -14,6 +14,7 @@ import (
 	"github.com/ab393911/MHX-Studio-Updates/internal/automation"
 	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
 	"github.com/ab393911/MHX-Studio-Updates/internal/gameapp"
+	"github.com/ab393911/MHX-Studio-Updates/internal/login"
 	"github.com/ab393911/MHX-Studio-Updates/internal/update"
 )
 
@@ -35,6 +36,7 @@ type settings struct {
 	TargetRoles       map[string]int             `json:"target_roles"`
 	GroupLoginServer  string                     `json:"group_login_server,omitempty"`
 	GroupLoginRole    int                        `json:"group_login_role,omitempty"`
+	Startup           *login.StartupPlan         `json:"on_open_plan,omitempty"`
 	raw               map[string]json.RawMessage
 }
 
@@ -71,6 +73,11 @@ func loadSettings(root string) (settings, error) {
 	return c, c.Validate()
 }
 func (c settings) Validate() error {
+	if c.Startup != nil {
+		if e := c.Startup.Validate(); e != nil {
+			return e
+		}
+	}
 	if c.GroupLoginRole < 0 || c.GroupLoginRole > 5 || len(c.GroupLoginServer) > 128 {
 		return errors.New("五台登录区服或角色设置无效")
 	}

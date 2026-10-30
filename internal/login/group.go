@@ -15,15 +15,17 @@ type Spec struct {
 	Role   int    `json:"role"`
 }
 type Proof struct {
-	Identity         string    `json:"identity"`
-	Server           string    `json:"server"`
-	Role             int       `json:"role"`
-	EnteredGame      bool      `json:"entered_game"`
-	IdentityVerified bool      `json:"identity_verified"`
-	ServerVerified   bool      `json:"server_verified"`
-	ScreenSHA        string    `json:"screen_sha256"`
-	ServerScreenSHA  string    `json:"server_screen_sha256"`
-	ObservedAt       time.Time `json:"observed_at"`
+	Identity              string    `json:"identity"`
+	Server                string    `json:"server"`
+	Role                  int       `json:"role"`
+	EnteredGame           bool      `json:"entered_game"`
+	IdentityVerified      bool      `json:"identity_verified"`
+	ServerVerified        bool      `json:"server_verified"`
+	ScreenSHA             string    `json:"screen_sha256"`
+	ServerScreenSHA       string    `json:"server_screen_sha256"`
+	ObservedAt            time.Time `json:"observed_at"`
+	CharacterName         string    `json:"character_name,omitempty"`
+	CharacterNameVerified bool      `json:"character_name_verified,omitempty"`
 }
 type Member struct {
 	Instance             int

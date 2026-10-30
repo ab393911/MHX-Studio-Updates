@@ -22,11 +22,13 @@ import (
 	"github.com/ab393911/MHX-Studio-Updates/internal/ldplayer"
 	"github.com/ab393911/MHX-Studio-Updates/internal/login"
 	"github.com/ab393911/MHX-Studio-Updates/internal/studio"
+	"github.com/ab393911/MHX-Studio-Updates/internal/vision"
 )
 
 type groupLoginPanel struct {
 	app                                *app
 	hwnd, server, role, report, status uintptr
+	leader                             uintptr
 	devices                            []ldplayer.Instance
 	states                             map[int]login.Status
 }
@@ -57,7 +59,7 @@ func (p *workbench) openGroupLogin() {
 	}
 	p.app.loginPanel = g
 	inst, _, _ := moduleHandle.Call(0)
-	x, y, w, h := fittedBounds(800, 550)
+	x, y, w, h := fittedBounds(800, 590)
 	hwnd, _, _ := createWindow.Call(0, uintptr(unsafe.Pointer(utf("MHXStudioNextWindow"))), uintptr(unsafe.Pointer(utf("MHX Studio · 五台同槽登录准备"))), 0x00CA0000|wsVisible, uintptr(x), uintptr(y), uintptr(w), uintptr(h), p.app.hwnd, 0, inst, 0)
 	if hwnd == 0 {
 		p.app.loginPanel = nil
@@ -65,7 +67,7 @@ func (p *workbench) openGroupLogin() {
 		return
 	}
 	g.hwnd = hwnd
-	child(hwnd, "STATIC", "只做登录准备：全组预检后执行，最后重新核验五台；不会组队、换区或执行任务。", 18, 15, 750, 28, 0, 0)
+	child(hwnd, "STATIC", "全组预检后登录；可勾选登录后组队测试。不会自动换区、战斗或真实发货。", 18, 15, 750, 28, 0, 0)
 	child(hwnd, "STATIC", "目标区服", 18, 55, 85, 25, 0, 0)
 	g.server = child(hwnd, "EDIT", server, 105, 50, 240, 28, wsBorder, 534)
 	child(hwnd, "STATIC", "共同角色槽位", 365, 55, 125, 25, 0, 0)
@@ -77,8 +79,27 @@ func (p *workbench) openGroupLogin() {
 	child(hwnd, "BUTTON", "预检并登录所选五台", 18, 96, 250, 34, 0, 531)
 	child(hwnd, "BUTTON", "停止", 285, 96, 130, 34, 0, 532)
 	child(hwnd, "BUTTON", "关闭", 432, 96, 130, 34, 0, 533)
+	child(hwnd, "BUTTON", "打开软件后自动\n启动本组并登录", 580, 47, 180, 45, 3|0x2000, 538)
+	if p.app.cfg.Startup != nil && p.app.cfg.Startup.Enabled {
+		send(controlOf(hwnd, 538), 0xF1, 1, 0)
+	}
+	child(hwnd, "BUTTON", "保存启动方案", 580, 96, 180, 34, 0, 539)
 	g.status = child(hwnd, "STATIC", "当前只内置“一梦诛仙”区服文字特征；其它区服不猜测。请先完成每台目标角色昵称标定。", 18, 145, 745, 55, 0, 536)
-	g.report = child(hwnd, "EDIT", "", 18, 210, 745, 275, wsBorder|0x200000|4|0x40|0x800, 537)
+	g.report = child(hwnd, "EDIT", "", 18, 210, 745, 260, wsBorder|0x200000|4|0x40|0x800, 537)
+	child(hwnd, "BUTTON", "登录后继续组队（测试）", 18, 485, 285, 28, 3, 540)
+	child(hwnd, "STATIC", "队长", 350, 489, 60, 25, 0, 0)
+	g.leader = child(hwnd, "COMBOBOX", "", 410, 482, 350, 180, 3, 541)
+	leaderIndex := 0
+	for i, d := range chosen {
+		comboAdd(g.leader, fmt.Sprintf("实例%d %s", d.Index, d.Name))
+		if p.app.cfg.Startup != nil && p.app.cfg.Startup.LeaderIndex == d.Index {
+			leaderIndex = i
+		}
+	}
+	send(g.leader, 0x14E, uintptr(leaderIndex), 0)
+	if p.app.cfg.Startup != nil && p.app.cfg.Startup.RunTasks {
+		send(controlOf(hwnd, 540), 0xF1, 1, 0)
+	}
 	for _, d := range chosen {
 		g.states[d.Index] = login.Status{Instance: d.Index, State: "PENDING", Step: "等待启动；不会把历史记录当本次核验"}
 	}
@@ -148,6 +169,7 @@ func (g *groupLoginPanel) planGate(spec login.Spec) error {
 	return nil
 }
 func (g *groupLoginPanel) start() {
+	g.app.cancelOnOpen()
 	if g.app.busy.Load() {
 		setText(g.status, "已有操作运行，请等待或先点停止。")
 		return
@@ -157,32 +179,105 @@ func (g *groupLoginPanel) start() {
 		setText(g.status, e.Error())
 		return
 	}
-	catalog, e := evidence.Load()
+	needTasks := send(controlOf(g.hwnd, 540), 0xF0, 0, 0) == 1
+	leaderRow := comboIndex(g.leader)
+	if leaderRow < 0 || leaderRow >= len(g.devices) {
+		setText(g.status, "请选择本组队长")
+		return
+	}
+	leaderIndex := g.devices[leaderRow].Index
+	members, e := g.members(spec, g.devices, needTasks)
 	if e != nil {
 		setText(g.status, e.Error())
 		return
+	}
+	next := g.app.cfg
+	next.GroupLoginServer = spec.Server
+	next.GroupLoginRole = spec.Role
+	if e = next.Save(g.app.root); e != nil {
+		setText(g.status, "登录设置未能保存，未启动："+e.Error())
+		return
+	}
+	g.app.cfg = next
+	for _, id := range []int{531, 534, 535, 538, 539, 540, 541} {
+		user32.NewProc("EnableWindow").Call(controlOf(g.hwnd, id), 0)
+	}
+	setText(g.status, "开始全组只读预检；任何一台失败就取消本次其余操作，不执行任务或战斗。")
+	g.app.work(func(ctx context.Context) error {
+		report, e := login.Run(ctx, spec, members, login.Options{OnStatus: func(s login.Status) {
+			g.app.ui(func() {
+				if g.app.loginPanel == g {
+					g.states[s.Instance] = s
+					g.render()
+				}
+			})
+		}})
+		if e == nil && report.Ready && needTasks {
+			e = g.app.runTeam(ctx, report, g.devices, leaderIndex)
+		}
+		// This is a last-run diagnostic, not durable game-task completion or a
+		// reusable permission to act. It is covered by existing profiles/*.json backup.
+		saved := filesafe.JSON(filepath.Join(g.app.root, "profiles", "group-login-last.json"), report)
+		if saved != nil {
+			e = errors.Join(e, fmt.Errorf("登录结果保存失败：%w", saved))
+		}
+		g.app.ui(func() {
+			if g.app.loginPanel != g {
+				return
+			}
+			for _, id := range []int{531, 534, 535, 538, 539, 540, 541} {
+				user32.NewProc("EnableWindow").Call(controlOf(g.hwnd, id), 1)
+			}
+			if report.Ready && e == nil {
+				setText(g.status, "五台同槽位角色及本次区服图像依据已复核；仅登录准备完成，未组队、未完成任务。")
+				if needTasks {
+					setText(g.status, "五台目标角色及五人队伍已核验；未执行战斗或交易。")
+				}
+			} else {
+				message := "本组未通过就位核验；不开始组队或下一任务。"
+				if report.Ready && needTasks {
+					message = "角色登录已核验，后续组队未完成。"
+				}
+				if e != nil {
+					message += " " + e.Error()
+				}
+				setText(g.status, message)
+			}
+		})
+		return e
+	})
+}
+
+// members builds guarded workers for either the manual or saved-on-open path.
+func (g *groupLoginPanel) members(spec login.Spec, devices []ldplayer.Instance, readNames bool) ([]login.Member, error) {
+	if readNames && g.app.ocr == nil {
+		g.app.ocr = vision.NewNativeReader()
+	}
+	catalog, e := evidence.Load()
+	if e != nil {
+		return nil, e
 	}
 	serverPage, e := catalog.ServerPage(spec.Server)
 	if e != nil {
-		setText(g.status, e.Error())
-		return
+		return nil, e
 	}
 	cfg, client := g.app.cfg, g.app.client
 	var members []login.Member
-	for _, d := range g.devices {
+	for _, d := range devices {
 		key := strconv.Itoa(d.Index)
 		binding := cfg.Games[key]
 		raw, e := loadProfile(g.app.root, d.Index)
 		if e != nil {
-			setText(g.status, fmt.Sprintf("实例%d：%v", d.Index, e))
-			return
+			return nil, fmt.Errorf("实例%d：%w", d.Index, e)
 		}
 		identityPage, hasIdentity := raw.Pages[fmt.Sprintf("game_%d", spec.Role)]
 		if !hasIdentity {
-			setText(g.status, fmt.Sprintf("实例%d缺少第%d个角色的昵称标定；未启动本组", d.Index, spec.Role))
-			return
+			return nil, fmt.Errorf("实例%d缺少第%d个角色的昵称标定；未启动本组", d.Index, spec.Role)
 		}
 		profile := catalog.Profile(raw)
+		if e = profile.Validate(); e != nil {
+			return nil, e
+		}
 		pageBytes, _ := json.Marshal(identityPage)
 		signature := sha256.Sum256(pageBytes)
 		identity := sha256.Sum256([]byte(client.Console + "|" + key + "|" + d.AndroidID + "|" + d.BootID + "|" + binding.Package))
@@ -191,16 +286,24 @@ func (g *groupLoginPanel) start() {
 		device := &gameDevice{boundDevice: boundDevice{client, d, g.app.cache}, shell: shell, pkg: binding.Package}
 		ad := &evidence.LoginDevice{Device: device, Catalog: catalog, Retries: cfg.Retries, MinDelayMS: cfg.MinDelayMS, MaxDelayMS: cfg.MaxDelayMS, OnLog: g.app.logAsync}
 		guard := &automation.ServerGuard{Device: ad, Profile: profile, ServerPage: serverPage}
+		var loginDevice automation.Device = guard
+		named := &vision.NamedRoleDevice{Device: guard, Profile: profile, Reader: g.app.ocr}
+		if readNames {
+			loginDevice = named
+		}
 		jobs := cfg.Jobs[key]
 		job := jobs[0]
 		for _, j := range jobs {
 			if j != job {
-				setText(g.status, fmt.Sprintf("实例%d五个角色的职业绑定不一致", d.Index))
-				return
+				return nil, fmt.Errorf("实例%d五个角色的职业绑定不一致", d.Index)
 			}
 		}
 		proof := func(ctx context.Context) (login.Proof, error) {
 			result := login.Proof{Identity: memberID, Server: spec.Server, Role: spec.Role, ServerVerified: guard.Verified, ServerScreenSHA: guard.ServerScreenSHA}
+			if named.Verified {
+				result.CharacterName = named.Names[spec.Role-1]
+				result.CharacterNameVerified = true
+			}
 			for n := 0; n < 2; n++ {
 				shot, e := guard.Capture(ctx)
 				if e != nil {
@@ -280,15 +383,23 @@ func (g *groupLoginPanel) start() {
 			}
 			// Detect explicit scope failures immediately, instead of waiting through the
 			// cold-start allowance on a known role page without server provenance.
-			if _, e = guard.Capture(ctx); e != nil {
+			if _, e = guard.Capture(ctx); errors.Is(e, automation.ErrServerUnverified) {
+				e = guard.RevealServer(ctx, catalog.RoleBackButton(), cfg.MinDelayMS, cfg.MaxDelayMS)
+			}
+			if e != nil {
 				return diagnose(ctx, login.Proof{}, e)
 			}
-			engine := automation.Engine{Device: guard, Profile: profile, Options: automation.Options{Retries: cfg.Retries, MinDelayMS: cfg.MinDelayMS, MaxDelayMS: cfg.MaxDelayMS, StateTimeout: 30 * time.Second, OnLog: func(s string) { g.app.logAsync(fmt.Sprintf("[%d] %s", d.Index, s)) }}}
+			engine := automation.Engine{Device: loginDevice, Profile: profile, Options: automation.Options{Retries: cfg.Retries, MinDelayMS: cfg.MinDelayMS, MaxDelayMS: cfg.MaxDelayMS, StateTimeout: 30 * time.Second, OnLog: func(s string) { g.app.logAsync(fmt.Sprintf("[%d] %s", d.Index, s)) }}}
 			wait := time.Duration(0)
 			if !launched.AlreadyForeground {
 				wait = 40 * time.Second
 			}
 			r, e := engine.EnterRole(ctx, spec.Role, automation.EnterOptions{InitialWait: wait})
+			if errors.Is(e, automation.ErrServerUnverified) {
+				if e = guard.RevealServer(ctx, catalog.RoleBackButton(), cfg.MinDelayMS, cfg.MaxDelayMS); e == nil {
+					r, e = engine.EnterRole(ctx, spec.Role, automation.EnterOptions{})
+				}
+			}
 			if e != nil {
 				return diagnose(ctx, login.Proof{EnteredGame: r.EnteredGame, IdentityVerified: r.IdentityVerified}, e)
 			}
@@ -298,56 +409,7 @@ func (g *groupLoginPanel) start() {
 		m.Recheck = func(ctx context.Context) (login.Proof, error) { p, e := proof(ctx); return diagnose(ctx, p, e) }
 		members = append(members, m)
 	}
-	if e = login.Validate(spec, members); e != nil {
-		setText(g.status, e.Error())
-		return
-	}
-	next := g.app.cfg
-	next.GroupLoginServer = spec.Server
-	next.GroupLoginRole = spec.Role
-	if e = next.Save(g.app.root); e != nil {
-		setText(g.status, "登录设置未能保存，未启动："+e.Error())
-		return
-	}
-	g.app.cfg = next
-	for _, id := range []int{531, 534, 535} {
-		user32.NewProc("EnableWindow").Call(controlOf(g.hwnd, id), 0)
-	}
-	setText(g.status, "开始全组只读预检；任何一台失败就取消本次其余操作，不执行任务或战斗。")
-	g.app.work(func(ctx context.Context) error {
-		report, e := login.Run(ctx, spec, members, login.Options{OnStatus: func(s login.Status) {
-			g.app.ui(func() {
-				if g.app.loginPanel == g {
-					g.states[s.Instance] = s
-					g.render()
-				}
-			})
-		}})
-		// This is a last-run diagnostic, not durable game-task completion or a
-		// reusable permission to act. It is covered by existing profiles/*.json backup.
-		saved := filesafe.JSON(filepath.Join(g.app.root, "profiles", "group-login-last.json"), report)
-		if saved != nil {
-			e = errors.Join(e, fmt.Errorf("登录结果保存失败：%w", saved))
-		}
-		g.app.ui(func() {
-			if g.app.loginPanel != g {
-				return
-			}
-			for _, id := range []int{531, 534, 535} {
-				user32.NewProc("EnableWindow").Call(controlOf(g.hwnd, id), 1)
-			}
-			if report.Ready && e == nil {
-				setText(g.status, "五台同槽位角色及本次区服图像依据已复核；仅登录准备完成，未组队、未完成任务。")
-			} else {
-				message := "本组未通过就位核验；不开始组队或下一任务。"
-				if e != nil {
-					message += " " + e.Error()
-				}
-				setText(g.status, message)
-			}
-		})
-		return e
-	})
+	return members, login.Validate(spec, members)
 }
 func groupWait(ctx context.Context, d time.Duration) error {
 	t := time.NewTimer(d)
@@ -375,6 +437,8 @@ func (g *groupLoginPanel) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 				g.app.handle(107)
 			}
 			destroyWindow.Call(h)
+		case 539:
+			g.saveOnOpen()
 		}
 		return 0
 	case wmClose:

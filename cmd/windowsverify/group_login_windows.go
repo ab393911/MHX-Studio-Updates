@@ -303,5 +303,6 @@ func groupLoginGUI(exe, fixture, version, out string) map[string]any {
 	gameIdle(h)
 	closeTitle(title)
 	fail(wait(app, 10*time.Second))
-	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "arbitrary_five_same_slot_login": true, "visible_server_label_required": true, "independent_role_templates": true, "final_five_recheck": true, "already_correct_no_logout_or_restart": true, "wrong_server_no_tap": true, "stop_cancels_all_and_no_new_taps": true, "user_stop_no_error_screenshot": true, "current_plan_role_barrier": true, "no_fake_task_completion": true, "settings_preserved": true, "dialog_on_screen": true, "delivery_ledger_gui": true, "pending_sender_message_blocks_role_change": true, "no_real_delivery": true}
+	startupResult := onOpenGUI(exe, install, data, version, out, ids)
+	return map[string]any{"passed": true, "on_open_gui": startupResult, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "arbitrary_five_same_slot_login": true, "visible_server_label_required": true, "independent_role_templates": true, "final_five_recheck": true, "already_correct_no_logout_or_restart": true, "wrong_server_no_tap": true, "stop_cancels_all_and_no_new_taps": true, "user_stop_no_error_screenshot": true, "current_plan_role_barrier": true, "no_fake_task_completion": true, "settings_preserved": true, "dialog_on_screen": true, "delivery_ledger_gui": true, "pending_sender_message_blocks_role_change": true, "no_real_delivery": true}
 }
