@@ -97,6 +97,13 @@ func (g *groupLoginPanel) render() {
 	setText(g.report, strings.Join(lines, "\r\n"))
 }
 func (g *groupLoginPanel) planGate(spec login.Spec) error {
+	notifications, e := g.app.stateStore.PendingNotifications()
+	if e != nil {
+		return e
+	}
+	if len(notifications) > 0 {
+		return errors.New("发货角色仍有买家进度消息待发送或核查，暂不自动切换角色")
+	}
 	orders, e := g.app.stateStore.Orders()
 	if e != nil {
 		return e

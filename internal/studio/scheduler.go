@@ -434,7 +434,7 @@ func (s *Store) SetTask(id string, phase int, actor string, to TaskState, eviden
 }
 func (s *Store) RecoverInterrupted() error {
 	return s.tx(func(d *nativeDB) error {
-		for _, q := range []string{"UPDATE tasks SET state='NEEDS_REVIEW',reason='interrupted_reconcile_game' WHERE enabled=1 AND state='RUNNING'", "UPDATE transfers SET state='NEEDS_REVIEW' WHERE state='DISPATCHED'"} {
+		for _, q := range []string{"UPDATE tasks SET state='NEEDS_REVIEW',reason='interrupted_reconcile_game' WHERE enabled=1 AND state='RUNNING'", "UPDATE transfers SET state='NEEDS_REVIEW' WHERE state='DISPATCHED'", "UPDATE outbox SET delivered=-2 WHERE delivered=-1"} {
 			if _, _, e := d.query(q); e != nil {
 				return e
 			}

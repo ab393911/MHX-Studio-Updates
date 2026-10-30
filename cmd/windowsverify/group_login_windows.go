@@ -255,5 +255,53 @@ func groupLoginGUI(exe, fixture, version, out string) map[string]any {
 	if cfg["group_login_role"] != float64(3) || cfg["group_login_server"] != "一梦诛仙" || cfg["future_unknown"] == nil {
 		fail(fmt.Errorf("group preferences/unknown fields lost"))
 	}
-	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "arbitrary_five_same_slot_login": true, "visible_server_label_required": true, "independent_role_templates": true, "final_five_recheck": true, "already_correct_no_logout_or_restart": true, "wrong_server_no_tap": true, "stop_cancels_all_and_no_new_taps": true, "user_stop_no_error_screenshot": true, "current_plan_role_barrier": true, "no_fake_task_completion": true, "settings_preserved": true, "dialog_on_screen": true}
+	// Seed only the financial ledger, not a simulated game gift. Verify the new
+	// native GUI accurately shows historical balances and pending sender messages.
+	actor := studio.ActorKey(phase.Actors[0].Identity, phase.Server, phase.Slot)
+	proofSHA := strings.Repeat("a", 64)
+	order, e := ledger.CreateOrder("123456", 3000000)
+	fail(e)
+	fail(ledger.AuthorizeDelivery(order.ID, order.Buyer, proofSHA))
+	fail(ledger.SetBudget(actor, 327000, 345, proofSHA, time.Now()))
+	transfer, e := ledger.Reserve(order.ID, actor, "native-gui-message-fixture", 30000)
+	fail(e)
+	fail(ledger.MarkDispatched(transfer.ID, order.Buyer, proofSHA))
+	var proof bytes.Buffer
+	fail(png.Encode(&proof, image.NewRGBA(image.Rect(0, 0, 16, 16))))
+	proofPath, storedSHA, e := ledger.SaveProof(order.Buyer, order.ID, transfer.ID, proof.Bytes(), time.Now())
+	fail(e)
+	fail(ledger.Confirm(transfer.ID, studio.Receipt{Buyer: order.Buyer, Reference: "native-gui-fixture-only", ProofPath: proofPath, ProofSHA: storedSHA, ResultEvidence: proofSHA, Amount: 30000, AfterSilver: 297000, AfterMerit: 45}))
+	fail(ledger.Close())
+	app = start(exe, "--data-dir", data)
+	fail(waitWindow(title))
+	h = findWindow(title)
+	until(h, "notification GUI inventory not ready", func() bool { return strings.Contains(readText(control(h, 208)), "检测到 24 台") })
+	gameIdle(h)
+	click(h, 106)
+	fail(waitWindow(panelTitle))
+	p = findWindow(panelTitle)
+	reportText := readText(control(p, 515))
+	for _, text := range []string{"有效功绩300", "不是实时余额", "剩余2970000", "买家消息#1 待发送"} {
+		if !strings.Contains(reportText, text) {
+			fail(fmt.Errorf("native delivery report missing %s: %s", text, reportText))
+		}
+	}
+	fail(captureWindow(p, filepath.Join(out, "delivery-ledger-gui-preview.png")))
+	for _, id := range ids {
+		user.NewProc("SendMessageW").Call(control(p, 510), 0x185, 1, uintptr(id-1))
+	}
+	gameIdle(h)
+	click(p, 522)
+	fail(waitWindow(groupTitle))
+	g = findWindow(groupTitle)
+	click(g, 531)
+	if !strings.Contains(readText(control(g, 536)), "进度消息待发送或核查") {
+		fail(fmt.Errorf("pending sender message allowed automatic role change"))
+	}
+	closeTitle(groupTitle)
+	closeTitle(panelTitle)
+	gameIdle(h)
+	closeTitle(title)
+	fail(wait(app, 10*time.Second))
+	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "arbitrary_five_same_slot_login": true, "visible_server_label_required": true, "independent_role_templates": true, "final_five_recheck": true, "already_correct_no_logout_or_restart": true, "wrong_server_no_tap": true, "stop_cancels_all_and_no_new_taps": true, "user_stop_no_error_screenshot": true, "current_plan_role_barrier": true, "no_fake_task_completion": true, "settings_preserved": true, "dialog_on_screen": true, "delivery_ledger_gui": true, "pending_sender_message_blocks_role_change": true, "no_real_delivery": true}
 }

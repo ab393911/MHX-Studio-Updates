@@ -206,6 +206,20 @@ func (p *workbench) refresh() {
 		}
 		lines = append(lines, fmt.Sprintf("订单%s 买家%s 总额%d 确认已交%d 锁定%d 剩余%d 状态%s", o.ID, o.Buyer, o.Total, o.Confirmed, o.Held, o.Remaining, status))
 	}
+	assets, ae := p.app.stateStore.Assets()
+	if ae != nil {
+		lines = append(lines, "角色统计读取失败："+ae.Error())
+	}
+	for _, a := range assets {
+		lines = append(lines, fmt.Sprintf("额度记录 %s：核验时银锭%d，功绩%d，有效功绩%d，整万额度%d，本期已发%d、锁定%d；核验于%s（不是实时余额）", a.Actor, a.Silver, a.Merit, a.EffectiveMerit, a.Capacity, a.Confirmed, a.Held, a.ObservedAt.Local().Format("01-02 15:04:05")))
+	}
+	notifications, ne := p.app.stateStore.PendingNotifications()
+	if ne != nil {
+		lines = append(lines, "买家消息读取失败："+ne.Error())
+	}
+	for _, n := range notifications {
+		lines = append(lines, fmt.Sprintf("买家消息#%d %s；发货角色%s；买家%s：%s", n.Sequence, n.State, n.Actor, n.Buyer, n.Message))
+	}
 	setText(p.report, strings.Join(lines, "\r\n"))
 	setText(p.status, fmt.Sprintf("本地订单%d笔。顺序：同服角色1→5；该批全部指定区服完成后才换下一批。\r\n失败/不明结果不算完成，跨日边界未确认时安全暂停。", len(orders)))
 }

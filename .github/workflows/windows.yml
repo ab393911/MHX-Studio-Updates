@@ -95,6 +95,7 @@ jobs:
             dist/calibration-gui-preview.png
             dist/studio-gui-preview.png
             dist/group-login-gui-preview.png
+            dist/delivery-ledger-gui-preview.png
             dist/preview19-direct/
             dist/preview21-migration/
             dist/old-test.exe
