@@ -301,3 +301,17 @@ func (d *LoginDevice) Capture(ctx context.Context) ([]byte, error) {
 	}
 	return nil, fmt.Errorf("advertisement did not close")
 }
+
+// ServerPage returns only a server label backed by the handoff's real image.
+// This is exact template evidence, not OCR or a guess based on the last setting.
+func (c Catalog) ServerPage(server string) (automation.Page, error) {
+	if server != "一梦诛仙" {
+		return automation.Page{}, errors.New("该区服尚无已核对的文字特征，不会猜测或自动换服")
+	}
+	for _, p := range c.Pages {
+		if p.Key == "server_yimeng" {
+			return p.Page, nil
+		}
+	}
+	return automation.Page{}, errors.New("区服特征未内置")
+}

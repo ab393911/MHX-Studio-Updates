@@ -15,6 +15,7 @@ specs=[
  ('talisman','八星打符界面',102,[(304,34,55,26),(316,278,119,25)],'',None,False),
  ('fortune','聚福宝匣',17,[(169,52,99,29),(605,424,142,25)],'',None,False),
  ('stronghold','妖灵据点入口',47,[(71,11,94,25),(760,264,141,21)],'',None,False),
+ ('server_yimeng','登录区服：一梦诛仙',150,[(707,331,43,24),(751,331,43,24)],'',None,False),
  ('formation','阵法',16,[(168,53,54,27),(657,444,106,22)],'',None,False),
  ('gift','赠送礼物/余额查询',74,[(169,52,99,29),(708,108,40,24)],'',None,False),
  ('market_buy','商行购买',1,[(168,52,51,28),(557,337,25,27)],'',None,False),
@@ -31,7 +32,7 @@ def sample(im,r):
 entries=[]
 for key,label,n,rs,button,bounds,login in specs:
  r=rows[n];im=Image.open(root/r['相对路径']).convert('RGB');anchors=[{'rect':rect(v),'pixels':sample(im,v)} for v in rs]
- entries.append(dict(key=key,label=label,source_id=n,source_sha256=r['SHA256'],page=dict(anchors=anchors,threshold=10),button=button,bounds=rect(bounds) if bounds else None,login=login))
+ entries.append(dict(key=key,label=label,source_id=n,source_sha256=r['SHA256'],page=dict(anchors=anchors,threshold=3 if key.startswith("server_") else 10),button=button,bounds=rect(bounds) if bounds else None,login=login))
 # Only thin, non-identifying gold frame strips are used. Nicknames and avatars
 # are excluded; row offsets come from the user's manually tested role centres.
 im=Image.open(root/rows[144]['相对路径']).convert('RGB');rs=[(44,64,198,8),(44,123,198,8)]

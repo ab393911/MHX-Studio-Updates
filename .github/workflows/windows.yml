@@ -2,7 +2,7 @@ name: Windows x64 tests and preview release
 
 on:
   push:
-    branches: [main, codex/mhx-studio-recovery, codex/mhx-remove-nine-20261029]
+    branches: [main, codex/mhx-studio-recovery, codex/mhx-remove-nine-20261029, codex/mhx-group-login-20261030]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: mhx-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/mhx-remove-nine-20261029' }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/codex/mhx-remove-nine-20261029' || github.ref == 'refs/heads/codex/mhx-group-login-20261030' }}
 
 jobs:
   portable-tests:
@@ -94,6 +94,7 @@ jobs:
             dist/single-game-gui-preview.png
             dist/calibration-gui-preview.png
             dist/studio-gui-preview.png
+            dist/group-login-gui-preview.png
             dist/preview19-direct/
             dist/preview21-migration/
             dist/old-test.exe

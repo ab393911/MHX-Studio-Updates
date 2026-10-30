@@ -110,6 +110,7 @@ type app struct {
 	roleInstanceKey                                   string
 	placedCalibration, placedSelector                 uintptr
 	workbench                                         *workbench
+	loginPanel                                        *groupLoginPanel
 	stateStore                                        *studio.Store
 	pendingStudioAction                               int
 	lastProofCleanupDay                               string
@@ -699,6 +700,9 @@ func (a *app) handle(id int) {
 }
 func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 	a := active
+	if a != nil && a.loginPanel != nil && h == a.loginPanel.hwnd {
+		return a.loginPanel.proc(h, m, w, l)
+	}
 	if a != nil && a.cal != nil && h == a.cal.hwnd {
 		return a.cal.proc(h, m, w, l)
 	}
@@ -738,8 +742,8 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 			a.tick()
 			return 0
 		case wmClose:
-			if a.cal != nil {
-				a.info("请先关闭标定窗口。")
+			if a.cal != nil || a.loginPanel != nil {
+				a.info("请先关闭标定或五台登录窗口。")
 				return 0
 			}
 			if a.busy.Load() {

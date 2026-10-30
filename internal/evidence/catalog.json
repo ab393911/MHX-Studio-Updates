@@ -358,6 +358,38 @@
       "login": false
     },
     {
+      "key": "server_yimeng",
+      "label": "登录区服：一梦诛仙",
+      "source_id": 150,
+      "source_sha256": "b6c93c901d91d425853136a53d940a8779b6aaa29d08255957b1b11ae2523c17",
+      "page": {
+        "anchors": [
+          {
+            "rect": {
+              "x": 707,
+              "y": 331,
+              "w": 43,
+              "h": 24
+            },
+            "pixels": "ZGNjY2RjY2NjZGRkZmZmZVhpUWJfcl5jaGddXFlbXFVkY2NjY2NjY2RlZWZnZ2dmZF10ZGJWYV5KZWVcWV5UamRjY2NjY2NkZWdnaGlpaWllY1zsY2Na3NltXFZlX2FhZGNjY2NjY2RlZ2hoampqaWlcZ3deX2Ph91NfW1dgV9tlXWZsa2hlZGRnZmZ1d1xzc5PA0unqztry56JqYWZfRm5wZV1kZmNmbGVnbWplcm1o9O7uWmZh7u3sXU9hWVd4ZW11XmFcb3Foc3aRZ3p0cHRn6ct2tbDW43D92Vrj+Oh0fnB+bHTK5ePt9+vy0uNuY+/rgkie06LZbO3l721G6Gp4eH3HomFfZnBpXWRaYmdqb2Nv6Or1vO3cY1tfWmHmdHNycWtra2pqamtqZmVmaHByZmL9XGX069ZpY2deXOp1c3JwbW1sbGxrbGtoZ2hpY2+IdGT75e50cFpqZGxp9HZ0cm9ubm1tbW1tbGppaWpoZ2tqbXLqfXNmW21tWWT9dnRzcXFxcHBwb25ubW1sa2lcdpbqqIdgZmd1X11jTm12dXNycnJxcXFwb29vbm1sas7wwGZ0ZW1gaFp0ZGhrXHR0dHNzc3Nzc3FycXFwcG9wb29ubW1vbm1raWlnaGpsdHR0dHN0dHR0c3R0cnJxcHBwcG9vb25ub29wcW9wcHE="
+          },
+          {
+            "rect": {
+              "x": 751,
+              "y": 331,
+              "w": 43,
+              "h": 24
+            },
+            "pixels": "XVlVYl1aX2FjaGlqbXV7dWx5eXtnbnpsd3Fwb25sa2pWXW1YY1djZWdrbG1wcGd3bF1veHJ1dm5zcnFwb21sallbZmDx8mBoam9vcHOg23N/7bKHbXZqfG9xcG9ubGxrh19WWOr6XGpscXJzdq7fgWva59JjgHp3cHJxcG9tbW1cWtJm7vjp1oB2ZoBu7Nxvcanry3V5eHJvb3BwcG9vcGBf4O3l89q7bnJ3aOryjHd0jOy8dHVpcGlvcHFxcG9waMhnZvH1bGtudXRs7PJ0a3d+96py8d9rc3BxcnJycnFaZ5vt9+334vZie3TZ5n/n73vrrW35+W9ucHFyc3Nzcm5pZ9727optcHjeisndc+zdl+ibnOztYHRwcnN0dHRzw2Vm++Xk9MFvdGt5x+N179qn37XP3sJtcXNzc3Nzc3Nv2/xd/N298N/Pbnf08nbq3fzQi/XdeWdpcnJycnJyct7xVX/s8HRzZ3J6Z+fzU+yRemxbdOxpf3VxcXFxcXFxbnFye+/iZ3BeeGeDhdtsbXNzem1ucXpuc3BwcHBwcHBkb21faqpzan93cnBicG9cempldGGCa35tcHBwcHBwcG1wcHBwcHBxcXBvb250c3Fxc3NxcXFyc3NxcXBwcHBvcW5ubm5ubm9vbm5ubXFwcHFzdHR0dXV2dnV0dHRzc3M="
+          }
+        ],
+        "threshold": 3
+      },
+      "button": "",
+      "bounds": null,
+      "login": false
+    },
+    {
       "key": "formation",
       "label": "阵法",
       "source_id": 16,

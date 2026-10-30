@@ -136,6 +136,7 @@ func main() {
 		results["adb_fallback_gui_fixture"] = adbFallbackGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 		results["single_game_gui_fixture"] = gameGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 		results["studio_gui_fixture"] = studioGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
+		results["group_login_gui_fixture"] = groupLoginGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 	}
 	scenarios := []string{"success", "startup_timeout", "sha_tamper", "sharing_violation"}
 	ledger, e := studio.Open(filepath.Dir(cfg))

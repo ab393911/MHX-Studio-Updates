@@ -30,7 +30,7 @@ func TestCatalogValidAndLocalCalibrationWins(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(c.Pages) != 19 || len(c.Icons) != 4 {
+	if len(c.Pages) != 20 || len(c.Icons) != 4 {
 		t.Fatal(c)
 	}
 	local := automation.NewProfile()
@@ -126,5 +126,33 @@ func TestRemovedDailyCargoAndCultivationCannotAppearInCurrentCandidates(t *testi
 		if p.Key == "daily" || p.Key == "cargo" || p.Key == "life_prompt" {
 			t.Fatal("removed candidate retained", p.Key)
 		}
+	}
+}
+
+func TestServerEvidenceIsNamedAndDoesNotGuessUnknownServers(t *testing.T) {
+	c, e := Load()
+	if e != nil {
+		t.Fatal(e)
+	}
+	page, e := c.ServerPage("一梦诛仙")
+	if e != nil || len(page.Anchors) != 2 || page.Threshold > 3 {
+		t.Fatal(page, e)
+	}
+	if _, e = c.ServerPage("另一区服"); e == nil {
+		t.Fatal("unknown server guessed")
+	}
+	img := canvas(page)
+	if !c.Match(img, "server_yimeng") {
+		t.Fatal("fixture label not recognized")
+	}
+	for _, a := range page.Anchors {
+		for y := a.Rect.Y; y < a.Rect.Y+a.Rect.H; y++ {
+			for x := a.Rect.X; x < a.Rect.X+a.Rect.W; x++ {
+				img.Set(x, y, color.Black)
+			}
+		}
+	}
+	if c.Match(img, "server_yimeng") {
+		t.Fatal("server label background counted as evidence")
 	}
 }

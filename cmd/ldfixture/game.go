@@ -54,7 +54,11 @@ func gameCommand(root, command string, index int) bool {
 		return true
 	}
 	if strings.Contains(command, "screencap") {
-		b, e := os.ReadFile(filepath.Join(root, "screens", g.Page+".png"))
+		screen := filepath.Join(root, "screens", strconv.Itoa(index), g.Page+".png")
+		if _, e := os.Stat(screen); os.IsNotExist(e) {
+			screen = filepath.Join(root, "screens", g.Page+".png")
+		}
+		b, e := os.ReadFile(screen)
 		die(e)
 		_, e = os.Stdout.Write(b)
 		die(e)

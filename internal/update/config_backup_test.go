@@ -122,3 +122,25 @@ func TestLegacyStartupSnapshotIsCreatedWithoutChangingConfiguration(t *testing.T
 		t.Fatal("legacy bootstrap changed configuration")
 	}
 }
+
+func TestGroupLoginPreferencesAndLastRunDiagnosticRestoreWithExistingProfiles(t *testing.T) {
+	p, _ := configFixture(t)
+	cfg := []byte(`{"group_login_server":"一梦诛仙","group_login_role":3,"future":{"keep":true}}`)
+	report := []byte(`{"ready":false,"target":{"server":"一梦诛仙","role":3},"error":"needs current verification"}`)
+	write(t, filepath.Join(p.DataRoot, "config.json"), cfg)
+	write(t, filepath.Join(p.DataRoot, "profiles", "group-login-last.json"), report)
+	if e := BackupConfig(p.DataRoot, p.ConfigBackup, p.Token); e != nil {
+		t.Fatal(e)
+	}
+	write(t, filepath.Join(p.DataRoot, "config.json"), []byte("failed settings"))
+	write(t, filepath.Join(p.DataRoot, "profiles", "group-login-last.json"), []byte("failed report"))
+	if e := RestoreConfig(p.ConfigBackup, p.DataRoot, p.Token); e != nil {
+		t.Fatal(e)
+	}
+	for path, want := range map[string][]byte{"config.json": cfg, "profiles/group-login-last.json": report} {
+		got, e := os.ReadFile(filepath.Join(p.DataRoot, filepath.FromSlash(path)))
+		if e != nil || string(got) != string(want) {
+			t.Fatal(path, string(got), e)
+		}
+	}
+}

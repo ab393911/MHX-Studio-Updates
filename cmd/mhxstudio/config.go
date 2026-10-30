@@ -33,6 +33,8 @@ type settings struct {
 	SingleValidations map[string]proof           `json:"single_validations"`
 	Games             map[string]gameapp.Binding `json:"game_bindings"`
 	TargetRoles       map[string]int             `json:"target_roles"`
+	GroupLoginServer  string                     `json:"group_login_server,omitempty"`
+	GroupLoginRole    int                        `json:"group_login_role,omitempty"`
 	raw               map[string]json.RawMessage
 }
 
@@ -69,6 +71,9 @@ func loadSettings(root string) (settings, error) {
 	return c, c.Validate()
 }
 func (c settings) Validate() error {
+	if c.GroupLoginRole < 0 || c.GroupLoginRole > 5 || len(c.GroupLoginServer) > 128 {
+		return errors.New("五台登录区服或角色设置无效")
+	}
 	if c.GroupStart < 0 || c.GroupStart > 99994 {
 		return errors.New("五开首编号须在 0～99994 之间，且使用雷电列表中的原始编号")
 	}

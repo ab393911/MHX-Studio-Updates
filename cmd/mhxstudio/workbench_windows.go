@@ -85,7 +85,7 @@ func (a *app) openWorkbench() {
 	child(hwnd, "STATIC", "功绩", 235, 343, 55, 24, 0, 0)
 	p.merit = child(hwnd, "EDIT", "", 290, 337, 115, 28, wsBorder, 517)
 	child(hwnd, "BUTTON", "计算可交付（手动核对）", 425, 335, 245, 32, 0, 509)
-	child(hwnd, "STATIC", "估算不会解锁真实发货", 690, 342, 255, 25, 0, 0)
+	child(hwnd, "BUTTON", "五台同槽登录准备…", 690, 335, 255, 32, 0, 522)
 	p.report = child(hwnd, "EDIT", "", 20, 385, 925, 260, wsBorder|0x200000|4|0x40|0x800, 515)
 	p.instances()
 	p.refresh()
@@ -378,6 +378,8 @@ func (p *workbench) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 			p.createPlan(false)
 		case 521:
 			p.createPlan(true)
+		case 522:
+			p.openGroupLogin()
 		case 504:
 			p.refresh()
 		case 505:
