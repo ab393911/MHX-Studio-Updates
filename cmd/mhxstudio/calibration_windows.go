@@ -20,9 +20,7 @@ var calibrationNames = func() []calibrationName {
 	for i := 1; i <= 5; i++ {
 		out = append(out, calibrationName{fmt.Sprintf("selected_%d", i), fmt.Sprintf("角色列表：第 %d 个已选中 + 对应角色行范围", i), fmt.Sprintf("role_%d", i)})
 	}
-	for i := 1; i <= 5; i++ {
-		out = append(out, calibrationName{fmt.Sprintf("game_%d", i), fmt.Sprintf("游戏主界面：第 %d 个角色昵称 + 菜单按钮", i), "menu"})
-	}
+	out = append(out, calibrationName{"game", "游戏主界面：两处稳定特征 + 菜单按钮", "menu"})
 	return out
 }()
 
@@ -138,7 +136,7 @@ func (c *calibration) paint() {
 	gdi32.NewProc("DeleteObject").Call(pen)
 }
 func (c *calibration) hint() {
-	hints := []string{"第1框：稳定的页面特征（避开动画、人物和计时数字）。在截图上拖出矩形。", "第2框：另一处独立特征。角色标定须包含昵称/选中高亮；不同角色必须有区别。", "第3框：按钮可点击范围（" + c.name.button + "）。框在按钮内部，点击只在中央小范围随机。", "三框已完成。确认页面和角色序号正确后点“保存这次标定”。"}
+	hints := []string{"第1框：稳定的页面特征（避开动画、人物和计时数字）。在截图上拖出矩形。", "第2框：另一处独立特征。角色选中标定须包含该行高亮；主界面不需昵称。", "第3框：按钮可点击范围（" + c.name.button + "）。框在按钮内部，点击只在中央小范围随机。", "三框已完成。确认页面和角色序号正确后点“保存这次标定”。"}
 	setText(c.label, hints[len(c.rects)])
 }
 func (c *calibration) save() {
@@ -160,7 +158,7 @@ func (c *calibration) save() {
 	c.profile.Buttons[c.name.button] = c.rects[2]
 	// An identical role identity calibration would allow the wrong character.
 	if e = c.profile.Require(c.img, c.name.key); e != nil {
-		c.app.info("标定有冲突：" + e.Error() + "。请将特征框放在昵称或该角色选中标记上。")
+		c.app.info("标定有冲突：" + e.Error() + "。请使用独立页面特征或该角色行选中标记。")
 		return
 	}
 	if e = saveProfile(c.app.root, c.index, c.profile); e != nil {

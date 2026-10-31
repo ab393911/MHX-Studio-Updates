@@ -50,10 +50,10 @@ func studioGUI(exe, fixture, version, out string) map[string]any {
 		return strings.Contains(readText(control(h, 208)), "检测到 24 台，已运行 5 台，ADB 已验证 5 台")
 	})
 	click(h, 106)
-	panelTitle := "MHX Studio 工作台 · 五开计划与订单"
+	panelTitle := "MHX Studio 工作台 · 五开计划与四区资产"
 	fail(waitWindow(panelTitle))
 	p := findWindow(panelTitle)
-	until(h, "workbench exceeds work area", func() bool { return onScreen(p) && onScreen(control(p, 501)) && onScreen(control(p, 507)) })
+	until(h, "workbench exceeds work area", func() bool { return onScreen(p) && onScreen(control(p, 501)) && onScreen(control(p, 522)) })
 	list := control(p, 510)
 	for _, id := range ids {
 		user.NewProc("SendMessageW").Call(list, 0x185, 1, uintptr(id-1))
@@ -81,16 +81,14 @@ func studioGUI(exe, fixture, version, out string) map[string]any {
 	writeText(control(p, 511), "一梦诛仙,另一服")
 	click(p, 503)
 	until(h, "plan not persisted/displayed", func() bool { return strings.Contains(readText(control(p, 515)), "角色1小组") })
-	writeText(control(p, 513), "ci-buyer-7")
-	writeText(control(p, 514), "7万")
-	click(p, 507)
-	until(h, "order not displayed", func() bool {
-		return strings.Contains(readText(control(p, 515)), "总额70000 确认已交0 锁定0 剩余70000")
+	if control(p, 507) != 0 || control(p, 513) != 0 || control(p, 514) != 0 {
+		fail(fmt.Errorf("retired order controls present"))
+	}
+	until(h, "four server summary missing", func() bool {
+		v := readText(control(p, 515))
+		return strings.Contains(v, "一区 [一梦诛仙]") && strings.Contains(v, "二区 [另一服]") && strings.Contains(v, "四区：未配置")
 	})
-	writeText(control(p, 516), "32.7万")
-	writeText(control(p, 517), "345")
-	click(p, 509)
-	until(h, "per-character capacity calculator failed", func() bool { return strings.Contains(readText(control(p, 512)), "估算可交付30000银锭") })
+
 	fail(captureWindow(p, filepath.Join(out, "studio-gui-preview.png")))
 	closeTitle(panelTitle)
 	gameIdle(h)
@@ -100,7 +98,7 @@ func studioGUI(exe, fixture, version, out string) map[string]any {
 	fail(e)
 	orders, e := s.Orders()
 	fail(e)
-	if len(orders) != 1 || orders[0].Total != 70000 || orders[0].Confirmed != 0 || orders[0].DeliveryEnabled {
+	if len(orders) != 0 {
 		fail(fmt.Errorf("order changed %+v", orders))
 	}
 	plan, e := s.LatestPlan()
@@ -126,10 +124,12 @@ func studioGUI(exe, fixture, version, out string) map[string]any {
 	click(h, 106)
 	fail(waitWindow(panelTitle))
 	p = findWindow(panelTitle)
-	until(h, "order not restored on restart", func() bool { return strings.Contains(readText(control(p, 515)), "ci-buyer-7") })
+	until(h, "plan and four-server view not restored on restart", func() bool {
+		return strings.Contains(readText(control(p, 515)), plan.ID) && strings.Contains(readText(control(p, 515)), "四区")
+	})
 	closeTitle(panelTitle)
 	gameIdle(h)
 	closeTitle(title)
 	fail(wait(app, 10*time.Second))
-	return map[string]any{"passed": true, "fixture_only": true, "real_game_tested": false, "real_ldplayer_tested": false, "arbitrary_five_selection": true, "selected_start_and_adb": true, "selected_five_games_open_without_taps": true, "sqlite_plan_and_order_persisted": true, "no_fake_task_completion": true, "no_real_delivery": true, "capacity_327000_345_is_30000": true, "restart_preserves_plan_and_order": true, "enabled_scope_only": true, "battle_pass_retained": true, "workbench_on_screen": true}
+	return map[string]any{"passed": true, "fixture_only": true, "real_game_tested": false, "real_ldplayer_tested": false, "arbitrary_five_selection": true, "selected_start_and_adb": true, "selected_five_games_open_without_taps": true, "sqlite_plan_persisted_orders_absent": true, "no_fake_task_completion": true, "no_real_delivery": true, "four_server_summary_visible": true, "restart_preserves_plan_and_assets_view": true, "enabled_scope_only": true, "battle_pass_retained": true, "workbench_on_screen": true}
 }

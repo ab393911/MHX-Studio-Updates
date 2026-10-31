@@ -161,7 +161,7 @@ func TestStopCancelsAllWorkersAndDoesNotContinue(t *testing.T) {
 	}
 }
 func TestDuplicateIdentityCalibrationOrProfessionRejectedBeforeQueries(t *testing.T) {
-	for _, mode := range []string{"duplicate_instance", "duplicate_device", "copied_nickname", "bad_profession", "unsupported_role"} {
+	for _, mode := range []string{"duplicate_instance", "duplicate_device", "bad_profession", "unsupported_role"} {
 		t.Run(mode, func(t *testing.T) {
 			spec, m := fixture()
 			var queries atomic.Int32
@@ -213,5 +213,16 @@ func TestMalformedProofCannotClaimReadiness(t *testing.T) {
 				t.Fatal(r, e)
 			}
 		})
+	}
+}
+
+func TestNoNicknameSignatureNeeded(t *testing.T) {
+	s, m := fixture()
+	for i := range m {
+		m[i].CharacterSignature = ""
+	}
+	r, e := Run(context.Background(), s, m, Options{})
+	if e != nil || !r.Ready {
+		t.Fatal(r, e)
 	}
 }

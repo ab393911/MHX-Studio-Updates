@@ -179,3 +179,34 @@ func TestColdStartWaitsForKnownPageWithoutClickingLoadingScreen(t *testing.T) {
 		t.Fatal(r, e, device)
 	}
 }
+
+func TestSlotEntryWithoutNicknameUsesSelectedRowAndGenericMain(t *testing.T) {
+	d := simulator(t)
+	d.profile.Pages["game"] = d.profile.Pages["game_3"]
+	e := enterEngine(d)
+	r, err := e.EnterRole(context.Background(), 3, EnterOptions{SkipNicknameCheck: true})
+	if err != nil || !r.SelectedRoleVerified || !r.IdentityVerified || d.state != "game_3" {
+		t.Fatal(r, err, d.state)
+	}
+	if _, ok := d.profile.Pages["game_3"]; !ok {
+		t.Fatal("saved nickname profile was mutated")
+	}
+	// Starting with a generic game image cannot prove its slot; follow the full
+	// logout/selection path and do not accept the old main screen as identity.
+	d.entered = nil
+	r, err = e.EnterRole(context.Background(), 3, EnterOptions{SkipNicknameCheck: true})
+	if err != nil || !r.SelectedRoleVerified || len(d.entered) != 1 || d.entered[0] != 3 {
+		t.Fatal(r, err, d.entered)
+	}
+}
+func TestSlotEntryWithoutNicknameStillRejectsWrongSelectedRow(t *testing.T) {
+	d := simulator(t)
+	d.profile.Pages["game"] = d.profile.Pages["game_1"]
+	d.state = "roles"
+	d.wrongRole = true
+	e := enterEngine(d)
+	e.Options.StateTimeout = 20 * time.Millisecond
+	if _, err := e.EnterRole(context.Background(), 1, EnterOptions{SkipNicknameCheck: true}); err == nil || len(d.entered) > 0 {
+		t.Fatal(err, d.entered)
+	}
+}

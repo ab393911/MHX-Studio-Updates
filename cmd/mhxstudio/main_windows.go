@@ -172,7 +172,7 @@ func (a *app) button(s string, x, y, w, id int) { a.control("BUTTON", s, x, y, w
 func comboAdd(h uintptr, s string)              { sendMessage.Call(h, 0x143, 0, uintptr(unsafe.Pointer(utf(s)))) }
 func comboIndex(h uintptr) int                  { return int(int32(send(h, 0x147, 0, 0))) }
 func (a *app) build() {
-	a.label("MHX Studio "+version+"  |  截图识别、五开计划与本地订单测试版", 20, 15, 1000)
+	a.label("MHX Studio "+version+"  |  截图识别、五开任务与四区资产测试版", 20, 15, 1000)
 	a.label("保留已验收更新、雷电与游戏包名启动；新增任务执行仍待实机验收，战斗与真实发货未开放。", 20, 44, 1000)
 	a.label("雷电目录", 20, 83, 90)
 	a.control("EDIT", a.cfg.InstallDir, 115, 78, 610, 28, wsBorder, 201)
@@ -682,7 +682,7 @@ func (a *app) handle(id int) {
 	case 111:
 		_ = exec.Command("explorer.exe", a.root).Start()
 	case 112:
-		a.info("preview.19及此前在线更新、雷电24实例、单台/五台启动、ADB和包名启动已由用户实机通过。\n新版新增内置候选识别、广告外框关闭和五开工作台；已有本机标定优先。\n工作台可自选五台、打开已绑定游戏、保存区服/批次计划及记账订单，可测试已接通的组队及八星准备，尚未开放战斗和真实发货。\n角色昵称未核验时只报告部分成功；职业候选不确定时保留人工绑定。\n所有升级继续只点“一键检查更新”，原设置、标定和进度/订单数据保留。真实机器故障回滚仍未验收。")
+		a.info("preview.19及此前在线更新、雷电24实例、单台/五台启动、ADB和包名启动已由用户实机通过。\n新版新增内置候选识别、广告外框关闭和五开工作台；已有本机标定优先。\n工作台可自选五台、打开已绑定游戏、保存区服/批次计划及四区资产汇总，可测试已接通的组队及八星准备，尚未开放战斗和真实发货。\n按实例、区服、角色选中槽位核验；职业候选不确定时保留人工绑定。\n所有升级继续只点“一键检查更新”，原设置、标定和进度与历史数据保留。真实机器故障回滚仍未验收。")
 	case 113:
 		a.pendingUpdates()
 	case 114:
@@ -782,7 +782,7 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 func (a *app) tick() {
 	if !a.healthDone && a.healthPath != "" {
 		if e := studio.VerifyFile(a.root); e != nil {
-			a.log("进度/订单数据库健康检查失败，拒绝确认升级：" + e.Error())
+			a.log("进度数据库健康检查失败，拒绝确认升级：" + e.Error())
 			return
 		}
 		visible, _, _ := user32.NewProc("IsWindowVisible").Call(a.hwnd)

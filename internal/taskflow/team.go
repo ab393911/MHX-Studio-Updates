@@ -94,6 +94,9 @@ func (c *controller) take(ctx context.Context) (snapshot, error) {
 	return s, nil
 }
 func (c *controller) game(s snapshot) error {
+	if _, ok := c.Profile.Pages["game"]; ok {
+		return c.Profile.Require(s.image, "game")
+	}
 	return c.Profile.Require(s.image, fmt.Sprintf("game_%d", c.Role))
 }
 func has(s snapshot, text string, r automation.Rect) bool {
@@ -246,23 +249,6 @@ func (c *controller) openTeam(ctx context.Context) error {
 	_, e = c.tap(ctx, teamPage, textButton("队伍", automation.Rect{X: 870, Y: 65, W: 80, H: 75}), partyPage)
 	return e
 }
-func sameNames(got []string, wanted []Actor) bool {
-	if len(got) != 5 || len(wanted) != 5 {
-		return false
-	}
-	seen := map[string]bool{}
-	for _, a := range wanted {
-		seen[vision.Normal(a.Name)] = true
-	}
-	for _, n := range got {
-		n = vision.Normal(n)
-		if !seen[n] {
-			return false
-		}
-		delete(seen, n)
-	}
-	return len(seen) == 0
-}
 func readNames(s snapshot, fixed bool) []string {
 	var names []string
 	for i := 0; i < 5; i++ {
@@ -274,14 +260,25 @@ func readNames(s snapshot, fixed bool) []string {
 	}
 	return names
 }
+func occupiedFive(slots []string) bool {
+	if len(slots) != 5 {
+		return false
+	}
+	for _, v := range slots {
+		if vision.Normal(v) == "" {
+			return false
+		}
+	}
+	return true
+}
 func fullTeam(actors []Actor, leader string) check {
 	return func(s snapshot) error {
 		if e := partyPage(s); e != nil {
 			return e
 		}
 		names := readNames(s, false)
-		if !sameNames(names, actors) || names[0] != vision.Normal(leader) || !has(s, "队长", automation.Rect{X: 45, Y: 130, W: 35, H: 85}) {
-			return errors.New("五名实际成员或队长身份尚未核验")
+		if !occupiedFive(names) || !has(s, "队长", automation.Rect{X: 45, Y: 130, W: 35, H: 85}) {
+			return errors.New("实际队伍未确认五人占位或缺少队长标记")
 		}
 		return nil
 	}
@@ -290,10 +287,6 @@ func fixedTeam(actors []Actor, leader string) check {
 	return func(s snapshot) error {
 		if e := teamPage(s); e != nil {
 			return e
-		}
-		names := readNames(s, true)
-		if !sameNames(names, actors) || names[0] != vision.Normal(leader) {
-			return errors.New("固定队成员与当前五个角色不一致，不发送邀请")
 		}
 		for i := 0; i < 5; i++ {
 			if !has(s, "在线", automation.Rect{X: 100 + 160*i, Y: 330, W: 140, H: 35}) || has(s, "离线", automation.Rect{X: 100 + 160*i, Y: 330, W: 140, H: 35}) {
@@ -330,15 +323,7 @@ func (c *controller) leaderInvite(ctx context.Context, actors []Actor) error {
 	}
 	// A populated, unrelated party is not dissolved or overwritten.
 	if !has(s, "没有队伍的时候", automation.Rect{Y: 450, W: 550, H: 65}) {
-		wanted := map[string]bool{}
-		for _, a := range actors {
-			wanted[vision.Normal(a.Name)] = true
-		}
-		for _, n := range readNames(s, false) {
-			if n != "" && !wanted[n] {
-				return errors.New("当前队伍存在未核验成员，不自动改队")
-			}
-		}
+		return errors.New("当前已有未满五人的队伍，先处理当前队伍，不自动拆队或补入")
 	}
 	if _, e = c.tap(ctx, teamPage, textButton("固定", automation.Rect{X: 870, Y: 140, W: 80, H: 75}), fixedTeam(actors, c.Name)); e != nil {
 		return e
@@ -366,8 +351,8 @@ func (c *controller) accept(ctx context.Context, leader string) error {
 				if e := invitePage(s); e != nil {
 					return e
 				}
-				if vision.Normal(s.ocr.Text(automation.Rect{X: 305, Y: 110, W: 180, H: 25})) != vision.Normal(leader) {
-					return errors.New("邀请队长不符，不接受")
+				if _, e := s.ocr.Unique("接受", automation.Rect{X: 580, Y: 100, W: 100, H: 350}); e != nil {
+					return errors.New("队伍邀请缺失或有多个可接受邀请，未选择")
 				}
 				return nil
 			}
@@ -498,17 +483,15 @@ func validateActors(actors []Actor, leader int) ([]*controller, int, error) {
 	if len(actors) != 5 {
 		return nil, -1, errors.New("组队需要恰好五个已核验角色")
 	}
-	seen := map[string]bool{}
 	indices := map[int]bool{}
 	identities := map[string]bool{}
 	jobs := map[string]int{}
 	lead := -1
 	controls := make([]*controller, 5)
 	for i, a := range actors {
-		if a.Identity == "" || identities[a.Identity] || a.Server == "" || a.Server != actors[0].Server || a.Role != actors[0].Role || vision.Normal(a.Name) == "" || seen[vision.Normal(a.Name)] || indices[a.Instance] || a.Role < 1 || a.Role > 5 || a.Device == nil || a.Reader == nil || a.MinDelayMS < 100 || a.MaxDelayMS < a.MinDelayMS || a.MaxDelayMS > 3000 {
-			return nil, -1, errors.New("角色身份、独立昵称、实例或点击设置不足，不发送邀请")
+		if a.Identity == "" || identities[a.Identity] || a.Server == "" || a.Server != actors[0].Server || a.Role != actors[0].Role || indices[a.Instance] || a.Role < 1 || a.Role > 5 || a.Device == nil || a.Reader == nil || a.MinDelayMS < 100 || a.MaxDelayMS < a.MinDelayMS || a.MaxDelayMS > 3000 {
+			return nil, -1, errors.New("角色实例、区服、槽位或点击设置不足，不发送邀请")
 		}
-		seen[vision.Normal(a.Name)] = true
 		identities[a.Identity] = true
 		indices[a.Instance] = true
 		jobs[a.Profession]++

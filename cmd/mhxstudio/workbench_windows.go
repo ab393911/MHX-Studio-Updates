@@ -25,10 +25,10 @@ import (
 )
 
 type workbench struct {
-	app                                                *app
-	hwnd, list, servers, buyer, amount, status, report uintptr
-	inventory                                          []ldplayer.Instance
-	balance, merit                                     uintptr
+	app                                 *app
+	hwnd, list, servers, status, report uintptr
+	inventory                           []ldplayer.Instance
+	assets                              [4]uintptr
 }
 
 func (a *app) openWorkbench() {
@@ -56,14 +56,14 @@ func (a *app) openWorkbench() {
 	a.workbench = p
 	inst, _, _ := moduleHandle.Call(0)
 	x, y, w, h := fittedBounds(1000, 730)
-	hwnd, _, _ := createWindow.Call(0, uintptr(unsafe.Pointer(utf("MHXStudioNextWindow"))), uintptr(unsafe.Pointer(utf("MHX Studio 工作台 · 五开计划与订单"))), 0x00CA0000|wsVisible, uintptr(x), uintptr(y), uintptr(w), uintptr(h), a.hwnd, 0, inst, 0)
+	hwnd, _, _ := createWindow.Call(0, uintptr(unsafe.Pointer(utf("MHXStudioNextWindow"))), uintptr(unsafe.Pointer(utf("MHX Studio 工作台 · 五开计划与四区资产"))), 0x00CA0000|wsVisible, uintptr(x), uintptr(y), uintptr(w), uintptr(h), a.hwnd, 0, inst, 0)
 	if hwnd == 0 {
 		a.workbench = nil
 		a.log("工作台窗口创建失败")
 		return
 	}
 	p.hwnd = hwnd
-	child(hwnd, "STATIC", "可保存五开计划、自动启动和已接通任务测试；订单目前只记账。点击列表可勾选/取消。", 20, 12, 945, 25, 0, 0)
+	child(hwnd, "STATIC", "五开计划、任务测试和四区可用银锭总览。点击列表可勾选/取消。", 20, 12, 945, 25, 0, 0)
 	child(hwnd, "STATIC", "勾选任意五台真实实例", 20, 42, 270, 24, 0, 0)
 	p.list = child(hwnd, "LISTBOX", "", 20, 69, 285, 215, wsBorder|0x200000|8|1, 510)
 	child(hwnd, "STATIC", "区服顺序（逗号分隔；仅计划，不自动换服）", 325, 42, 620, 24, 0, 0)
@@ -77,18 +77,27 @@ func (a *app) openWorkbench() {
 	child(hwnd, "BUTTON", "关闭", 805, 155, 140, 32, 0, 508)
 	child(hwnd, "BUTTON", "追加所选五台到当前计划", 325, 204, 220, 32, 0, 521)
 	p.status = child(hwnd, "STATIC", "", 560, 204, 385, 80, 0, 512)
-	child(hwnd, "STATIC", "买家游戏ID", 20, 299, 120, 24, 0, 0)
-	p.buyer = child(hwnd, "EDIT", "", 145, 294, 270, 28, wsBorder, 513)
-	child(hwnd, "STATIC", "订单银锭（整万）", 435, 299, 160, 24, 0, 0)
-	p.amount = child(hwnd, "EDIT", "", 600, 294, 170, 28, wsBorder, 514)
-	child(hwnd, "BUTTON", "建立记账订单", 790, 292, 155, 32, 0, 507)
-	child(hwnd, "STATIC", "余额", 20, 343, 55, 24, 0, 0)
-	p.balance = child(hwnd, "EDIT", "", 75, 337, 145, 28, wsBorder, 516)
-	child(hwnd, "STATIC", "功绩", 235, 343, 55, 24, 0, 0)
-	p.merit = child(hwnd, "EDIT", "", 290, 337, 115, 28, wsBorder, 517)
-	child(hwnd, "BUTTON", "计算可交付（手动核对）", 425, 335, 245, 32, 0, 509)
-	child(hwnd, "BUTTON", "五台同槽登录准备…", 690, 335, 255, 32, 0, 522)
-	p.report = child(hwnd, "EDIT", "", 20, 385, 925, 260, wsBorder|0x200000|4|0x40|0x800, 515)
+	child(hwnd, "BUTTON", "五台同槽登录准备…", 325, 250, 220, 32, 0, 522)
+	for i, label := range []string{"一区", "二区", "三区", "四区"} {
+		p.assets[i] = child(hwnd, "STATIC", label+"：尚未统计", 20, 294+i*32, 925, 28, 0, 0)
+	}
+	p.report = child(hwnd, "EDIT", "", 20, 430, 925, 215, wsBorder|0x200000|4|0x40|0x800, 515)
+
+	if plan, e := a.stateStore.LatestPlan(); e == nil {
+		var names []string
+		seen := map[string]bool{}
+		for _, b := range plan.Batches {
+			for _, v := range b.Servers {
+				if !seen[v] {
+					names = append(names, v)
+					seen[v] = true
+				}
+			}
+		}
+		if len(names) > 0 {
+			setText(p.servers, strings.Join(names, ","))
+		}
+	}
 	p.instances()
 	p.refresh()
 }
@@ -203,40 +212,34 @@ func (p *workbench) refresh() {
 			}
 		}
 	}
-	orders, e := p.app.stateStore.Orders()
-	if e != nil {
-		lines = append(lines, e.Error())
+	lines = append(lines, "", "四区可用银锭总览（每角色整万银锭、整百功绩取较小值；15分钟过期，不跨角色凑零头）")
+	servers := assetServers(text(p.servers))
+	ids := []int{}
+	for _, d := range p.inventory {
+		ids = append(ids, d.Index)
 	}
-	lines = append(lines, "", "订单仅记账；实际赠送、买家核验和消息发送尚未接入。")
-	for _, o := range orders {
-		status := "待分配"
-		if !o.DeliveryEnabled {
-			status = "仅记账"
+	summary, err := p.app.stateStore.ServerAssetSummary(servers, ids, time.Now(), 15*time.Minute)
+	if err != nil {
+		lines = append(lines, "资产汇总失败："+err.Error())
+	}
+	labels := []string{"一区", "二区", "三区", "四区"}
+	for i := 0; i < 4; i++ {
+		if err != nil {
+			setText(p.assets[i], labels[i]+"：汇总读取失败，未显示可用余额")
+			continue
 		}
-		if o.Held > 0 {
-			status = "额度锁定/待核验"
+		if i >= len(summary) {
+			setText(p.assets[i], labels[i]+"：未配置区服，尚未统计")
+			lines = append(lines, labels[i]+"：未配置区服，尚未统计")
+			continue
 		}
-		if o.Completed > 0 {
-			status = "已完成"
-		}
-		lines = append(lines, fmt.Sprintf("订单%s 买家%s 总额%d 确认已交%d 锁定%d 剩余%d 状态%s", o.ID, o.Buyer, o.Total, o.Confirmed, o.Held, o.Remaining, status))
+		v := summary[i]
+		setText(p.assets[i], fmt.Sprintf("%s [%s] 可用银锭%d；有效%d，不足门槛%d，缺测%d，过期%d（共%d角色）", labels[i], v.Server, v.Available, v.Eligible, v.BelowMinimum, v.Missing, v.Stale, v.Expected))
+		lines = append(lines, fmt.Sprintf("%s [%s] 可用银锭%d；有效%d角色，低于门槛%d，缺测%d，过期%d（应统计%d）", labels[i], v.Server, v.Available, v.Eligible, v.BelowMinimum, v.Missing, v.Stale, v.Expected))
 	}
-	assets, ae := p.app.stateStore.Assets()
-	if ae != nil {
-		lines = append(lines, "角色统计读取失败："+ae.Error())
-	}
-	for _, a := range assets {
-		lines = append(lines, fmt.Sprintf("额度记录 %s：核验时银锭%d，功绩%d，有效功绩%d，整万额度%d，本期已发%d、锁定%d；核验于%s（不是实时余额）", a.Actor, a.Silver, a.Merit, a.EffectiveMerit, a.Capacity, a.Confirmed, a.Held, a.ObservedAt.Local().Format("01-02 15:04:05")))
-	}
-	notifications, ne := p.app.stateStore.PendingNotifications()
-	if ne != nil {
-		lines = append(lines, "买家消息读取失败："+ne.Error())
-	}
-	for _, n := range notifications {
-		lines = append(lines, fmt.Sprintf("买家消息#%d %s；发货角色%s；买家%s：%s", n.Sequence, n.State, n.Actor, n.Buyer, n.Message))
-	}
+
 	setText(p.report, strings.Join(lines, "\r\n"))
-	setText(p.status, fmt.Sprintf("本地订单%d笔。顺序：同服角色1→5；该批全部指定区服完成后才换下一批。\r\n失败/不明结果不算完成，跨日边界未确认时安全暂停。", len(orders)))
+	setText(p.status, "顺序：同服角色1→5；该批全部指定区服完成后才换下一批。\r\n缺测、过期不计入可用银锭；总览覆盖本机全部已发现实例。")
 }
 func (p *workbench) startSelected(games bool) {
 	chosen, e := p.chosen()
@@ -413,35 +416,8 @@ func (p *workbench) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 			p.refresh()
 		case 505:
 			setText(p.status, "海嘟嘟战术规划代码已接入；实战未开放。缺目标A可靠绑定、宝宝技能与第三回合备用，以及失败后重入验证。30秒回合保护按角色+宝宝双指令设计。")
-		case 507:
-			n, e := studio.ParseAmount(text(p.amount))
-			if e == nil {
-				_, e = p.app.stateStore.CreateOrder(strings.TrimSpace(text(p.buyer)), n)
-			}
-			if e != nil {
-				setText(p.status, e.Error())
-			} else {
-				p.refresh()
-			}
 		case 508:
 			destroyWindow.Call(h)
-		case 509:
-			b, e := studio.ParseAmount(text(p.balance))
-			if e != nil {
-				setText(p.status, e.Error())
-				return 0
-			}
-			m, e := studio.ParseAmount(text(p.merit))
-			if e != nil {
-				setText(p.status, e.Error())
-				return 0
-			}
-			n, e := studio.Capacity(b, m)
-			if e != nil {
-				setText(p.status, e.Error())
-			} else {
-				setText(p.status, fmt.Sprintf("当前角色估算可交付%d银锭；有效功绩%d。每角色单独取整，不混合零头。仅手动核对，不是已读取游戏余额。", n, m-m%100))
-			}
 		}
 		return 0
 	case wmClose:
@@ -482,23 +458,7 @@ func (a *app) maintainStudio() bool {
 			a.stateStore = s
 		}
 	}
-	day := studio.Day(time.Now())
-	if a.stateStore == nil || a.lastProofCleanupDay == day {
-		return false
-	}
-	a.lastProofCleanupDay = day
-	s := a.stateStore
-	a.work(func(ctx context.Context) error {
-		if e := ctx.Err(); e != nil {
-			return e
-		}
-		n, e := s.CleanupProofs(time.Now())
-		if e == nil && n > 0 {
-			a.logAsync(fmt.Sprintf("已清理%d个完成超过10天订单的截图；订单和流水保留。", n))
-		}
-		return e
-	})
-	return true
+	return false
 }
 func (a *app) evidenceCheck() {
 	d, e := a.selected()
@@ -535,4 +495,17 @@ func (a *app) evidenceCheck() {
 		}
 		return nil
 	})
+}
+
+func assetServers(raw string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, v := range strings.Split(strings.NewReplacer("，", ",", "\n", ",").Replace(raw), ",") {
+		v = strings.TrimSpace(v)
+		if v != "" && !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
 }

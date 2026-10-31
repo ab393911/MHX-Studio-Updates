@@ -67,15 +67,10 @@ func Validate(spec Spec, members []Member) error {
 	ids := map[string]bool{}
 	indexes := map[int]bool{}
 	jobs := map[string]int{}
-	signatures := map[string]bool{}
 	for _, m := range members {
 		if m.Instance < 0 || m.Identity == "" || ids[m.Identity] || indexes[m.Instance] || m.Preflight == nil || m.Enter == nil || m.Recheck == nil {
 			return errors.New("实例身份重复、缺失或登录接口不完整")
 		}
-		if !validHash(m.CharacterSignature) || signatures[m.CharacterSignature] {
-			return errors.New("五名角色缺少独立身份标定，不能复制通用主界面作为五个账号身份")
-		}
-		signatures[m.CharacterSignature] = true
 		ids[m.Identity] = true
 		indexes[m.Instance] = true
 		jobs[m.Profession]++

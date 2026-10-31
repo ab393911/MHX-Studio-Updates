@@ -109,6 +109,31 @@ func gameCommand(root, command string, index int) bool {
 				} else {
 					die(fmt.Errorf("bad enter tap"))
 				}
+			case "game_1", "game_2", "game_3", "game_4", "game_5":
+				if x >= 900 && x < 930 && y >= 310 && y < 334 {
+					g.Page = "menu"
+				} else {
+					die(fmt.Errorf("bad menu tap"))
+				}
+			case "menu":
+				if x >= 800 && x < 830 && y >= 400 && y < 424 {
+					g.Page = "settings"
+				} else {
+					die(fmt.Errorf("bad settings tap"))
+				}
+			case "settings":
+				if x >= 600 && x < 630 && y >= 420 && y < 444 {
+					g.Page = "logout_confirm"
+				} else {
+					die(fmt.Errorf("bad logout tap"))
+				}
+			case "logout_confirm":
+				if x >= 500 && x < 530 && y >= 350 && y < 374 {
+					g.Page = "notice"
+				} else {
+					die(fmt.Errorf("bad logout confirmation"))
+				}
+
 			default:
 				die(fmt.Errorf("unexpected game action in %s", g.Page))
 			}

@@ -105,3 +105,17 @@ func TestNicknameCapabilityAndRetryFailuresStayUnverified(t *testing.T) {
 		})
 	}
 }
+
+func TestSkipNicknamesStillConfirmsProfessionWithoutOCR(t *testing.T) {
+	d, r, _ := namesFixture(t)
+	d.SkipNicknameCheck = true
+	r.fail = true
+	for range 2 {
+		if _, e := d.Capture(context.Background()); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if r.calls != 0 || !d.ProfessionVerified || d.Verified {
+		t.Fatal(r.calls, d.ProfessionVerified, d.Verified)
+	}
+}

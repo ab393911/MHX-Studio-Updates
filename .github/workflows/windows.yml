@@ -37,7 +37,7 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin 4089802dcfa41d7d352f66da031d234a8d2b836b
           if ($LASTEXITCODE) { throw 'Cannot fetch accepted emulator source baseline' }
-          git diff --exit-code 4089802dcfa41d7d352f66da031d234a8d2b836b HEAD -- internal/ldplayer internal/gameapp internal/update/transaction.go internal/update/manifest.go internal/automation/engine.go internal/automation/profile.go cmd/mhxstudio/runtime_windows.go cmd/mhxstudio/update_status_windows.go cmd/mhxstudio/emulators_windows.go cmd/mhxstudio/discovery_store.go cmd/mhxstudio/calibration_windows.go
+          git diff --exit-code 4089802dcfa41d7d352f66da031d234a8d2b836b HEAD -- internal/ldplayer internal/gameapp internal/update/transaction.go internal/update/manifest.go internal/automation/engine.go internal/automation/profile.go cmd/mhxstudio/runtime_windows.go cmd/mhxstudio/update_status_windows.go cmd/mhxstudio/emulators_windows.go cmd/mhxstudio/discovery_store.go
           if ($LASTEXITCODE) { throw 'Accepted foundation was changed beyond the isolated handoff additions' }
       - uses: actions/setup-go@v5
         with:

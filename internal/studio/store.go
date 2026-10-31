@@ -94,12 +94,18 @@ func Open(root string) (*Store, error) {
 			return errors.New("invalid studio schema metadata")
 		}
 		if r[0][0] == "1" {
-			return migrateScope(d)
+			if e := migrateScope(d); e != nil {
+				return e
+			}
+			return ensureCharacterAssets(d)
 		}
 		if r[0][0] != "2" {
 			return errors.New("unsupported studio database schema; original retained")
 		}
-		return verifyScope(d)
+		if e := verifyScope(d); e != nil {
+			return e
+		}
+		return ensureCharacterAssets(d)
 	})
 	if e != nil {
 		s.Close()

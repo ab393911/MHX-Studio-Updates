@@ -52,6 +52,7 @@ type NamedRoleDevice struct {
 	ExpectedProfession         string
 	VerifyProfession           func(image.Image) (string, error)
 	ProfessionVerified         bool
+	SkipNicknameCheck          bool
 	MaxFailures                int
 	failures, professionFrames int
 	consecutive                int
@@ -108,6 +109,9 @@ func (d *NamedRoleDevice) Capture(ctx context.Context) ([]byte, error) {
 		}
 		d.professionFrames++
 		d.ProfessionVerified = d.professionFrames >= 2
+	}
+	if d.SkipNicknameCheck {
+		return b, nil
 	}
 	if d.Reader == nil {
 		d.Error = ErrUnavailable

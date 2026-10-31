@@ -19,8 +19,9 @@ type EnterResult struct {
 }
 type LoginStatus struct{ Page, Step string }
 type EnterOptions struct {
-	OnStatus    func(LoginStatus)
-	InitialWait time.Duration
+	OnStatus          func(LoginStatus)
+	InitialWait       time.Duration
+	SkipNicknameCheck bool
 }
 
 // Recognize uses one frame for all comparisons. A selected-row template can
@@ -75,8 +76,28 @@ func (p Profile) Recognize(img image.Image) (string, error) {
 	return "", errors.New("未知页面：请用截图标定稳定特征；未点击")
 }
 
+// WithoutNicknamePages keeps page and selected-slot evidence, while ignoring
+// legacy per-character nickname templates. It never edits the saved profile.
+func (p Profile) WithoutNicknamePages() Profile {
+	out := NewProfile()
+	for k, v := range p.Pages {
+		if !strings.HasPrefix(k, "game_") {
+			out.Pages[k] = v
+		}
+	}
+	for k, v := range p.Buttons {
+		out.Buttons[k] = v
+	}
+	return out
+}
+
 func (e *Engine) EnterRole(ctx context.Context, role int, opt EnterOptions) (result EnterResult, err error) {
 	result.Role = role
+	if opt.SkipNicknameCheck {
+		copy := *e
+		copy.Profile = e.Profile.WithoutNicknamePages()
+		e = &copy
+	}
 	defer func() {
 		if err != nil && !errors.Is(err, context.Canceled) && e.Options.OnError != nil {
 			e.Options.OnError(e.last, err)
@@ -105,7 +126,7 @@ func (e *Engine) EnterRole(ctx context.Context, role int, opt EnterOptions) (res
 		}
 	}
 	if !e.has(game) && !e.has("game") {
-		return result, errors.New("缺少游戏主界面标定：请标定本角色昵称+稳定界面特征；未进行登录点击")
+		return result, errors.New("缺少游戏主界面标定：请标定两处稳定界面特征；未进行登录点击")
 	}
 	for _, key := range []string{fmt.Sprintf("role_%d", role), "enter"} {
 		if _, ok := e.Profile.Buttons[key]; !ok {
@@ -143,7 +164,7 @@ func (e *Engine) EnterRole(ctx context.Context, role int, opt EnterOptions) (res
 		status(state, "当前已在目标角色内，昵称画面已核验；没有重新启动或退出")
 		return result, nil
 	}
-	if state == "game" {
+	if state == "game" && !opt.SkipNicknameCheck {
 		result.EnteredGame = true
 		return result, ErrIdentityUnverified
 	}
@@ -166,17 +187,17 @@ func (e *Engine) EnterRole(ctx context.Context, role int, opt EnterOptions) (res
 				return result, err
 			}
 			result.EnteredGame = true
-			result.IdentityVerified = state == game
+			result.IdentityVerified = state == game || (opt.SkipNicknameCheck && result.SelectedRoleVerified && state == "game")
 			if !result.IdentityVerified {
 				return result, ErrIdentityUnverified
 			}
-			status(state, fmt.Sprintf("已进入第%d个角色，游戏内身份画面已核验；已停止操作", role))
+			status(state, fmt.Sprintf("已进入第%d个角色，槽位选中和游戏主界面已核验；已停止操作", role))
 			return result, nil
 		case state == "notice":
 			state, err = e.loginTransition(ctx, state, "notice_enter", []string{"tree", "roles", selected}, status)
 		case state == "tree":
 			state, err = e.loginTransition(ctx, state, "tree_enter", []string{"roles", selected}, status)
-		case strings.HasPrefix(state, "game_"):
+		case strings.HasPrefix(state, "game_") || (opt.SkipNicknameCheck && state == "game"):
 			state, err = e.loginTransition(ctx, state, "menu", []string{"menu"}, status)
 		case state == "menu":
 			state, err = e.loginTransition(ctx, state, "settings", []string{"settings"}, status)

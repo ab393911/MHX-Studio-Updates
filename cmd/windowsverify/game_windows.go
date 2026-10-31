@@ -29,7 +29,7 @@ func gameIdle(h uintptr) {
 }
 func gameFixtureProfile(root string) automation.Profile {
 	p := automation.NewProfile()
-	names := []string{"notice", "tree", "roles"}
+	names := []string{"notice", "tree", "roles", "menu", "settings", "logout_confirm"}
 	for n := 1; n <= 5; n++ {
 		names = append(names, fmt.Sprintf("selected_%d", n), fmt.Sprintf("game_%d", n))
 	}
@@ -73,6 +73,11 @@ func gameFixtureProfile(root string) automation.Profile {
 	for n, y := range []int{95, 169, 240, 311, 382} {
 		p.Buttons[fmt.Sprintf("role_%d", n+1)] = automation.Rect{X: 125, Y: y - 12, W: 30, H: 24}
 	}
+	p.Pages["game"] = p.Pages["game_3"]
+	p.Buttons["menu"] = automation.Rect{X: 900, Y: 310, W: 30, H: 24}
+	p.Buttons["settings"] = automation.Rect{X: 800, Y: 400, W: 30, H: 24}
+	p.Buttons["logout"] = automation.Rect{X: 600, Y: 420, W: 30, H: 24}
+	p.Buttons["confirm_logout"] = automation.Rect{X: 500, Y: 350, W: 30, H: 24}
 	return p
 }
 func gameGUI(exe, fixture, version, outDir string) map[string]any {
@@ -132,10 +137,10 @@ func gameGUI(exe, fixture, version, outDir string) map[string]any {
 	closeTitle(calTitle)
 	gameIdle(h)
 	click(h, 117)
-	until(h, "already-in-target state was not reused", func() bool { return strings.Contains(readText(control(h, 900)), "当前已在目标角色内") })
+	until(h, "slot was not reverified without nickname", func() bool { return strings.Contains(readText(control(h, 900)), "已进入第3个角色") })
 	gameIdle(h)
 	fail(filesafe.ReadJSON(statePath, &g))
-	if g.Starts != 1 || g.Taps != 4 {
+	if g.Starts != 1 || g.Taps != 12 {
 		fail(fmt.Errorf("already-running game was restarted/tapped %+v", g))
 	}
 	g.Page = "unknown"
@@ -148,20 +153,20 @@ func gameGUI(exe, fixture, version, outDir string) map[string]any {
 	})
 	gameIdle(h)
 	fail(filesafe.ReadJSON(statePath, &g))
-	if g.Taps != 4 {
+	if g.Taps != 12 {
 		fail(fmt.Errorf("unknown screen tapped %+v", g))
 	}
 	g.Page = "roles"
 	g.Stall = true
 	fail(filesafe.JSON(statePath, g))
 	click(h, 117)
-	until(h, "stall test never reached first controlled tap", func() bool { var s gameFixtureState; return filesafe.ReadJSON(statePath, &s) == nil && s.Taps == 5 })
+	until(h, "stall test never reached first controlled tap", func() bool { var s gameFixtureState; return filesafe.ReadJSON(statePath, &s) == nil && s.Taps == 13 })
 	click(h, 107)
 	until(h, "stop button did not cancel login", func() bool { return strings.Contains(readText(control(h, 211)), "用户中止") })
 	time.Sleep(400 * time.Millisecond)
 	gameIdle(h)
 	fail(filesafe.ReadJSON(statePath, &g))
-	if g.Taps != 5 {
+	if g.Taps != 13 {
 		fail(fmt.Errorf("tap after stop %+v", g))
 	}
 	calibrationAfter, e := os.ReadFile(profilePath)
@@ -205,10 +210,10 @@ func gameGUI(exe, fixture, version, outDir string) map[string]any {
 	}
 	gameIdle(h)
 	fail(filesafe.ReadJSON(statePath, &g))
-	if g.Starts != 1 || g.Taps != 5 {
+	if g.Starts != 1 || g.Taps != 13 {
 		fail(fmt.Errorf("unconfirmed discovery performed launch/tap %+v", g))
 	}
 	closeTitle(title)
 	fail(wait(app, 10*time.Second))
-	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "main_and_critical_buttons_on_screen": true, "calibration_window_on_screen": true, "game_selector_on_screen": true, "synthetic_960x540_screens": true, "actual_launch_and_enter_buttons": true, "package_selection_and_binding": true, "unknown_candidates_never_trial_launched": true, "existing_running_game_not_restarted": true, "target_role_selected_and_stays_in_game": true, "identity_template_verified": true, "unknown_page_stops_without_tap": true, "exception_screenshot_only": true, "stop_button_cancels_wait": true, "target_role_and_binding_persisted": true, "calibration_byte_identical": true}
+	return map[string]any{"passed": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "main_and_critical_buttons_on_screen": true, "calibration_window_on_screen": true, "game_selector_on_screen": true, "synthetic_960x540_screens": true, "actual_launch_and_enter_buttons": true, "package_selection_and_binding": true, "unknown_candidates_never_trial_launched": true, "existing_running_game_not_restarted": true, "target_role_selected_and_stays_in_game": true, "selected_slot_and_generic_main_verified": true, "unknown_page_stops_without_tap": true, "exception_screenshot_only": true, "stop_button_cancels_wait": true, "target_role_and_binding_persisted": true, "calibration_byte_identical": true}
 }

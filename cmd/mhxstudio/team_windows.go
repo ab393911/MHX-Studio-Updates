@@ -32,8 +32,8 @@ func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplaye
 	}
 	proofs := map[int]login.Proof{}
 	for _, m := range ready.Members {
-		if m.State != "VERIFIED" || !m.Proof.IdentityVerified || !m.Proof.ServerVerified || !m.Proof.CharacterNameVerified || !m.Proof.ProfessionVerified || m.Proof.CharacterName == "" {
-			return fmt.Errorf("实例%d本次昵称文字/职业图标依据不足，未发送邀请；%s", m.Instance, m.Proof.CharacterNameError)
+		if m.State != "VERIFIED" || !m.Proof.IdentityVerified || !m.Proof.ServerVerified || !m.Proof.ProfessionVerified {
+			return fmt.Errorf("实例%d本次槽位/职业图标依据不足，未发送邀请；%s", m.Instance, m.Proof.CharacterNameError)
 		}
 		if m.Proof.Server != ready.Spec.Server || m.Proof.Role != ready.Spec.Role || time.Since(m.Proof.ObservedAt) > 15*time.Second {
 			return errors.New("登录就位依据过期或目标不符，未开始组队")
@@ -62,7 +62,7 @@ func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplaye
 		}
 		shell := gameShell{a.client, d}
 		device := &gameDevice{boundDevice: boundDevice{a.client, d, a.cache}, shell: shell, pkg: binding.Package}
-		actors = append(actors, taskflow.Actor{Instance: d.Index, Identity: p.Identity, Name: p.CharacterName, Profession: a.cfg.Jobs[key][0], Server: ready.Spec.Server, Role: ready.Spec.Role, Device: device, Profile: catalog.Profile(raw), Reader: a.ocr, MinDelayMS: a.cfg.MinDelayMS, MaxDelayMS: a.cfg.MaxDelayMS, OnError: func(b []byte, e error) { a.errorCapture(d, b, e) }})
+		actors = append(actors, taskflow.Actor{Instance: d.Index, Identity: p.Identity, Name: p.CharacterName, Profession: a.cfg.Jobs[key][0], Server: ready.Spec.Server, Role: ready.Spec.Role, Device: device, Profile: catalog.Profile(raw).WithoutNicknamePages(), Reader: a.ocr, MinDelayMS: a.cfg.MinDelayMS, MaxDelayMS: a.cfg.MaxDelayMS, OnError: func(b []byte, e error) { a.errorCapture(d, b, e) }})
 	}
 	var plan studio.Plan
 	var phase studio.Phase

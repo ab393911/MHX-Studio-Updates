@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -84,7 +83,7 @@ func (p *workbench) openGroupLogin() {
 		send(controlOf(hwnd, 538), 0xF1, 1, 0)
 	}
 	child(hwnd, "BUTTON", "保存启动方案", 580, 96, 180, 34, 0, 539)
-	g.status = child(hwnd, "STATIC", "当前只内置“一梦诛仙”区服文字特征；其它区服不猜测。请先完成每台目标角色昵称标定。", 18, 145, 745, 55, 0, 536)
+	g.status = child(hwnd, "STATIC", "当前只内置“一梦诛仙”区服文字特征；其它区服不猜测。按实例、区服及选中槽位核验，不需要昵称标定。", 18, 145, 745, 55, 0, 536)
 	g.report = child(hwnd, "EDIT", "", 18, 210, 745, 260, wsBorder|0x200000|4|0x40|0x800, 537)
 	child(hwnd, "BUTTON", "登录后继续组队及八星准备（测试）", 18, 485, 285, 28, 3, 540)
 	child(hwnd, "STATIC", "队长", 350, 489, 60, 25, 0, 0)
@@ -118,22 +117,6 @@ func (g *groupLoginPanel) render() {
 	setText(g.report, strings.Join(lines, "\r\n"))
 }
 func (g *groupLoginPanel) planGate(spec login.Spec) error {
-	notifications, e := g.app.stateStore.PendingNotifications()
-	if e != nil {
-		return e
-	}
-	if len(notifications) > 0 {
-		return errors.New("发货角色仍有买家进度消息待发送或核查，暂不自动切换角色")
-	}
-	orders, e := g.app.stateStore.Orders()
-	if e != nil {
-		return e
-	}
-	for _, o := range orders {
-		if o.Held > 0 {
-			return errors.New("订单仍有锁定额度，先核查交付；暂不自动切换角色")
-		}
-	}
 	plan, e := g.app.stateStore.LatestPlan()
 	if e != nil {
 		if e.Error() == "尚无五开计划" {
@@ -276,16 +259,12 @@ func (g *groupLoginPanel) members(spec login.Spec, devices []ldplayer.Instance, 
 		if e != nil {
 			return nil, fmt.Errorf("实例%d：%w", d.Index, e)
 		}
-		identityPage, hasIdentity := raw.Pages[fmt.Sprintf("game_%d", spec.Role)]
-		if !hasIdentity {
-			return nil, fmt.Errorf("实例%d缺少第%d个角色的昵称标定；未启动本组", d.Index, spec.Role)
-		}
-		profile := catalog.Profile(raw)
+		profile := catalog.Profile(raw).WithoutNicknamePages()
 		if e = profile.Validate(); e != nil {
 			return nil, e
 		}
-		pageBytes, _ := json.Marshal(identityPage)
-		signature := sha256.Sum256(pageBytes)
+		enteredSlot := false
+
 		identity := sha256.Sum256([]byte(client.Console + "|" + key + "|" + d.AndroidID + "|" + d.BootID + "|" + binding.Package))
 		memberID := hex.EncodeToString(identity[:])
 		shell := gameShell{client, d}
@@ -293,7 +272,7 @@ func (g *groupLoginPanel) members(spec login.Spec, devices []ldplayer.Instance, 
 		ad := &evidence.LoginDevice{Device: device, Catalog: catalog, Retries: cfg.Retries, MinDelayMS: cfg.MinDelayMS, MaxDelayMS: cfg.MaxDelayMS, OnLog: g.app.logAsync}
 		guard := &automation.ServerGuard{Device: ad, Profile: profile, ServerPage: serverPage}
 		var loginDevice automation.Device = guard
-		named := &vision.NamedRoleDevice{Device: guard, Profile: profile, Reader: g.app.ocr, ExpectedProfession: cfg.Jobs[key][0], VerifyProfession: catalog.FiveProfessions, MaxFailures: cfg.Retries}
+		named := &vision.NamedRoleDevice{Device: guard, Profile: profile, Reader: g.app.ocr, ExpectedProfession: cfg.Jobs[key][0], VerifyProfession: catalog.FiveProfessions, MaxFailures: cfg.Retries, SkipNicknameCheck: true}
 		if readNames {
 			loginDevice = named
 		}
@@ -315,7 +294,7 @@ func (g *groupLoginPanel) members(spec login.Spec, devices []ldplayer.Instance, 
 				result.CharacterNameError = named.Error.Error()
 			}
 			for n := 0; n < 2; n++ {
-				shot, e := guard.Capture(ctx)
+				shot, e := loginDevice.Capture(ctx)
 				if e != nil {
 					return result, e
 				}
@@ -327,8 +306,8 @@ func (g *groupLoginPanel) members(spec login.Spec, devices []ldplayer.Instance, 
 				if e != nil {
 					return result, e
 				}
-				if state != fmt.Sprintf("game_%d", spec.Role) {
-					return result, fmt.Errorf("最终页面为%s，不是已标定目标角色", state)
+				if state != "game" || !enteredSlot {
+					return result, fmt.Errorf("最终页面为%s，本次未核验目标槽位进入游戏", state)
 				}
 				if e = profile.Require(img, state); e != nil {
 					return result, e
@@ -357,7 +336,7 @@ func (g *groupLoginPanel) members(spec login.Spec, devices []ldplayer.Instance, 
 			}
 			return p, err
 		}
-		m := login.Member{Instance: d.Index, Identity: memberID, Profession: job, CharacterSignature: hex.EncodeToString(signature[:])}
+		m := login.Member{Instance: d.Index, Identity: memberID, Profession: job}
 		m.Preflight = func(ctx context.Context) error {
 			if !d.Running() || d.Serial == "" || d.AndroidID == "" || d.BootID == "" {
 				return errors.New("请先启动所选五台并完成ADB验证")
@@ -374,7 +353,7 @@ func (g *groupLoginPanel) members(spec login.Spec, devices []ldplayer.Instance, 
 			if e := profile.Validate(); e != nil {
 				return e
 			}
-			for _, k := range []string{"roles", fmt.Sprintf("selected_%d", spec.Role), fmt.Sprintf("game_%d", spec.Role)} {
+			for _, k := range []string{"roles", fmt.Sprintf("selected_%d", spec.Role), "game"} {
 				if _, ok := profile.Pages[k]; !ok {
 					return fmt.Errorf("缺少%s页面标定", k)
 				}
@@ -404,15 +383,16 @@ func (g *groupLoginPanel) members(spec login.Spec, devices []ldplayer.Instance, 
 			if !launched.AlreadyForeground {
 				wait = 40 * time.Second
 			}
-			r, e := engine.EnterRole(ctx, spec.Role, automation.EnterOptions{InitialWait: wait})
+			r, e := engine.EnterRole(ctx, spec.Role, automation.EnterOptions{InitialWait: wait, SkipNicknameCheck: true})
 			if errors.Is(e, automation.ErrServerUnverified) {
 				if e = guard.RevealServer(ctx, catalog.RoleBackButton(), cfg.MinDelayMS, cfg.MaxDelayMS); e == nil {
-					r, e = engine.EnterRole(ctx, spec.Role, automation.EnterOptions{})
+					r, e = engine.EnterRole(ctx, spec.Role, automation.EnterOptions{SkipNicknameCheck: true})
 				}
 			}
 			if e != nil {
 				return diagnose(ctx, login.Proof{EnteredGame: r.EnteredGame, IdentityVerified: r.IdentityVerified}, e)
 			}
+			enteredSlot = r.SelectedRoleVerified && r.IdentityVerified
 			p, e := proof(ctx)
 			return diagnose(ctx, p, e)
 		}

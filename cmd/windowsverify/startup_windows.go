@@ -35,7 +35,7 @@ func onOpenGUI(exe, install, data, version, out string, ids []int) map[string]an
 		copyFile(filepath.Join(data, p), filepath.Join(data2, p))
 	}
 	title := "知夏 · MHX Studio " + version
-	panelTitle := "MHX Studio 工作台 · 五开计划与订单"
+	panelTitle := "MHX Studio 工作台 · 五开计划与四区资产"
 	groupTitle := "MHX Studio · 五台同槽登录准备"
 	app := start(exe, "--data-dir", data2)
 	fail(waitWindow(title))

@@ -8,7 +8,6 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,16 +26,17 @@ const (
 )
 
 type teamWorld struct {
-	mu            sync.Mutex
-	state         [5]int
-	accepted      [5]bool
-	invited       bool
-	wrongInvite   bool
-	wrongFixed    bool
-	taps, accepts int
-	names         [5]string
-	images        map[string][]byte
-	onTap         func(int)
+	mu              sync.Mutex
+	state           [5]int
+	accepted        [5]bool
+	invited         bool
+	wrongInvite     bool
+	wrongFixed      bool
+	multipleInvites bool
+	taps, accepts   int
+	names           [5]string
+	images          map[string][]byte
+	onTap           func(int)
 }
 type teamDevice struct {
 	world *teamWorld
@@ -228,6 +228,12 @@ func (r teamReader) Read(ctx context.Context, b []byte) (vision.Screen, error) {
 		}
 		add(n, 310, 115, 100, 20)
 		add("接受", 590, 130, 55, 25)
+		r.world.mu.Lock()
+		multiple := r.world.multipleInvites
+		r.world.mu.Unlock()
+		if multiple {
+			add("接受", 590, 190, 55, 25)
+		}
 	}
 	return s, nil
 }
@@ -287,7 +293,7 @@ func TestAlreadyCorrectPartyDoesNotInviteAgain(t *testing.T) {
 	}
 }
 func TestTeamRejectsCopiedOrMismatchedIdentityBeforeAnyTap(t *testing.T) {
-	for _, kind := range []string{"name", "identity", "role", "server", "leader"} {
+	for _, kind := range []string{"identity", "role", "server", "leader"} {
 		t.Run(kind, func(t *testing.T) {
 			a, w := teamFixture(t)
 			leader := 2
@@ -309,14 +315,23 @@ func TestTeamRejectsCopiedOrMismatchedIdentityBeforeAnyTap(t *testing.T) {
 		})
 	}
 }
-func TestWrongFixedMembersCannotSendInvitation(t *testing.T) {
+func TestFixedPresetDoesNotRequireNicknameEquality(t *testing.T) {
 	a, w := teamFixture(t)
 	w.wrongFixed = true
 	w.state[0] = testFixed
 	c := &controller{Actor: a[0]}
-	_, e := c.tap(context.Background(), fixedTeam(a, a[0].Name), textButton("发起组队", automation.Rect{X: 700, Y: 450, W: 155, H: 65}), confirmPage)
-	if e == nil || !strings.Contains(e.Error(), "固定队成员") || w.invited || w.taps != 0 {
-		t.Fatal(e, w.taps)
+	s, e := c.take(context.Background())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = fixedTeam(a, "")(s); e != nil {
+		t.Fatal(e)
+	}
+	for i := range a {
+		a[i].Name = ""
+	}
+	if _, _, e := validateActors(a, a[0].Instance); e != nil {
+		t.Fatal(e)
 	}
 }
 
@@ -338,13 +353,13 @@ func TestStopDuringNavigationPreventsAnyFurtherTapOrErrorPersistence(t *testing.
 		t.Fatal(r, e, w.taps, errorsSaved)
 	}
 }
-func TestWrongInviteDoesNotAcceptAndUserCancellationNeverClicks(t *testing.T) {
+func TestInviteDoesNotRequireNicknameAndUserCancellationNeverClicks(t *testing.T) {
 	a, w := teamFixture(t)
 	w.wrongInvite = true
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	r, e := RunTeam(ctx, a, 2)
-	if e == nil || r.Verified || w.accepts != 0 {
+	if e != nil || !r.Verified || w.accepts != 4 {
 		t.Fatal(r, e, w.accepts)
 	}
 	a, w = teamFixture(t)
@@ -353,5 +368,31 @@ func TestWrongInviteDoesNotAcceptAndUserCancellationNeverClicks(t *testing.T) {
 	_, e = RunTeam(ctx, a, 2)
 	if !errors.Is(e, context.Canceled) || w.taps != 0 {
 		t.Fatal(e, w.taps)
+	}
+}
+
+func TestMultipleAcceptableInvitesStopBeforeAccepting(t *testing.T) {
+	a, w := teamFixture(t)
+	w.multipleInvites = true
+	w.state[1] = testInvite
+	c := &controller{Actor: a[1]}
+	if e := c.accept(context.Background(), ""); e == nil || w.accepts != 0 || w.taps != 0 {
+		t.Fatal(e, w.accepts, w.taps)
+	}
+}
+func TestFiveOccupiedSlotsAreRequiredEvenWithoutNames(t *testing.T) {
+	a, w := teamFixture(t)
+	w.invited = true
+	w.state[0] = testParty
+	for i := 0; i < 4; i++ {
+		w.accepted[i] = true
+	}
+	c := &controller{Actor: a[0]}
+	s, e := c.take(context.Background())
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = fullTeam(a, "")(s); e == nil {
+		t.Fatal("four members accepted as five")
 	}
 }

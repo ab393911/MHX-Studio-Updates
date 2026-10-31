@@ -20,3 +20,8 @@
 [默认更新清单](https://raw.githubusercontent.com/ab393911/MHX-Studio-Updates/updates/preview.json) · [发布与测试报告](https://github.com/ab393911/MHX-Studio-Updates/releases)
 
 源码完成、离线/自动测试、Windows界面测试、真实雷电实机分别记录。真实故障回滚仍未验收。
+
+
+## 2026-11-01 当前开发范围
+
+用户当前为preview.21；取消昵称标定与核对。固定队使用游戏内预设，校验五人在线、单一可接受邀请及实际五人占位。订单、消息、自动发货入口和角色切换限制已移除，历史数据保留用于回滚。工作台提供四区独立资产汇总，缺测/过期分别显示；自动游戏余额读取尚未接通，不是实时资产看板。组队、打符、幻形需真实游戏验收。最新范围见 docs/CONTINUE_DEVELOPMENT_20261101.md，优先于前述历史介绍。

@@ -123,11 +123,11 @@ func verifyMigrated21UI(h uintptr, dataRoot, planID, orderID string) {
 	// pending: creating/upgrading a plan is never recorded as actual game success.
 	gameIdle(h)
 	click(h, 106)
-	title := "MHX Studio 工作台 · 五开计划与订单"
+	title := "MHX Studio 工作台 · 五开计划与四区资产"
 	until(h, "workbench did not open for published21 seed or migrated verification", func() bool { return findWindow(title) != 0 })
 	p := findWindow(title)
 	until(h, "migrated order/plan missing", func() bool {
-		return strings.Contains(readText(control(p, 515)), planID) && strings.Contains(readText(control(p, 515)), orderID)
+		return strings.Contains(readText(control(p, 515)), planID) && control(p, 507) == 0
 	})
 	text := readText(control(p, 515))
 	for _, removed := range []string{"锁灵塔", "日课", "群英榜"} {

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ab393911/MHX-Studio-Updates/internal/update"
 )
@@ -72,5 +73,53 @@ func TestUpdaterSnapshotRestoresLegacyScopeAndAllMoneyAfterMigration(t *testing.
 	}
 	if e = MigrateExisting(root); e != nil {
 		t.Fatal("retry migration after rollback", e)
+	}
+}
+
+func TestUpdaterSnapshotRestoresCharacterAssetsExactly(t *testing.T) {
+	root := t.TempDir()
+	s, e := Open(root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	a := CharacterAsset{Instance: 24, Slot: 5, Server: "四区", Silver: 327000, Merit: 345, Evidence: evidence("before update"), ObservedAt: time.Now()}
+	if e = s.RecordCharacterAsset(a); e != nil {
+		t.Fatal(e)
+	}
+	s.Close()
+	before, e := update.Hash(filepath.Join(root, FileName))
+	if e != nil {
+		t.Fatal(e)
+	}
+	snapshot := filepath.Join(t.TempDir(), "snapshot")
+	token := strings.Repeat("b", 48)
+	if e = update.BackupConfig(root, snapshot, token); e != nil {
+		t.Fatal(e)
+	}
+	s, e = Open(root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	a.Silver = 0
+	a.ObservedAt = time.Now()
+	if e = s.RecordCharacterAsset(a); e != nil {
+		t.Fatal(e)
+	}
+	s.Close()
+	if e = update.RestoreConfig(snapshot, root, token); e != nil {
+		t.Fatal(e)
+	}
+	after, e := update.Hash(filepath.Join(root, FileName))
+	if e != nil || after != before {
+		t.Fatal("asset database was not restored byte-for-byte", e)
+	}
+	s, e = Open(root)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	v, e := s.ServerAssetSummary([]string{"四区"}, []int{24}, time.Now(), time.Hour)
+	if e != nil || v[0].Available != 30000 {
+		t.Fatal(v, e)
 	}
 }

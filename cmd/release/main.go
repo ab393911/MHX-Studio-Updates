@@ -60,7 +60,7 @@ func main() {
 	fail(e)
 	st, e := os.Stat(*exe)
 	fail(e)
-	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "交接集中测试版：内置截图候选识别与广告外框关闭、保留本机身份标定；新增自选五台启动/已绑定游戏启动、持久化五开计划与本地订单、手动额度核对。新增功能待真实游戏验收。海嘟嘟仅战术预检，任务执行、交易行买卖和真实发货未开放；订单/进度库纳入后续升级备份回滚。保留preview.19已验收的更新、雷电、ADB和包名启动。", SourceCommit: *commit, WindowsTested: false}
+	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "持续开发测试版：取消昵称核对，按实例、区服、角色槽位和职业核验；接通固定队组队与八星打符/幻形测试。移除订单、发货和消息界面及相关切角色限制，中控台分别显示四区资产汇总，逐角色按整万银锭及整百功绩取较小值，重复扫描覆盖。余额自动读取与后续任务链仍未接通，不代表实时余额或真实游戏验收通过。以preview.21直升及故障恢复为当前基线，保留preview.19直升验证。", SourceCommit: *commit, WindowsTested: false}
 	fail(m.Validate())
 	fail(os.MkdirAll(*out, 0700))
 	fail(filesafe.JSON(filepath.Join(*out, "update.json"), m))
