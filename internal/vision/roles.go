@@ -3,6 +3,8 @@ package vision
 import (
 	"context"
 	"errors"
+	"fmt"
+	"image"
 	"strings"
 	"unicode"
 
@@ -41,14 +43,28 @@ func RoleNames(s Screen) ([5]string, error) {
 
 // NamedRoleDevice augments the existing nickname calibration, never replaces it.
 type NamedRoleDevice struct {
-	Device      automation.Device
-	Profile     automation.Profile
-	Reader      Reader
-	Names       [5]string
-	Verified    bool
-	Error       error
-	consecutive int
-	disabled    bool
+	Device                     automation.Device
+	Profile                    automation.Profile
+	Reader                     Reader
+	Names                      [5]string
+	Verified                   bool
+	Error                      error
+	ExpectedProfession         string
+	VerifyProfession           func(image.Image) (string, error)
+	ProfessionVerified         bool
+	MaxFailures                int
+	failures, professionFrames int
+	consecutive                int
+	disabled                   bool
+}
+
+func (d *NamedRoleDevice) failed(e error) {
+	d.Error = e
+	d.failures++
+	d.consecutive = 0
+	if d.failures > d.MaxFailures {
+		d.disabled = true
+	}
 }
 
 func (d *NamedRoleDevice) Tap(ctx context.Context, x, y int) error { return d.Device.Tap(ctx, x, y) }
@@ -72,10 +88,26 @@ func (d *NamedRoleDevice) Capture(ctx context.Context) ([]byte, error) {
 		d.consecutive = 0
 		d.Verified = false
 		d.Names = [5]string{}
+		d.professionFrames = 0
+		d.ProfessionVerified = false
 		return b, nil
 	}
 	if (state != "roles" && !strings.HasPrefix(state, "selected_")) || d.Verified {
 		return b, nil
+	}
+	if d.VerifyProfession != nil {
+		job, e := d.VerifyProfession(img)
+		if e != nil {
+			d.professionFrames = 0
+			d.ProfessionVerified = false
+			d.failed(e)
+			return b, nil
+		}
+		if job != d.ExpectedProfession {
+			return nil, fmt.Errorf("角色列表职业为%s，与本实例绑定%s不符；未选角色", job, d.ExpectedProfession)
+		}
+		d.professionFrames++
+		d.ProfessionVerified = d.professionFrames >= 2
 	}
 	if d.Reader == nil {
 		d.Error = ErrUnavailable
@@ -87,15 +119,14 @@ func (d *NamedRoleDevice) Capture(ctx context.Context) ([]byte, error) {
 		return nil, ctx.Err()
 	}
 	if e != nil {
-		d.Error = e
-		d.disabled = errors.Is(e, ErrUnavailable)
+		d.failed(e)
+		d.disabled = d.disabled || errors.Is(e, ErrUnavailable)
 		return b, nil
 	}
 	names, e := RoleNames(s)
 	if e != nil {
-		d.Error = e
-		d.consecutive = 0
-		d.disabled = !strings.HasPrefix(strings.ToLower(s.Language), "zh")
+		d.failed(e)
+		d.disabled = d.disabled || !strings.HasPrefix(strings.ToLower(s.Language), "zh")
 		return b, nil
 	}
 	if names == d.Names {

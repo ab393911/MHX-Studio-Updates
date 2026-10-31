@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	"github.com/ab393911/MHX-Studio-Updates/internal/gameapp"
 	"github.com/ab393911/MHX-Studio-Updates/internal/ldplayer"
 	"github.com/ab393911/MHX-Studio-Updates/internal/studio"
+	"github.com/ab393911/MHX-Studio-Updates/internal/taskflow"
 )
 
 type workbench struct {
@@ -61,7 +63,7 @@ func (a *app) openWorkbench() {
 		return
 	}
 	p.hwnd = hwnd
-	child(hwnd, "STATIC", "本地进度与订单；游戏任务尚未开放执行，订单不会自动发货。点击列表可勾选/取消。", 20, 12, 945, 25, 0, 0)
+	child(hwnd, "STATIC", "可保存五开计划、自动启动和已接通任务测试；订单目前只记账。点击列表可勾选/取消。", 20, 12, 945, 25, 0, 0)
 	child(hwnd, "STATIC", "勾选任意五台真实实例", 20, 42, 270, 24, 0, 0)
 	p.list = child(hwnd, "LISTBOX", "", 20, 69, 285, 215, wsBorder|0x200000|8|1, 510)
 	child(hwnd, "STATIC", "区服顺序（逗号分隔；仅计划，不自动换服）", 325, 42, 620, 24, 0, 0)
@@ -160,7 +162,7 @@ func (p *workbench) refresh() {
 		return
 	}
 	p.instances()
-	lines := []string{"任务状态：仅保存计划与核验进度，不把点击或模拟测试写为游戏完成。"}
+	lines := []string{"任务状态：实际游戏执行经画面核验才记录完成；不把点击或模拟测试写为游戏完成。"}
 	plan, e := p.app.stateStore.LatestPlan()
 	if e == nil {
 		phase, pe := p.app.stateStore.Next(plan.ID, time.Now())
@@ -187,6 +189,19 @@ func (p *workbench) refresh() {
 		}
 	} else {
 		lines = append(lines, e.Error())
+	}
+	if raw, err := os.ReadFile(filepath.Join(p.app.root, "profiles", "eight-last.json")); err == nil && len(raw) <= 65536 {
+		var last taskflow.EightReport
+		if json.Unmarshal(raw, &last) == nil && len(last.Actors) <= 5 {
+			lines = append(lines, "", fmt.Sprintf("八星历史诊断 %s / 角色%d / %s；不是当前画面依据", last.Server, last.Role, last.FinishedAt.Local().Format("01-02 15:04:05")))
+			for _, actor := range last.Actors {
+				if actor.PreviouslyCompleted {
+					lines = append(lines, fmt.Sprintf("实例%d：保留原完成记录，本次未消耗", actor.Instance))
+					continue
+				}
+				lines = append(lines, fmt.Sprintf("实例%d：打符%s(%s)，幻形%s(%s)，已返回主界面%t；%s", actor.Instance, studio.StateLabel(actor.Talisman.State), actor.Talisman.Reason, studio.StateLabel(actor.Phantom.State), actor.Phantom.Reason, actor.ReturnedMain, actor.Error))
+			}
+		}
 	}
 	orders, e := p.app.stateStore.Orders()
 	if e != nil {

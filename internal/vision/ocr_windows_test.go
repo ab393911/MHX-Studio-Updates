@@ -82,6 +82,18 @@ func TestNativeWindowsOCRReadsGeneratedTextWithoutSavingScreenshot(t *testing.T)
 	if ok == 0 {
 		t.Fatal("TextOut failed")
 	}
+	small, _, _ := gdi.NewProc("CreateFontW").Call(int32ToUint(-16), 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 0, 0, uintptr(unsafe.Pointer(face)))
+	if small == 0 {
+		t.Fatal("small font creation failed")
+	}
+	previous, _, _ := gdi.NewProc("SelectObject").Call(dc, small)
+	digits, _ := syscall.UTF16PtrFromString("654321")
+	ok, _, _ = gdi.NewProc("TextOutW").Call(dc, 80, 200, uintptr(unsafe.Pointer(digits)), 6)
+	gdi.NewProc("SelectObject").Call(dc, previous)
+	gdi.NewProc("DeleteObject").Call(small)
+	if ok == 0 {
+		t.Fatal("numeric probe TextOut failed")
+	}
 	im := image.NewNRGBA(image.Rect(0, 0, 960, 540))
 	for i := 0; i < 960*540; i++ {
 		im.Pix[i*4] = pixels[i*4+2]
@@ -95,7 +107,7 @@ func TestNativeWindowsOCRReadsGeneratedTextWithoutSavingScreenshot(t *testing.T)
 	}
 	r := NewNativeReader()
 	defer r.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	s, e := r.Read(ctx, b.Bytes())
 	if e != nil {
@@ -118,6 +130,11 @@ func TestNativeWindowsOCRReadsGeneratedTextWithoutSavingScreenshot(t *testing.T)
 		t.Fatal(s, e)
 	}
 	report["generated_text_verified"] = true
+	amounts, e := ReadAmounts(ctx, r, b.Bytes(), []automation.Rect{{X: 80, Y: 200, W: 130, H: 28}})
+	if e != nil || len(amounts) != 1 || !amounts[0].Exact || amounts[0].Value != 654321 {
+		t.Fatal("isolated numeric OCR failed", amounts, e)
+	}
+	report["packed_numeric_verified"] = true
 	t.Log("native Windows OCR language", s.Language, "; no real game tested")
 }
 func int32ToUint(v int32) uintptr { return uintptr(uint32(v)) }

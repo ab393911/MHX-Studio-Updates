@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Assert the live GUI report is for these exact release bytes and source.
-jq -e '.capability_present == true and .generated_text_verified == true and .real_game_tested == false' dist/native-ocr-capability.json > /dev/null
+jq -e '.capability_present == true and .generated_text_verified == true and .packed_numeric_verified == true and .real_game_tested == false' dist/native-ocr-capability.json > /dev/null
 jq -e --arg version "$MHX_VERSION" --arg sha "$GITHUB_SHA" '.passed == true and .version == $version and .source_commit == $sha and .configuration_byte_identical == true and .windows_game_tested == false' dist/live-gui-update.json > /dev/null
 jq -e --arg version "$MHX_VERSION" --arg sha "$GITHUB_SHA" '.passed == true and .version == $version and .source_commit == $sha and .one_click_without_confirmation == true and .confirmation_clicks == 0 and .configuration_snapshot_verified == true and .post_upgrade_24_instance_detection_fixture == true and .post_upgrade_start_and_adb_fixture == true' dist/one-click-gui-update.json > /dev/null
 jq -e '.new_gui_visible == true' dist/live-gui-update.json > /dev/null

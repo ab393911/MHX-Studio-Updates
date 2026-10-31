@@ -137,7 +137,7 @@ func fixedButton(r automation.Rect) button {
 
 // tap revalidates both the context and the button after the random delay.
 // Exactly one tap is submitted; an unconfirmed response never causes a resend.
-func (c *controller) tap(ctx context.Context, before check, find button, after check) (snapshot, error) {
+func (c *controller) press(ctx context.Context, before check, find button) (snapshot, error) {
 	s, e := c.take(ctx)
 	if e != nil {
 		return s, e
@@ -173,8 +173,18 @@ func (c *controller) tap(ctx context.Context, before check, find button, after c
 	if e = ctx.Err(); e != nil {
 		return fresh, e
 	}
+	if time.Since(fresh.at) > 10*time.Second {
+		return fresh, errors.New("提交前截图依据过期，未点击")
+	}
 	if e = c.Device.Tap(ctx, x, y); e != nil {
 		return fresh, e
+	}
+	return fresh, nil
+}
+func (c *controller) tap(ctx context.Context, before check, find button, after check) (snapshot, error) {
+	s, e := c.press(ctx, before, find)
+	if e != nil {
+		return s, e
 	}
 	return c.await(ctx, after, 18*time.Second)
 }
@@ -396,30 +406,9 @@ func RunTeam(ctx context.Context, actors []Actor, leader int) (report TeamReport
 			report.Error = err.Error()
 		}
 	}()
-	if len(actors) != 5 {
-		return report, errors.New("组队需要恰好五个已核验角色")
-	}
-	seen := map[string]bool{}
-	indices := map[int]bool{}
-	identities := map[string]bool{}
-	jobs := map[string]int{}
-	lead := -1
-	controls := make([]*controller, 5)
-	for i, a := range actors {
-		if a.Identity == "" || identities[a.Identity] || a.Server == "" || a.Server != actors[0].Server || a.Role != actors[0].Role || vision.Normal(a.Name) == "" || seen[vision.Normal(a.Name)] || indices[a.Instance] || a.Role < 1 || a.Role > 5 || a.Device == nil || a.Reader == nil || a.MinDelayMS < 100 || a.MaxDelayMS < a.MinDelayMS || a.MaxDelayMS > 3000 {
-			return report, errors.New("角色身份、独立昵称、实例或点击设置不足，不发送邀请")
-		}
-		seen[vision.Normal(a.Name)] = true
-		identities[a.Identity] = true
-		indices[a.Instance] = true
-		jobs[a.Profession]++
-		if a.Instance == leader {
-			lead = i
-		}
-		controls[i] = &controller{Actor: a}
-	}
-	if lead < 0 || jobs["合欢"] != 1 || jobs["天音"] != 1 || jobs["青云"] != 1 || jobs["鬼王"] != 2 {
-		return report, errors.New("队长或五人职业配置不符")
+	controls, lead, e := validateActors(actors, leader)
+	if e != nil {
+		return report, e
 	}
 	userCtx := ctx
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
@@ -502,4 +491,33 @@ func RunTeam(ctx context.Context, actors []Actor, leader int) (report TeamReport
 	}
 	report.Verified = true
 	return report, nil
+}
+
+func validateActors(actors []Actor, leader int) ([]*controller, int, error) {
+	if len(actors) != 5 {
+		return nil, -1, errors.New("组队需要恰好五个已核验角色")
+	}
+	seen := map[string]bool{}
+	indices := map[int]bool{}
+	identities := map[string]bool{}
+	jobs := map[string]int{}
+	lead := -1
+	controls := make([]*controller, 5)
+	for i, a := range actors {
+		if a.Identity == "" || identities[a.Identity] || a.Server == "" || a.Server != actors[0].Server || a.Role != actors[0].Role || vision.Normal(a.Name) == "" || seen[vision.Normal(a.Name)] || indices[a.Instance] || a.Role < 1 || a.Role > 5 || a.Device == nil || a.Reader == nil || a.MinDelayMS < 100 || a.MaxDelayMS < a.MinDelayMS || a.MaxDelayMS > 3000 {
+			return nil, -1, errors.New("角色身份、独立昵称、实例或点击设置不足，不发送邀请")
+		}
+		seen[vision.Normal(a.Name)] = true
+		identities[a.Identity] = true
+		indices[a.Instance] = true
+		jobs[a.Profession]++
+		if a.Instance == leader {
+			lead = i
+		}
+		controls[i] = &controller{Actor: a}
+	}
+	if lead < 0 || jobs["合欢"] != 1 || jobs["天音"] != 1 || jobs["青云"] != 1 || jobs["鬼王"] != 2 {
+		return nil, -1, errors.New("队长或五人职业配置不符")
+	}
+	return controls, lead, nil
 }

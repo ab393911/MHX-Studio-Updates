@@ -67,7 +67,7 @@ func (p *workbench) openGroupLogin() {
 		return
 	}
 	g.hwnd = hwnd
-	child(hwnd, "STATIC", "全组预检后登录；可勾选登录后组队测试。不会自动换区、战斗或真实发货。", 18, 15, 750, 28, 0, 0)
+	child(hwnd, "STATIC", "全组预检后登录；可勾选登录后组队及八星准备测试。不会自动换区、战斗或真实发货。", 18, 15, 750, 28, 0, 0)
 	child(hwnd, "STATIC", "目标区服", 18, 55, 85, 25, 0, 0)
 	g.server = child(hwnd, "EDIT", server, 105, 50, 240, 28, wsBorder, 534)
 	child(hwnd, "STATIC", "共同角色槽位", 365, 55, 125, 25, 0, 0)
@@ -86,7 +86,7 @@ func (p *workbench) openGroupLogin() {
 	child(hwnd, "BUTTON", "保存启动方案", 580, 96, 180, 34, 0, 539)
 	g.status = child(hwnd, "STATIC", "当前只内置“一梦诛仙”区服文字特征；其它区服不猜测。请先完成每台目标角色昵称标定。", 18, 145, 745, 55, 0, 536)
 	g.report = child(hwnd, "EDIT", "", 18, 210, 745, 260, wsBorder|0x200000|4|0x40|0x800, 537)
-	child(hwnd, "BUTTON", "登录后继续组队（测试）", 18, 485, 285, 28, 3, 540)
+	child(hwnd, "BUTTON", "登录后继续组队及八星准备（测试）", 18, 485, 285, 28, 3, 540)
 	child(hwnd, "STATIC", "队长", 350, 489, 60, 25, 0, 0)
 	g.leader = child(hwnd, "COMBOBOX", "", 410, 482, 350, 180, 3, 541)
 	leaderIndex := 0
@@ -180,6 +180,12 @@ func (g *groupLoginPanel) start() {
 		return
 	}
 	needTasks := send(controlOf(g.hwnd, 540), 0xF0, 0, 0) == 1
+	if needTasks {
+		if _, e := g.app.stateStore.LatestPlan(); e != nil {
+			setText(g.status, "先在工作台建立五开计划，防止重复消耗材料；"+e.Error())
+			return
+		}
+	}
 	leaderRow := comboIndex(g.leader)
 	if leaderRow < 0 || leaderRow >= len(g.devices) {
 		setText(g.status, "请选择本组队长")
@@ -231,12 +237,12 @@ func (g *groupLoginPanel) start() {
 			if report.Ready && e == nil {
 				setText(g.status, "五台同槽位角色及本次区服图像依据已复核；仅登录准备完成，未组队、未完成任务。")
 				if needTasks {
-					setText(g.status, "五台目标角色及五人队伍已核验；未执行战斗或交易。")
+					setText(g.status, "组队及八星准备已核验结束（可能含资源不足跳过）；未执行据点战斗、交易行整理或银锭发货。")
 				}
 			} else {
 				message := "本组未通过就位核验；不开始组队或下一任务。"
 				if report.Ready && needTasks {
-					message = "角色登录已核验，后续组队未完成。"
+					message = "角色登录已核验，后续任务未完成。"
 				}
 				if e != nil {
 					message += " " + e.Error()
@@ -287,7 +293,7 @@ func (g *groupLoginPanel) members(spec login.Spec, devices []ldplayer.Instance, 
 		ad := &evidence.LoginDevice{Device: device, Catalog: catalog, Retries: cfg.Retries, MinDelayMS: cfg.MinDelayMS, MaxDelayMS: cfg.MaxDelayMS, OnLog: g.app.logAsync}
 		guard := &automation.ServerGuard{Device: ad, Profile: profile, ServerPage: serverPage}
 		var loginDevice automation.Device = guard
-		named := &vision.NamedRoleDevice{Device: guard, Profile: profile, Reader: g.app.ocr}
+		named := &vision.NamedRoleDevice{Device: guard, Profile: profile, Reader: g.app.ocr, ExpectedProfession: cfg.Jobs[key][0], VerifyProfession: catalog.FiveProfessions, MaxFailures: cfg.Retries}
 		if readNames {
 			loginDevice = named
 		}
@@ -303,6 +309,10 @@ func (g *groupLoginPanel) members(spec login.Spec, devices []ldplayer.Instance, 
 			if named.Verified {
 				result.CharacterName = named.Names[spec.Role-1]
 				result.CharacterNameVerified = true
+			}
+			result.ProfessionVerified = named.ProfessionVerified
+			if readNames && named.Error != nil {
+				result.CharacterNameError = named.Error.Error()
 			}
 			for n := 0; n < 2; n++ {
 				shot, e := guard.Capture(ctx)

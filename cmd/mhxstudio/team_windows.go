@@ -24,7 +24,7 @@ import (
 func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplayer.Instance, leader int) (err error) {
 	defer func() {
 		if err != nil {
-			a.ui(func() { setText(a.controls[211], "后续组队已停止："+err.Error()+"；未标记完成。") })
+			a.ui(func() { setText(a.controls[211], "后续任务已停止："+err.Error()+"；未标记完成。") })
 		}
 	}()
 	if !ready.Ready || len(ready.Members) != 5 || len(devices) != 5 || a.ocr == nil {
@@ -32,8 +32,8 @@ func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplaye
 	}
 	proofs := map[int]login.Proof{}
 	for _, m := range ready.Members {
-		if m.State != "VERIFIED" || !m.Proof.IdentityVerified || !m.Proof.ServerVerified || !m.Proof.CharacterNameVerified || m.Proof.CharacterName == "" {
-			return fmt.Errorf("实例%d虽可完成昵称标定核验，但尚未得到本次中文昵称读数，未发送组队邀请", m.Instance)
+		if m.State != "VERIFIED" || !m.Proof.IdentityVerified || !m.Proof.ServerVerified || !m.Proof.CharacterNameVerified || !m.Proof.ProfessionVerified || m.Proof.CharacterName == "" {
+			return fmt.Errorf("实例%d本次昵称文字/职业图标依据不足，未发送邀请；%s", m.Instance, m.Proof.CharacterNameError)
 		}
 		if m.Proof.Server != ready.Spec.Server || m.Proof.Role != ready.Spec.Role || time.Since(m.Proof.ObservedAt) > 15*time.Second {
 			return errors.New("登录就位依据过期或目标不符，未开始组队")
@@ -74,8 +74,8 @@ func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplaye
 			if e != nil {
 				return e
 			}
-			if phase.Module != "team" || phase.Server != ready.Spec.Server || phase.Slot != ready.Spec.Role {
-				return errors.New("当前计划已进入其它阶段，不重做组队；对应后续执行器仍待接通")
+			if (phase.Module != "team" && phase.Module != "eight_star") || phase.Server != ready.Spec.Server || phase.Slot != ready.Spec.Role {
+				return errors.New("当前计划阶段尚无执行器，不重做已完成模块")
 			}
 			wanted := map[string]bool{}
 			for _, t := range phase.Tasks {
@@ -92,6 +92,16 @@ func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplaye
 			return e
 		}
 	}
+	if !ledger || phase.Module == "team" {
+		if e = a.executeTeam(ctx, actors, leader, plan, phase, ledger); e != nil {
+			return e
+		}
+	}
+	return a.executeEight(ctx, actors, ready.Spec, leader, plan.ID, ledger)
+}
+
+func (a *app) executeTeam(ctx context.Context, actors []taskflow.Actor, leader int, plan studio.Plan, phase studio.Phase, ledger bool) (err error) {
+	var e error
 	if ledger {
 		if e = a.stateStore.StartPhase(plan.ID, phase.Number, a.cfg.Retries); e != nil {
 			return e

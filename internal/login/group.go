@@ -26,6 +26,8 @@ type Proof struct {
 	ObservedAt            time.Time `json:"observed_at"`
 	CharacterName         string    `json:"character_name,omitempty"`
 	CharacterNameVerified bool      `json:"character_name_verified,omitempty"`
+	CharacterNameError    string    `json:"character_name_error,omitempty"`
+	ProfessionVerified    bool      `json:"profession_verified,omitempty"`
 }
 type Member struct {
 	Instance             int
