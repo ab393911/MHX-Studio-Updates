@@ -3,6 +3,7 @@ $ProgressPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $capabilityMissing = $false
 try {
+    [Console]::Error.WriteLine('ocr-stage=init')
     Add-Type -AssemblyName System.Runtime.WindowsRuntime
     $null = [Windows.Storage.Streams.InMemoryRandomAccessStream, Windows.Storage.Streams, ContentType=WindowsRuntime]
     $null = [Windows.Storage.Streams.DataWriter, Windows.Storage.Streams, ContentType=WindowsRuntime]
@@ -10,18 +11,21 @@ try {
     $null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics.Imaging, ContentType=WindowsRuntime]
     $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]
     $null = [Windows.Media.Ocr.OcrResult, Windows.Foundation, ContentType=WindowsRuntime]
+    [Console]::Error.WriteLine('ocr-stage=types-ready')
     $awaitMethod = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetParameters().Count -eq 1 -and $_.GetGenericArguments().Count -eq 1 } | Select-Object -First 1
     function Await-WinRT($Operation, $ResultType) {
         $task = $awaitMethod.MakeGenericMethod($ResultType).Invoke($null, @($Operation))
         $task.GetAwaiter().GetResult()
     }
     $languages = @([Windows.Media.Ocr.OcrEngine]::AvailableRecognizerLanguages)
+    [Console]::Error.WriteLine('ocr-stage=languages-ready')
     $language = $languages | Where-Object { $_.LanguageTag -like 'zh-Hans*' } | Select-Object -First 1
     if ($null -eq $language) { $language = $languages | Where-Object { $_.LanguageTag -like 'zh*' } | Select-Object -First 1 }
     if ($null -eq $language) { $language = $languages | Select-Object -First 1 }
     if ($null -eq $language) { $capabilityMissing = $true; throw 'Windows没有可用的OCR识别语言，未安装或修改任何系统组件。' }
     $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($language)
     if ($null -eq $engine) { $capabilityMissing = $true; throw 'Windows OCR引擎不可用。' }
+    [Console]::Error.WriteLine('ocr-stage=engine-ready')
 } catch {
     [Console]::WriteLine((@{error=$_.Exception.Message;unavailable=$capabilityMissing} | ConvertTo-Json -Compress))
     exit 0
@@ -30,6 +34,7 @@ try {
 while ($null -ne ($line = [Console]::ReadLine())) {
     $stream = $null; $writer = $null; $bitmap = $null
     try {
+        [Console]::Error.WriteLine('ocr-stage=request')
         $request = $line | ConvertFrom-Json
         $bytes = [Convert]::FromBase64String([string]$request.png)
         if ($bytes.Length -gt 8388608) { throw 'Screenshot exceeds 8MiB' }
@@ -37,12 +42,16 @@ while ($null -ne ($line = [Console]::ReadLine())) {
         $writer = [Windows.Storage.Streams.DataWriter]::new($stream)
         $writer.WriteBytes($bytes)
         $null = Await-WinRT $writer.StoreAsync() ([uint32])
+        [Console]::Error.WriteLine('ocr-stage=stored')
         $null = $writer.DetachStream()
         $writer.Dispose(); $writer = $null
         $stream.Seek(0)
         $decoder = Await-WinRT ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+        [Console]::Error.WriteLine('ocr-stage=decoded')
         $bitmap = Await-WinRT $decoder.GetSoftwareBitmapAsync() ([Windows.Graphics.Imaging.SoftwareBitmap])
+        [Console]::Error.WriteLine('ocr-stage=bitmap-ready')
         $result = Await-WinRT $engine.RecognizeAsync($bitmap) ([Windows.Media.Ocr.OcrResult])
+        [Console]::Error.WriteLine('ocr-stage=recognized')
         $lines = @()
         foreach ($ocrLine in $result.Lines) {
             $words = @()

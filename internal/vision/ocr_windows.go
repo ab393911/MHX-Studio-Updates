@@ -36,6 +36,23 @@ type NativeReader struct {
 	in          io.WriteCloser
 	scan        *bufio.Scanner
 	unavailable error
+	stderr      *stageBuffer
+}
+type stageBuffer struct{ b []byte }
+
+func (b *stageBuffer) Write(p []byte) (int, error) {
+	n := len(p)
+	b.b = append(b.b, p...)
+	if len(b.b) > 8192 {
+		b.b = b.b[len(b.b)-8192:]
+	}
+	return n, nil
+}
+func (r *NativeReader) diagnostic(e error) error {
+	if r.stderr != nil && len(r.stderr.b) > 0 {
+		return fmt.Errorf("%w; Windows OCR: %s", e, string(r.stderr.b))
+	}
+	return e
 }
 
 func NewNativeReader() *NativeReader { return &NativeReader{} }
@@ -78,7 +95,9 @@ func (r *NativeReader) Read(ctx context.Context, png []byte) (Screen, error) {
 		if root == "" {
 			return Screen{}, ErrUnavailable
 		}
-		cmd := exec.Command(filepath.Join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encodedScript())
+		cmd := exec.Command(filepath.Join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), "-NoLogo", "-NoProfile", "-NonInteractive", "-MTA", "-EncodedCommand", encodedScript())
+		r.stderr = &stageBuffer{}
+		cmd.Stderr = r.stderr
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		in, e := cmd.StdinPipe()
 		if e != nil {
@@ -98,7 +117,11 @@ func (r *NativeReader) Read(ctx context.Context, png []byte) (Screen, error) {
 		r.scan = bufio.NewScanner(out)
 		r.scan.Buffer(make([]byte, 4096), 1<<20)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	limit := 15 * time.Second
+	if starting {
+		limit = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	type reply struct {
 		Ready       bool   `json:"ready"`
@@ -156,11 +179,11 @@ func (r *NativeReader) Read(ctx context.Context, png []byte) (Screen, error) {
 	case <-ctx.Done():
 		r.stop()
 		<-done
-		return Screen{}, ctx.Err()
+		return Screen{}, r.diagnostic(ctx.Err())
 	case v := <-done:
 		if v.e != nil {
 			r.stop()
-			return Screen{}, v.e
+			return Screen{}, r.diagnostic(v.e)
 		}
 		if v.r.Error != "" {
 			r.stop()
