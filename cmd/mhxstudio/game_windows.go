@@ -394,3 +394,14 @@ func (a *app) loginCalibrationGuide() {
 	rows := []int{95, 169, 240, 311, 382}
 	a.info(fmt.Sprintf("实例%d，目标角色%d。每个实际页面点“截图并框选标定”：两处稳定特征 + 一个按钮范围。\n待标定：%s\n\n参考中心：公告(480,480)、动画页(750,405)、本角色行(140,%d)、角色进入(850,488)、游戏菜单(930,320)。仅作找按钮参考，未经截图核验不点击。\n\n角色选中标定须包含本行高亮；游戏内标定使用通用稳定特征。没有实际出现的动画页可略过。\n内置候选模板用于页面与选中边框；不再核对或要求标定角色昵称。缺少可靠身份依据时只报告部分成功。", d.Index, r, missing, rows[r-1]))
 }
+
+func (d *gameDevice) Swipe(ctx context.Context, x1, y1, x2, y2 int, duration time.Duration) error {
+	if x1 < 0 || x1 >= 960 || x2 < 0 || x2 >= 960 || y1 < 0 || y1 >= 540 || y2 < 0 || y2 >= 540 || duration < 100*time.Millisecond || duration > time.Second {
+		return errors.New("滚动范围无效")
+	}
+	if e := gameapp.RequireForeground(ctx, d.shell, d.pkg); e != nil {
+		return e
+	}
+	_, e := d.shell.Shell(ctx, "input", "touchscreen", "swipe", strconv.Itoa(x1), strconv.Itoa(y1), strconv.Itoa(x2), strconv.Itoa(y2), strconv.Itoa(int(duration/time.Millisecond)))
+	return e
+}

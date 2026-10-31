@@ -21,7 +21,10 @@ import (
 	"github.com/ab393911/MHX-Studio-Updates/internal/taskflow"
 )
 
-func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplayer.Instance, leader int) (err error) {
+func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplayer.Instance, leader int) error {
+	return a.runTaskMode(ctx, ready, devices, leader, "chain")
+}
+func (a *app) runTaskMode(ctx context.Context, ready login.Report, devices []ldplayer.Instance, leader int, mode string) (err error) {
 	defer func() {
 		if err != nil {
 			a.ui(func() { setText(a.controls[211], "后续任务已停止："+err.Error()+"；未标记完成。") })
@@ -64,6 +67,24 @@ func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplaye
 		device := &gameDevice{boundDevice: boundDevice{a.client, d, a.cache}, shell: shell, pkg: binding.Package}
 		actors = append(actors, taskflow.Actor{Instance: d.Index, Identity: p.Identity, Name: p.CharacterName, Profession: a.cfg.Jobs[key][0], Server: ready.Spec.Server, Role: ready.Spec.Role, Device: device, Profile: catalog.Profile(raw).WithoutNicknamePages(), Reader: a.ocr, MinDelayMS: a.cfg.MinDelayMS, MaxDelayMS: a.cfg.MaxDelayMS, OnError: func(b []byte, e error) { a.errorCapture(d, b, e) }})
 	}
+	if mode != "chain" {
+		switch mode {
+		case "stronghold_prepare":
+			report, e := taskflow.InspectStronghold(ctx, actors, leader)
+			if saved := filesafe.JSON(filepath.Join(a.root, "profiles", "stronghold-inspection-last.json"), report); saved != nil {
+				return errors.Join(e, saved)
+			}
+			if e == nil && len(report.Actors) == 1 {
+				a.ui(func() {
+					setText(a.controls[211], "本周赛季首领："+report.Actors[0].Target+"；已返回主界面，尚未执行挑战。")
+				})
+			}
+			return e
+		case "assets", "fortune", "battle_pass":
+			return a.executeModule(ctx, actors, leader, mode, "", false)
+		}
+		return errors.New("未知单项测试，不执行游戏操作")
+	}
 	var plan studio.Plan
 	var phase studio.Phase
 	ledger := false
@@ -74,7 +95,7 @@ func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplaye
 			if e != nil {
 				return e
 			}
-			if (phase.Module != "team" && phase.Module != "eight_star") || phase.Server != ready.Spec.Server || phase.Slot != ready.Spec.Role {
+			if phase.Server != ready.Spec.Server || phase.Slot != ready.Spec.Role {
 				return errors.New("当前计划阶段尚无执行器，不重做已完成模块")
 			}
 			wanted := map[string]bool{}
@@ -97,7 +118,12 @@ func (a *app) runTeam(ctx context.Context, ready login.Report, devices []ldplaye
 			return e
 		}
 	}
-	return a.executeEight(ctx, actors, ready.Spec, leader, plan.ID, ledger)
+	if !ledger || phase.Module == "team" || phase.Module == "eight_star" {
+		if e = a.executeEight(ctx, actors, ready.Spec, leader, plan.ID, ledger); e != nil {
+			return e
+		}
+	}
+	return a.executeFollowups(ctx, actors, ready.Spec, leader, plan.ID, ledger)
 }
 
 func (a *app) executeTeam(ctx context.Context, actors []taskflow.Actor, leader int, plan studio.Plan, phase studio.Phase, ledger bool) (err error) {

@@ -94,3 +94,34 @@ func TestCharacterAssetsPersistAndBadInputsDoNotCreateSamples(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestFailedAssetRereadSuppressesPriorBalanceUntilNewerSuccess(t *testing.T) {
+	s := store(t)
+	now := time.Now().Add(-time.Second)
+	a := CharacterAsset{Instance: 2, Slot: 3, Server: "一区", Silver: 327000, Merit: 345, Evidence: evidence("query"), ObservedAt: now}
+	if e := s.RecordCharacterAsset(a); e != nil {
+		t.Fatal(e)
+	}
+	failed := now.Add(time.Millisecond)
+	if e := s.RecordCharacterAssetFailure(2, 3, "一区", failed, "OCR unreadable"); e != nil {
+		t.Fatal(e)
+	}
+	sum, e := s.ServerAssetSummary([]string{"一区"}, []int{2}, time.Now(), 15*time.Minute)
+	if e != nil || sum[0].Available != 0 || sum[0].Missing != 5 {
+		t.Fatal(sum, e)
+	}
+	if rows(t, s, "SELECT silver FROM character_assets")[0][0] != "327000" {
+		t.Fatal("failure erased old snapshot")
+	}
+	if e = s.RecordCharacterAsset(a); e == nil {
+		t.Fatal("old successful sample replaced newer failure")
+	}
+	a.ObservedAt = failed.Add(time.Millisecond)
+	if e = s.RecordCharacterAsset(a); e != nil {
+		t.Fatal(e)
+	}
+	sum, e = s.ServerAssetSummary([]string{"一区"}, []int{2}, time.Now(), 15*time.Minute)
+	if e != nil || sum[0].Available != 30000 || sum[0].Missing != 4 {
+		t.Fatal(sum, e)
+	}
+}

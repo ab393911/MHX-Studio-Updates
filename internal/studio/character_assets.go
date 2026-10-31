@@ -9,6 +9,10 @@ import (
 // The additive table is included in the existing updater's SQLite backup.
 func ensureCharacterAssets(d *nativeDB) error {
 	_, _, e := d.query("CREATE TABLE IF NOT EXISTS character_assets(instance INTEGER NOT NULL CHECK(instance>=0),server TEXT NOT NULL,slot INTEGER NOT NULL CHECK(slot BETWEEN 1 AND 5),silver INTEGER NOT NULL CHECK(silver>=0),merit INTEGER NOT NULL CHECK(merit>=0),evidence TEXT NOT NULL,observed INTEGER NOT NULL,PRIMARY KEY(instance,server,slot))")
+	if e != nil {
+		return e
+	}
+	_, _, e = d.query("CREATE TABLE IF NOT EXISTS character_asset_failures(instance INTEGER NOT NULL CHECK(instance>=0),server TEXT NOT NULL,slot INTEGER NOT NULL CHECK(slot BETWEEN 1 AND 5),observed INTEGER NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(instance,server,slot))")
 	return e
 }
 
@@ -41,6 +45,13 @@ func (s *Store) RecordCharacterAsset(a CharacterAsset) error {
 		if len(rows) > 0 && integer(rows[0][0]) > a.ObservedAt.UnixNano() {
 			return errors.New("旧扫描不能覆盖较新的资产读数")
 		}
+		failures, _, e := d.query("SELECT observed FROM character_asset_failures WHERE instance=? AND server=? AND slot=?", num(int64(a.Instance)), a.Server, num(int64(a.Slot)))
+		if e != nil {
+			return e
+		}
+		if len(failures) > 0 && integer(failures[0][0]) >= a.ObservedAt.UnixNano() {
+			return errors.New("旧资产扫描不能覆盖更新的读取失败状态")
+		}
 		_, _, e = d.query("INSERT INTO character_assets(instance,server,slot,silver,merit,evidence,observed) VALUES(?,?,?,?,?,?,?) ON CONFLICT(instance,server,slot) DO UPDATE SET silver=excluded.silver,merit=excluded.merit,evidence=excluded.evidence,observed=excluded.observed", num(int64(a.Instance)), a.Server, num(int64(a.Slot)), num(a.Silver), num(a.Merit), a.Evidence, num(a.ObservedAt.UnixNano()))
 		return e
 	})
@@ -67,12 +78,17 @@ func (s *Store) ServerAssetSummary(servers []string, instances []int, now time.T
 		}
 		seen[server] = true
 		v := ServerAssets{Server: server, Expected: len(ids) * 5}
-		rows, e := s.read("SELECT instance,silver,merit,observed FROM character_assets WHERE server=?", server)
+		rows, e := s.read("SELECT a.instance,a.silver,a.merit,a.observed,COALESCE(f.observed,0) FROM character_assets a LEFT JOIN character_asset_failures f ON a.instance=f.instance AND a.server=f.server AND a.slot=f.slot WHERE a.server=?", server)
 		if e != nil {
 			return nil, e
 		}
 		for _, row := range rows {
 			if !ids[int(integer(row[0]))] {
+				continue
+			}
+			// A failed reread makes the character missing immediately; retain the
+			// prior snapshot for history instead of displaying it as a current read.
+			if integer(row[4]) >= integer(row[3]) {
 				continue
 			}
 			v.Scanned++
@@ -102,4 +118,19 @@ func (s *Store) ServerAssetSummary(servers []string, instances []int, now time.T
 		out = append(out, v)
 	}
 	return out, nil
+}
+
+// RecordCharacterAssetFailure preserves the last verified amount while excluding
+// it from current totals until a newer successful scan supersedes the failure.
+func (s *Store) RecordCharacterAssetFailure(instance, slot int, server string, at time.Time, reason string) error {
+	if instance < 0 || slot < 1 || slot > 5 || !validText(server) || at.IsZero() || time.Since(at) > 15*time.Minute || time.Until(at) > time.Second || reason == "" {
+		return errors.New("资产失败记录缺少明确角色及时间")
+	}
+	if len(reason) > 2048 {
+		reason = reason[:2048]
+	}
+	return s.tx(func(d *nativeDB) error {
+		_, _, e := d.query("INSERT INTO character_asset_failures(instance,server,slot,observed,reason) VALUES(?,?,?,?,?) ON CONFLICT(instance,server,slot) DO UPDATE SET observed=excluded.observed,reason=excluded.reason WHERE excluded.observed>character_asset_failures.observed", num(int64(instance)), server, num(int64(slot)), num(at.UnixNano()), reason)
+		return e
+	})
 }

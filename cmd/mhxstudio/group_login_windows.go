@@ -27,7 +27,7 @@ import (
 type groupLoginPanel struct {
 	app                                *app
 	hwnd, server, role, report, status uintptr
-	leader                             uintptr
+	leader, taskMode                   uintptr
 	devices                            []ldplayer.Instance
 	states                             map[int]login.Status
 }
@@ -66,7 +66,7 @@ func (p *workbench) openGroupLogin() {
 		return
 	}
 	g.hwnd = hwnd
-	child(hwnd, "STATIC", "全组预检后登录；可勾选登录后组队及八星准备测试。不会自动换区、战斗或真实发货。", 18, 15, 750, 28, 0, 0)
+	child(hwnd, "STATIC", "全组预检后登录，可选完整流程或资产、聚福、战令单项测试；未接通的阶段会明确停止。", 18, 15, 750, 28, 0, 0)
 	child(hwnd, "STATIC", "目标区服", 18, 55, 85, 25, 0, 0)
 	g.server = child(hwnd, "EDIT", server, 105, 50, 240, 28, wsBorder, 534)
 	child(hwnd, "STATIC", "共同角色槽位", 365, 55, 125, 25, 0, 0)
@@ -85,7 +85,7 @@ func (p *workbench) openGroupLogin() {
 	child(hwnd, "BUTTON", "保存启动方案", 580, 96, 180, 34, 0, 539)
 	g.status = child(hwnd, "STATIC", "当前只内置“一梦诛仙”区服文字特征；其它区服不猜测。按实例、区服及选中槽位核验，不需要昵称标定。", 18, 145, 745, 55, 0, 536)
 	g.report = child(hwnd, "EDIT", "", 18, 210, 745, 260, wsBorder|0x200000|4|0x40|0x800, 537)
-	child(hwnd, "BUTTON", "登录后继续组队及八星准备（测试）", 18, 485, 285, 28, 3, 540)
+	child(hwnd, "BUTTON", "登录后执行所选任务（测试）", 18, 485, 285, 28, 3, 540)
 	child(hwnd, "STATIC", "队长", 350, 489, 60, 25, 0, 0)
 	g.leader = child(hwnd, "COMBOBOX", "", 410, 482, 350, 180, 3, 541)
 	leaderIndex := 0
@@ -99,6 +99,12 @@ func (p *workbench) openGroupLogin() {
 	if p.app.cfg.Startup != nil && p.app.cfg.Startup.RunTasks {
 		send(controlOf(hwnd, 540), 0xF1, 1, 0)
 	}
+	child(hwnd, "STATIC", "测试项目", 18, 523, 85, 25, 0, 0)
+	g.taskMode = child(hwnd, "COMBOBOX", "", 110, 518, 650, 180, 3, 542)
+	for _, name := range []string{"组队→八星→资产→后续计划", "只读取当前五角色银锭/功绩", "只测聚福激活", "只测仙盟战令/打工簿", "只识别本周赛季据点"} {
+		comboAdd(g.taskMode, name)
+	}
+	send(g.taskMode, 0x14E, 0, 0)
 	for _, d := range chosen {
 		g.states[d.Index] = login.Status{Instance: d.Index, State: "PENDING", Step: "等待启动；不会把历史记录当本次核验"}
 	}
@@ -163,7 +169,14 @@ func (g *groupLoginPanel) start() {
 		return
 	}
 	needTasks := send(controlOf(g.hwnd, 540), 0xF0, 0, 0) == 1
-	if needTasks {
+	modes := []string{"chain", "assets", "fortune", "battle_pass", "stronghold_prepare"}
+	modeIndex := comboIndex(g.taskMode)
+	if modeIndex < 0 || modeIndex >= len(modes) {
+		setText(g.status, "请选择测试项目")
+		return
+	}
+	mode := modes[modeIndex]
+	if needTasks && mode == "chain" {
 		if _, e := g.app.stateStore.LatestPlan(); e != nil {
 			setText(g.status, "先在工作台建立五开计划，防止重复消耗材料；"+e.Error())
 			return
@@ -188,7 +201,7 @@ func (g *groupLoginPanel) start() {
 		return
 	}
 	g.app.cfg = next
-	for _, id := range []int{531, 534, 535, 538, 539, 540, 541} {
+	for _, id := range []int{531, 534, 535, 538, 539, 540, 541, 542} {
 		user32.NewProc("EnableWindow").Call(controlOf(g.hwnd, id), 0)
 	}
 	setText(g.status, "开始全组只读预检；任何一台失败就取消本次其余操作，不执行任务或战斗。")
@@ -202,7 +215,7 @@ func (g *groupLoginPanel) start() {
 			})
 		}})
 		if e == nil && report.Ready && needTasks {
-			e = g.app.runTeam(ctx, report, g.devices, leaderIndex)
+			e = g.app.runTaskMode(ctx, report, g.devices, leaderIndex, mode)
 		}
 		// This is a last-run diagnostic, not durable game-task completion or a
 		// reusable permission to act. It is covered by existing profiles/*.json backup.
@@ -214,13 +227,17 @@ func (g *groupLoginPanel) start() {
 			if g.app.loginPanel != g {
 				return
 			}
-			for _, id := range []int{531, 534, 535, 538, 539, 540, 541} {
+			for _, id := range []int{531, 534, 535, 538, 539, 540, 541, 542} {
 				user32.NewProc("EnableWindow").Call(controlOf(g.hwnd, id), 1)
 			}
 			if report.Ready && e == nil {
 				setText(g.status, "五台同槽位角色及本次区服图像依据已复核；仅登录准备完成，未组队、未完成任务。")
 				if needTasks {
-					setText(g.status, "组队及八星准备已核验结束（可能含资源不足跳过）；未执行据点战斗、交易行整理或银锭发货。")
+					if mode == "stronghold_prepare" {
+						setText(g.status, "本周赛季首领识别已结束；首领名称见主窗口，未执行挑战。")
+					} else {
+						setText(g.status, "所选测试已核验结束；资产测试的成功读数可在工作台四区统计中查看。")
+					}
 				}
 			} else {
 				message := "本组未通过就位核验；不开始组队或下一任务。"

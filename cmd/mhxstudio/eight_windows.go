@@ -114,7 +114,7 @@ func (a *app) executeEight(ctx context.Context, actors []taskflow.Actor, spec lo
 		return errors.New("五台八星准备未全部核验结束")
 	}
 	a.ui(func() {
-		setText(a.controls[211], fmt.Sprintf("%s角色%d：组队及八星准备已核验结束，资源不足按检查结果跳过。聚福、据点、交易等尚未执行，未自动切号。", spec.Server, spec.Role))
+		setText(a.controls[211], fmt.Sprintf("%s角色%d：组队及八星准备已核验结束，资源不足按检查结果跳过；继续读取资产并检查下一计划阶段。", spec.Server, spec.Role))
 		if a.workbench != nil {
 			a.workbench.refresh()
 		}

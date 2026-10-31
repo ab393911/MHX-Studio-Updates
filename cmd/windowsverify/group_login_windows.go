@@ -122,7 +122,7 @@ func groupLoginGUI(exe, fixture, version, out string) map[string]any {
 	groupTitle := "MHX Studio · 五台同槽登录准备"
 	fail(waitWindow(groupTitle))
 	g := findWindow(groupTitle)
-	if !onScreen(g) || !onScreen(control(g, 531)) || !onScreen(control(g, 532)) {
+	if !onScreen(g) || !onScreen(control(g, 531)) || !onScreen(control(g, 532)) || !onScreen(control(g, 542)) {
 		fail(fmt.Errorf("five-login controls exceed desktop"))
 	}
 	user.NewProc("SendMessageW").Call(control(g, 535), 0x14E, 2, 0)
