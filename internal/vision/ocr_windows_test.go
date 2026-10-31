@@ -94,6 +94,7 @@ func TestNativeWindowsOCRReadsGeneratedTextWithoutSavingScreenshot(t *testing.T)
 	if ok == 0 {
 		t.Fatal("numeric probe TextOut failed")
 	}
+	gdi.NewProc("GdiFlush").Call()
 	im := image.NewNRGBA(image.Rect(0, 0, 960, 540))
 	for i := 0; i < 960*540; i++ {
 		im.Pix[i*4] = pixels[i*4+2]
@@ -130,11 +131,33 @@ func TestNativeWindowsOCRReadsGeneratedTextWithoutSavingScreenshot(t *testing.T)
 		t.Fatal(s, e)
 	}
 	report["generated_text_verified"] = true
-	amounts, e := ReadAmounts(ctx, r, b.Bytes(), []automation.Rect{{X: 80, Y: 200, W: 130, H: 28}})
-	if e != nil || len(amounts) != 1 || !amounts[0].Exact || amounts[0].Value != 654321 {
-		t.Fatal("isolated numeric OCR failed", amounts, e)
+	trace := &numericProbeReader{Reader: r}
+	fields, e := ReadFields(ctx, trace, b.Bytes(), []automation.Rect{{X: 80, Y: 200, W: 130, H: 28}})
+	var amount Amount
+	if e == nil && len(fields) == 1 {
+		amount, e = ParseAmount(fields[0])
+	}
+	if e != nil || len(fields) != 1 || !amount.Exact || amount.Value != 654321 {
+		if path := os.Getenv("MHX_OCR_REPORT"); path != "" {
+			_ = os.WriteFile(filepath.Join(filepath.Dir(path), "numeric-ocr-failure.png"), trace.png, 0600)
+		}
+		t.Fatalf("isolated numeric OCR failed fields=%q amount=%+v err=%v screen=%+v", fields, amount, e, trace.screen)
 	}
 	report["packed_numeric_verified"] = true
 	t.Log("native Windows OCR language", s.Language, "; no real game tested")
 }
 func int32ToUint(v int32) uintptr { return uintptr(uint32(v)) }
+
+// Probe diagnostics contain only generated test digits, never a game frame.
+type numericProbeReader struct {
+	Reader
+	png    []byte
+	screen Screen
+}
+
+func (r *numericProbeReader) Read(ctx context.Context, b []byte) (Screen, error) {
+	r.png = append([]byte(nil), b...)
+	s, e := r.Reader.Read(ctx, b)
+	r.screen = s
+	return s, e
+}

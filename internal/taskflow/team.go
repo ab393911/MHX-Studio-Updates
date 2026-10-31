@@ -50,7 +50,8 @@ type snapshot struct {
 }
 type controller struct {
 	Actor
-	last []byte
+	last        []byte
+	resourceSHA string
 }
 type check func(snapshot) error
 type button func(snapshot) (automation.Rect, error)

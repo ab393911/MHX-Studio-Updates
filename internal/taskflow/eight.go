@@ -370,7 +370,7 @@ func (c *controller) phantom(ctx context.Context) (part Part, err error) {
 	} else {
 		if has(s, "暂无幻形卡可使用", automation.Rect{X: 560, Y: 370, W: 280, H: 60}) {
 			if e = c.buyPhantom(ctx, target); errors.Is(e, ErrResourceInsufficient) {
-				part = Part{State: studio.Skip, Reason: "resource_insufficient", ScreenSHA: s.sha}
+				part = Part{State: studio.Skip, Reason: "resource_insufficient", ScreenSHA: c.resourceSHA}
 			} else if e != nil {
 				return part, e
 			}

@@ -94,6 +94,7 @@ jobs:
             dist/SHA256SUMS.txt
             dist/windows-tests.json
             dist/native-ocr-capability.json
+            dist/numeric-ocr-failure.png
             dist/emulator-gui-preview.png
             dist/adb-fallback-gui-preview.png
             dist/single-game-gui-preview.png

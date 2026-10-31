@@ -235,6 +235,29 @@ func (c *controller) buyPhantom(ctx context.Context, target string) error {
 		return errors.New("商行显示已拥有目标卡，先核对库存，不重复购买")
 	}
 	if values.balance.Upper < values.price {
+		verified, err := c.await(ctx, func(s snapshot) error {
+			if e := shopTarget(target)(s); e != nil {
+				return e
+			}
+			if e := c.shopGrade(ctx, s); e != nil {
+				return e
+			}
+			if !goldPurchaseCurrency(s) {
+				return errors.New("余额不足的币种尚未核验")
+			}
+			v, e := c.shopRead(ctx, s)
+			if e != nil {
+				return e
+			}
+			if v.quantity != 1 || v.price != values.price || v.owned != 0 || v.balance.Upper >= v.price {
+				return errors.New("铜钱不足未连续核验")
+			}
+			return nil
+		}, 8*time.Second)
+		if err != nil {
+			return err
+		}
+		c.resourceSHA = verified.sha
 		if e = c.closeShopToPhantom(ctx, target); e != nil {
 			return e
 		}
