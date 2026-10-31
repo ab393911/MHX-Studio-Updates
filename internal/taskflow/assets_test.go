@@ -218,13 +218,14 @@ func TestAssetAbbreviationBoundariesNeverProduceFalseCapacity(t *testing.T) {
 		t.Run(s, func(t *testing.T) {
 			a, d := newAssetActor(t)
 			a.Reader = assetReader{device: d, silver: s, merit: "345"}
-			ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
+			d.scene = 4
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			r, e := ReadAssets(ctx, a)
 			if e == nil || r.ReturnedMain {
 				t.Fatal(r, e)
 			}
-			if len(d.taps) != 3 {
+			if len(d.taps) != 0 {
 				t.Fatal("uncertain read navigated further", d.taps)
 			}
 		})
@@ -259,5 +260,28 @@ func TestUnsupportedModuleCannotBeCompleted(t *testing.T) {
 	r, e := RunModule(context.Background(), nil, 0, "market", nil)
 	if e == nil || r.Verified || !strings.Contains(e.Error(), "执行器") {
 		t.Fatal(r, e)
+	}
+}
+
+func TestAssetRoundedIntervalMustAgreeAtBothEnds(t *testing.T) {
+	merit, e := vision.ParseAmount("345")
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, raw := range []string{"32万", "32.0万"} {
+		silver, e := vision.ParseAmount(raw)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, _, _, e = assetAmounts([]vision.Amount{silver, merit}); e == nil {
+			t.Fatal("uncertain interval accepted", raw)
+		}
+	}
+	silver, e := vision.ParseAmount("32.7万")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, _, n, e := assetAmounts([]vision.Amount{silver, merit}); e != nil || n != 30000 {
+		t.Fatal(n, e)
 	}
 }

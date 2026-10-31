@@ -30,7 +30,8 @@ func TestNativeWindowsAssetAmounts(t *testing.T) {
 	defer reader.Close()
 	v, e := vision.ReadAmounts(ctx, reader, b, assetAreas)
 	if e != nil {
-		t.Fatal(e)
+		raw, readErr := vision.ReadFields(ctx, reader, b, assetAreas)
+		t.Fatalf("native amount parsing: %v; raw=%q; fields=%v", e, raw, readErr)
 	}
 	silver, merit, available, e := assetAmounts(v)
 	if e != nil || silver != 320000 || merit != 300 || available != 30000 {

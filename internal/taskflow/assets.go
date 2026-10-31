@@ -154,10 +154,11 @@ func (c *controller) readAssets(ctx context.Context) (reading AssetReading, err 
 			return e
 		}
 		key := fmt.Sprintf("%+v", v)
-		if key != prior {
+		if prior != "" && key != prior {
 			prior = key
 			return errors.New("等待两次银锭/功绩读数一致")
 		}
+		prior = key
 		amounts = v
 		return nil
 	}
