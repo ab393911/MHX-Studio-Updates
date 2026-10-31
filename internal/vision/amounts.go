@@ -104,7 +104,10 @@ func ReadFields(ctx context.Context, reader Reader, frame []byte, areas []automa
 			return nil, errors.New("数字字段过大，未与相邻信息隔离")
 		}
 		dest := automation.Rect{X: 20, Y: i*rowH + 8, W: r.W * scale, H: r.H * scale}
-		reads = append(reads, dest)
+		// Windows OCR can extend a word box several pixels beyond the crop
+		// (e.g. X=16 for content starting at X=20). This entire packed row
+		// belongs exclusively to one field; never relax source UI boundaries.
+		reads = append(reads, automation.Rect{X: 0, Y: i * rowH, W: 960, H: rowH})
 		for y := 0; y < dest.H; y++ {
 			for x := 0; x < dest.W; x++ {
 				rr, g, b, _ := img.At(r.X+x/scale, r.Y+y/scale).RGBA()

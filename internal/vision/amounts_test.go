@@ -50,11 +50,11 @@ func (r amountReader) Read(ctx context.Context, b []byte) (Screen, error) {
 		if uint8(v>>8) != uint8(80+i*20) {
 			r.t.Fatal("wrong source field packed", i, v)
 		}
-		s.Lines = append(s.Lines, Line{Words: []Word{{Text: text, Bounds: automation.Rect{X: 24, Y: 14 + 135*i, W: 30, H: 40}}}})
+		s.Lines = append(s.Lines, Line{Words: []Word{{Text: text, Bounds: automation.Rect{X: 16, Y: 14 + 135*i, W: 30, H: 40}}}})
 	}
 	return s, ctx.Err()
 }
-func TestFourNumericFieldsAreIsolatedAndReadInOneRequest(t *testing.T) {
+func TestFourNumericFieldsKeepIsolationAndAllowOCRBoxOverhang(t *testing.T) {
 	im := image.NewRGBA(image.Rect(0, 0, 960, 540))
 	var areas []automation.Rect
 	for i := 0; i < 4; i++ {
