@@ -150,3 +150,19 @@ func saveProfile(root string, index int, p automation.Profile) error {
 	}
 	return filesafe.JSON(path, p)
 }
+
+// storeGame rolls memory back if durable configuration writing fails.
+func (c *settings) storeGame(root string, index int, b gameapp.Binding) error {
+	key := strconv.Itoa(index)
+	old, exists := c.Games[key]
+	c.Games[key] = b
+	if err := c.Save(root); err != nil {
+		if exists {
+			c.Games[key] = old
+		} else {
+			delete(c.Games, key)
+		}
+		return err
+	}
+	return nil
+}

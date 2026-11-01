@@ -102,7 +102,35 @@ func (a *app) startGame(enter bool) {
 	}
 	d, e := a.selected()
 	if e != nil {
-		a.log(e.Error())
+		i := comboIndex(a.controls[202])
+		if i < 0 || i >= len(a.devices) || a.devices[i].Unmapped || !a.devices[i].Running() {
+			a.log(e.Error())
+			return
+		}
+		stale, client := a.devices[i], a.client
+		a.connectionLog(fmt.Sprintf("编号%d：缓存未就绪（%v），按需重新扫描身份；不将扫描延迟直接报告为offline。", stale.Index, e))
+		a.work(func(ctx context.Context) error {
+			fresh, err := client.RecoverInstance(ctx, stale.Index)
+			if err != nil {
+				return err
+			}
+			a.ui(func() {
+				current := comboIndex(a.controls[202])
+				if current != i || current >= len(a.devices) || a.devices[current].Index != stale.Index {
+					return
+				}
+				updated := append([]ldplayer.Instance(nil), a.devices...)
+				updated[current] = fresh
+				a.showInstances(client, updated, true)
+				setText(a.controls[208], fmt.Sprintf("编号%d按需核验完成；其他实例为最近扫描结果；空闲扫描间隔12秒。", fresh.Index))
+				a.connectionLog(fmt.Sprintf("编号%d按需恢复于%s，身份重新核验完成", fresh.Index, time.Now().Format(time.RFC3339)))
+				a.pendingAction = 118
+				if enter {
+					a.pendingAction = 117
+				}
+			})
+			return nil
+		})
 		return
 	}
 	if !d.Running() || d.Serial == "" || d.AndroidID == "" {
@@ -116,7 +144,40 @@ func (a *app) startGame(enter bool) {
 		if enter {
 			id = 117
 		}
-		a.discoverGame(id)
+		// An existing mismatched identity must be explicitly rebound, never copied.
+		if _, exists := a.cfg.Games[key]; exists {
+			a.discoverGame(id)
+			return
+		}
+		saved := make(map[string]gameapp.Binding, len(a.cfg.Games))
+		for k, v := range a.cfg.Games {
+			saved[k] = v
+		}
+		client := a.client
+		a.work(func(ctx context.Context) error {
+			candidate, err := gameapp.Reuse(ctx, gameShell{client, d}, saved, key, d.AndroidID)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			a.ui(func() {
+				selected, e := a.selected()
+				if e != nil || selected.Index != d.Index {
+					return
+				}
+				if err != nil {
+					a.pendingGameDiscovery = id
+					return
+				}
+				if e := a.cfg.storeGame(a.root, d.Index, candidate); e != nil {
+					a.log(e.Error())
+					return
+				}
+				a.roleInstanceKey = ""
+				a.log(fmt.Sprintf("实例%d 已核验并保存相同游戏入口：%s", d.Index, candidate.String()))
+				a.pendingAction = id
+			})
+			return nil
+		})
 		return
 	}
 	role := comboIndex(a.controls[210]) + 1
@@ -264,7 +325,7 @@ func (c *gameSelector) populate() {
 	chosen, count := -1, 0
 	for i, a := range c.inv.Apps {
 		label := a.String()
-		if a.Package == c.inv.Foreground {
+		if a.Package == c.inv.Foreground && a.GameCandidate() {
 			label = "[当前前台] " + label
 			chosen = i
 			count++
@@ -290,22 +351,14 @@ func (c *gameSelector) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 			}
 			b := gameapp.Binding{Component: c.inv.Apps[i], AndroidID: c.d.AndroidID, Confirmed: true}
 			c.app.work(func(ctx context.Context) error {
-				if e := gameapp.VerifyBinding(ctx, c.shell, b, c.d.AndroidID); e != nil {
+				if e := gameapp.Confirm(ctx, c.shell, b, c.d.AndroidID); e != nil {
 					return e
 				}
 				c.app.ui(func() {
 					if c.app.gameSelector != c {
 						return
 					}
-					key := strconv.Itoa(c.d.Index)
-					old, exists := c.app.cfg.Games[key]
-					c.app.cfg.Games[key] = b
-					if e := c.app.cfg.Save(c.app.root); e != nil {
-						if exists {
-							c.app.cfg.Games[key] = old
-						} else {
-							delete(c.app.cfg.Games, key)
-						}
+					if e := c.app.cfg.storeGame(c.app.root, c.d.Index, b); e != nil {
 						c.app.log(e.Error())
 						return
 					}

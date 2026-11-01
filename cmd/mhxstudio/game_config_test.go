@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/ab393911/MHX-Studio-Updates/internal/gameapp"
@@ -55,5 +57,44 @@ func TestGroupLoginPreferencesAndUnknownSettingsSurviveSaveAndReload(t *testing.
 	got.GroupLoginRole = 6
 	if got.Validate() == nil {
 		t.Fatal("invalid group role saved")
+	}
+}
+
+func TestFiveInstanceBindingsSurviveRestartAndFailedSaveRollsBack(t *testing.T) {
+	root := t.TempDir()
+	c := defaults()
+	c.TargetRoles["1"] = 5
+	for i := 1; i <= 5; i++ {
+		b := gameapp.Binding{Component: gameapp.Component{Package: "com.example.game", Activity: ".Main"}, AndroidID: fmt.Sprintf("id%d", i), Confirmed: true}
+		if err := c.storeGame(root, i, b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := loadSettings(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 5; i++ {
+		b := got.Games[strconv.Itoa(i)]
+		if !b.Confirmed || b.AndroidID != fmt.Sprintf("id%d", i) {
+			t.Fatal(i, b)
+		}
+	}
+	if got.TargetRoles["1"] != 5 {
+		t.Fatal("role removed")
+	}
+	blocked := filepath.Join(t.TempDir(), "file")
+	if err = os.WriteFile(blocked, []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	old := got.Games["1"]
+	if err = got.storeGame(blocked, 1, gameapp.Binding{}); err == nil || got.Games["1"] != old {
+		t.Fatal("failed write changed existing binding", err)
+	}
+	if err = got.storeGame(blocked, 6, old); err == nil {
+		t.Fatal("expected save error")
+	}
+	if _, exists := got.Games["6"]; exists {
+		t.Fatal("failed new binding retained")
 	}
 }

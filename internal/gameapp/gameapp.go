@@ -129,8 +129,44 @@ func Discover(ctx context.Context, s Shell) (Inventory, error) {
 	p, _ := ReadForeground(ctx, s)
 	return Inventory{Apps: apps, Foreground: p}, nil
 }
+
+// System launchers and settings are never game candidates, including old saved bindings.
+func (c Component) GameCandidate() bool {
+	p := strings.ToLower(c.Package)
+	return c.Valid() && !strings.HasPrefix(p, "com.android.") && !strings.HasPrefix(p, "com.google.android.apps.nexuslauncher") && !strings.Contains(p, "launcher")
+}
+
+// Confirm requires current foreground evidence, not merely an installed launcher.
+func Confirm(ctx context.Context, s Shell, b Binding, androidID string) error {
+	if err := VerifyBinding(ctx, s, b, androidID); err != nil {
+		return err
+	}
+	return RequireForeground(ctx, s, b.Package)
+}
+
+// Reuse checks an explicitly confirmed, unique game component on the target device.
+// Never replace a target binding whose Android identity has changed.
+func Reuse(ctx context.Context, s Shell, saved map[string]Binding, key, androidID string) (Binding, error) {
+	if b, ok := saved[key]; ok {
+		return b, VerifyBinding(ctx, s, b, androidID)
+	}
+	candidates := map[string]Binding{}
+	for _, b := range saved {
+		if b.Confirmed && b.AndroidID != "" && b.Component.GameCandidate() {
+			candidates[b.Component.key()] = b
+		}
+	}
+	if len(candidates) != 1 {
+		return Binding{}, errors.New("没有唯一的已确认游戏，请在本实例打开游戏并确认")
+	}
+	for _, b := range candidates {
+		b.AndroidID = androidID
+		return b, VerifyBinding(ctx, s, b, androidID)
+	}
+	panic("unreachable")
+}
 func VerifyBinding(ctx context.Context, s Shell, b Binding, androidID string) error {
-	if !b.Confirmed || b.AndroidID == "" || b.AndroidID != androidID || !b.Component.Valid() {
+	if !b.Confirmed || b.AndroidID == "" || b.AndroidID != androidID || !b.Component.GameCandidate() {
 		return errors.New("游戏尚未绑定或设备身份已变化，请重新发现并确认游戏")
 	}
 	inv, e := Discover(ctx, s)

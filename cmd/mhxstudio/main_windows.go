@@ -98,6 +98,8 @@ type app struct {
 	cal                                               *calibration
 	healthPath, healthToken, healthVersion, smokePath string
 	healthDone                                        bool
+	pendingGameDiscovery                              int
+	connectionHistory                                 connectionHistory
 	nextScan                                          time.Time
 	lastInventory                                     string
 	groupSeeded                                       bool
@@ -269,6 +271,11 @@ func (a *app) work(f func(context.Context) error) {
 			a.updating = false
 			if a.closing {
 				destroyWindow.Call(a.hwnd)
+				return
+			}
+			if next := a.pendingGameDiscovery; next != 0 {
+				a.pendingGameDiscovery = 0
+				a.discoverGame(next)
 				return
 			}
 			if a.pendingAction != 0 {

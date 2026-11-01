@@ -98,6 +98,7 @@ func (a *app) showInstances(client ldplayer.Client, all []ldplayer.Instance, fin
 			previous = a.devices[i].Key()
 		}
 	}
+	client.OnConnection = func(event string) { a.ui(func() { a.connectionLog(event) }) }
 	a.client, a.devices = client, all
 	currentDir := strings.TrimSpace(text(a.controls[201]))
 	if client.Console != "" && (currentDir == "" || strings.EqualFold(currentDir, a.cfg.InstallDir) || strings.EqualFold(currentDir, filepath.Dir(client.Console))) {
@@ -139,7 +140,14 @@ func (a *app) showInstances(client ldplayer.Client, all []ldplayer.Instance, fin
 			a.groupSeeded = true
 		}
 	}
-	setText(a.controls[208], ldplayer.Summary(all)+"；空闲时每12秒自动刷新。")
+	if final {
+		for _, event := range a.connectionHistory.Observe(time.Now(), all) {
+			a.connectionLog(event)
+		}
+		setText(a.controls[208], ldplayer.Summary(all)+"；扫描完成 "+time.Now().Format("15:04:05")+"；空闲12秒后再扫描。")
+	} else {
+		setText(a.controls[208], ldplayer.Summary(all)+"；扫描中，ADB身份待本轮核验，暂不能操作。")
+	}
 	if final {
 		b, _ := json.Marshal(struct {
 			Console string
@@ -220,5 +228,24 @@ func (a *app) detectionDetails() {
 	}
 	if e := exec.Command("notepad.exe", path).Start(); e != nil {
 		a.log("打开检测报告失败：" + e.Error() + "；路径：" + path)
+	}
+}
+
+// Keep connection evidence beyond the bounded on-screen log and software restart.
+func (a *app) connectionLog(event string) {
+	a.log(event)
+	dir := filepath.Join(a.root, "diagnostics")
+	if e := os.MkdirAll(dir, 0700); e != nil {
+		a.log("连接记录保存失败：" + e.Error())
+		return
+	}
+	f, e := os.OpenFile(filepath.Join(dir, "adb-connections.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if e != nil {
+		a.log("连接记录保存失败：" + e.Error())
+		return
+	}
+	_, writeErr := fmt.Fprintln(f, time.Now().Format(time.RFC3339)+" "+event)
+	if e = errors.Join(writeErr, f.Close()); e != nil {
+		a.log("连接记录保存失败：" + e.Error())
 	}
 }

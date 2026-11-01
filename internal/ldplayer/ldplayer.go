@@ -146,10 +146,11 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 }
 
 type Client struct {
-	Console string
-	ADB     string
-	Runner  Runner
-	Server  string // optional read-only discovery via an existing local ADB server
+	Console      string
+	ADB          string
+	Runner       Runner
+	OnConnection func(string) // optional connection diagnostics; must be concurrency-safe
+	Server       string       // optional read-only discovery via an existing local ADB server
 }
 
 func (c Client) run(ctx context.Context, exe string, args ...string) ([]byte, error) {
@@ -190,7 +191,7 @@ func (c Client) Discover(ctx context.Context) ([]Instance, error) {
 	}
 	return c.Bind(ctx, all)
 }
-func (c Client) Verify(ctx context.Context, d Instance) error {
+func (c Client) verifyOnce(ctx context.Context, d Instance) error {
 	if d.Unmapped || c.Console == "" {
 		return errors.New("已发现 ADB 设备，但雷电实例编号未核对；没有进行游戏操作")
 	}
@@ -217,13 +218,44 @@ func (c Client) Verify(ctx context.Context, d Instance) error {
 	if e != nil {
 		return e
 	}
+	if e := adbOutputError(b); e != nil {
+		return e
+	}
 	if idFrom(string(b)) != d.AndroidID {
 		return errors.New("ADB identity changed; stopped")
 	}
 	if d.BootID != "" {
 		b, e = c.adb(ctx, d.Serial, "shell", "cat", "/proc/sys/kernel/random/boot_id")
-		if e != nil || bootFrom(string(b)) != d.BootID {
+		if e != nil {
+			return e
+		}
+		if bootFrom(string(b)) != d.BootID {
 			return errors.New("Android restarted or ADB binding changed; detect again")
+		}
+	}
+	return nil
+}
+
+// Re-read the vendor index identity after a transport recovery. Normal checks
+// retain the accepted command count; a scan already does this mapping in Bind.
+func (c Client) verifyIndexIdentity(ctx context.Context, d Instance) error {
+	b, e := c.run(ctx, c.Console, "adb", "--index", strconv.Itoa(d.Index), "--command", "shell settings get secure android_id")
+	if e != nil {
+		return e
+	}
+	if e := adbOutputError(b); e != nil {
+		return e
+	}
+	if idFrom(string(b)) != d.AndroidID {
+		return errors.New("instance Android identity changed; detect again")
+	}
+	if d.BootID != "" {
+		b, e = c.run(ctx, c.Console, "adb", "--index", strconv.Itoa(d.Index), "--command", "shell cat /proc/sys/kernel/random/boot_id")
+		if e != nil {
+			return e
+		}
+		if bootFrom(string(b)) != d.BootID {
+			return errors.New("instance boot identity changed; detect again")
 		}
 	}
 	return nil
