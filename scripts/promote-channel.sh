@@ -18,6 +18,7 @@ jq -e '.group_login_gui_fixture.passed == true and .group_login_gui_fixture.fixt
 jq -e '.group_login_gui_fixture.four_server_assets_gui == true and .group_login_gui_fixture.retired_order_controls_absent == true and .group_login_gui_fixture.no_real_delivery == true' dist/windows-tests.json > /dev/null
 jq -e '.group_login_gui_fixture.on_open_gui.passed == true and .group_login_gui_fixture.on_open_gui.no_button_click_after_reopen == true and .group_login_gui_fixture.on_open_gui.cold_five_start_adb_game_role == true and .group_login_gui_fixture.on_open_gui.real_game_tested == false' dist/windows-tests.json > /dev/null
 go run ./cmd/release -verify "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${MHX_VERSION}/update.json" -commit "$GITHUB_SHA" -version "$MHX_VERSION"
+jq -e --arg sha "$GITHUB_SHA" --arg version "$MHX_VERSION" '.passed == true and .source_commit == $sha and .version == $version and .previous_version == "3.5.0-preview.21" and .one_click_without_confirmation == true and .confirmation_clicks == 0 and .configuration_snapshot_verified == true and .new_gui_visible == true and .post_upgrade_five_launch_and_adb_fixture == true and .windows_game_tested == false' dist/preview21-live-gui-update.json > /dev/null
 # The updates ref is a separate channel branch. Main and every previous release remain intact.
 if ! gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/updates" > /dev/null 2>&1; then
   gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" -f ref='refs/heads/updates' -f sha="$GITHUB_SHA" > /dev/null
@@ -30,7 +31,7 @@ gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/preview.json" --input "
 # Confirm the exact client-facing channel, without a GitHub token.
 for attempt in 1 2 3 4 5 6; do
   if go run ./cmd/release -verify 'https://raw.githubusercontent.com/ab393911/MHX-Studio-Updates/updates/preview.json' -commit "$GITHUB_SHA" -version "$MHX_VERSION" -report dist/download-verification.json; then
-    gh release upload "v${MHX_VERSION}" dist/live-gui-update.json dist/one-click-gui-update.json dist/download-verification.json --repo "$GITHUB_REPOSITORY"
+    gh release upload "v${MHX_VERSION}" dist/live-gui-update.json dist/one-click-gui-update.json dist/preview21-live-gui-update.json dist/download-verification.json --repo "$GITHUB_REPOSITORY"
     exit 0
   fi
   sleep 5

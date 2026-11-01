@@ -60,7 +60,7 @@ func main() {
 	fail(e)
 	st, e := os.Stat(*exe)
 	fail(e)
-	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "持续开发测试版：取消昵称核对，按实例、区服、角色槽位和职业核验；接通固定队组队与八星打符/幻形测试。移除订单、发货和消息界面及相关切角色限制，中控台分别显示四区资产汇总，逐角色按整万银锭及整百功绩取较小值，重复扫描覆盖。余额自动读取与后续任务链仍未接通，不代表实时余额或真实游戏验收通过。以preview.21直升及故障恢复为当前基线，保留preview.19直升验证。", SourceCommit: *commit, WindowsTested: false}
+	m := update.Manifest{Schema: 1, Version: *ver, Platform: "windows-amd64", URL: "https://github.com/ab393911/MHX-Studio-Updates/releases/download/v" + *ver + "/MHXStudio.exe", SHA256: hash, Size: st.Size(), Notes: "持续开发测试版：取消昵称核对，按实例、区服、角色槽位和职业核验；接通固定队组队与八星打符/幻形测试。移除订单、发货和消息界面及相关切角色限制，中控台分别显示四区资产汇总，逐角色按整万银锭及整百功绩取较小值，重复扫描覆盖。新增银锭/功绩自动查询入库，并提供资产、聚福、仙盟战令/打工簿及当周据点识别单项测试；缺测与过期明确显示。真实游戏尚未验收；据点实战、交易行完整买卖、绑玉补充及完整角色轮转仍未接通。以preview.21直升及故障恢复为当前基线，保留preview.19直升验证。", SourceCommit: *commit, WindowsTested: false}
 	fail(m.Validate())
 	fail(os.MkdirAll(*out, 0700))
 	fail(filesafe.JSON(filepath.Join(*out, "update.json"), m))
@@ -91,6 +91,7 @@ func main() {
 	add("docs/GROUP_LOGIN_ACCEPTANCE.md", "GROUP_LOGIN_ACCEPTANCE.md")
 	add("docs/ON_OPEN_TEAM_ACCEPTANCE.md", "ON_OPEN_TEAM_ACCEPTANCE.md")
 	add("docs/CURRENT_FLOW.md", "CURRENT_FLOW.md")
+	add("docs/TEST_THIS_BUILD.md", "TEST_THIS_BUILD.md")
 	add(filepath.Join(*out, "update.json"), "update.json")
 	add(filepath.Join(*out, "SHA256SUMS.txt"), "SHA256SUMS.txt")
 	if *report != "" {

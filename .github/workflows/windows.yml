@@ -153,7 +153,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/mhx-studio-recovery' || startsWith(github.ref, 'refs/tags/v'))
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/mhx-studio-recovery' || startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/codex/mhx-startup-flow-20261030' && contains(github.event.head_commit.message, '[deliver-preview]')))
     needs: [portable-tests, windows]
     runs-on: ubuntu-latest
     permissions:
@@ -202,6 +202,13 @@ jobs:
           if ((Get-FileHash dist/previous-release.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'ab2fb36814a87d375dc3b45490eabefd81bae1d73a0390a9b2553b9044db9b16') { throw 'Published baseline SHA-256 mismatch' }
           go run ./cmd/windowsverify -old "$pwd/dist/previous-release.exe" -old-version '3.5.0-preview.19' -expect-one-click -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v${{ needs.windows.outputs.version }}/update.json' -version '${{ needs.windows.outputs.version }}' -emulator-fixture "$pwd/verification/ldfixture.exe" -out dist/live-gui-update.json
           if ($LASTEXITCODE) { throw 'Live GUI update test failed' }
+      - name: Verify published preview.21 upgrades through the candidate HTTPS manifest
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.21/MHXStudio.exe' -OutFile dist/published21.exe
+          if ((Get-FileHash dist/published21.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'b8c5d2c7bace05be05a332cba6afbc584600adee011635af6d509104aec05aa8') { throw 'Published preview.21 baseline SHA-256 mismatch' }
+          go run ./cmd/windowsverify -old "$pwd/dist/published21.exe" -old-version '3.5.0-preview.21' -expect-one-click -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v${{ needs.windows.outputs.version }}/update.json' -version '${{ needs.windows.outputs.version }}' -emulator-fixture "$pwd/verification/ldfixture.exe" -out dist/preview21-live-gui-update.json
+          if ($LASTEXITCODE) { throw 'preview.21 published GUI update failed' }
       - name: Verify the new updater requires exactly one click and no confirmation
         shell: pwsh
         run: |
@@ -214,6 +221,7 @@ jobs:
           path: |
             dist/live-gui-update.json
             dist/one-click-gui-update.json
+            dist/preview21-live-gui-update.json
             dist/legacy-before.png
             dist/legacy-after.png
             dist/one-click-before.png
