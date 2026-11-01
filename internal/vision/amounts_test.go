@@ -78,3 +78,40 @@ func TestFourNumericFieldsKeepIsolationAndAllowOCRBoxOverhang(t *testing.T) {
 		}
 	}
 }
+
+type fallbackAmountReader struct {
+	replies []string
+	calls   int
+}
+
+func (r *fallbackAmountReader) Read(ctx context.Context, b []byte) (Screen, error) {
+	text := r.replies[min(r.calls, len(r.replies)-1)]
+	r.calls++
+	return Screen{Lines: []Line{{Words: []Word{{Text: text, Bounds: automation.Rect{X: 20, Y: 15, W: 200, H: 30}}}}}}, ctx.Err()
+}
+func TestNumericFallbackRequiresTwoMatchingValidReadings(t *testing.T) {
+	im := image.NewRGBA(image.Rect(0, 0, 960, 540))
+	var b bytes.Buffer
+	_ = png.Encode(&b, im)
+	for _, c := range []struct {
+		replies []string
+		ok      bool
+	}{
+		{[]string{"32荨万", "32.7万", "32.7万"}, true},
+		{[]string{"32荨万", "32.7万", "32.1万"}, false},
+		{[]string{"32荨万", "32荨万"}, false},
+		{[]string{"32.7万"}, true},
+	} {
+		r := &fallbackAmountReader{replies: c.replies}
+		v, e := ReadAmounts(context.Background(), r, b.Bytes(), []automation.Rect{{X: 758, Y: 6, W: 56, H: 29}})
+		if (e == nil) != c.ok {
+			t.Fatal(c.replies, v, e)
+		}
+		if c.ok && (v[0].Value != 327000 || v[0].Exact) {
+			t.Fatal(v)
+		}
+		if r.calls > 3 {
+			t.Fatal("unbounded OCR retries")
+		}
+	}
+}

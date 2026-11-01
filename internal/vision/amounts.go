@@ -82,6 +82,9 @@ func (a Amount) RoundDown(unit int64) (int64, error) {
 // grade, or a market unit price as the listing's quantity. No screenshot file
 // or temporary external OCR service is involved.
 func ReadFields(ctx context.Context, reader Reader, frame []byte, areas []automation.Rect) ([]string, error) {
+	return readFields(ctx, reader, frame, areas, 0)
+}
+func readFields(ctx context.Context, reader Reader, frame []byte, areas []automation.Rect, threshold uint8) ([]string, error) {
 	if reader == nil || len(areas) == 0 || len(areas) > 4 {
 		return nil, errors.New("数字识别需要1到4个独立字段")
 	}
@@ -91,7 +94,11 @@ func ReadFields(ctx context.Context, reader Reader, frame []byte, areas []automa
 	}
 	canvas := image.NewNRGBA(image.Rect(0, 0, 960, 540))
 	for i := 0; i < len(canvas.Pix); i += 4 {
-		canvas.Pix[i], canvas.Pix[i+1], canvas.Pix[i+2], canvas.Pix[i+3] = 30, 30, 30, 255
+		background := uint8(30)
+		if threshold != 0 {
+			background = 255
+		}
+		canvas.Pix[i], canvas.Pix[i+1], canvas.Pix[i+2], canvas.Pix[i+3] = background, background, background, 255
 	}
 	var reads []automation.Rect
 	rowH := 540 / len(areas)
@@ -111,7 +118,17 @@ func ReadFields(ctx context.Context, reader Reader, frame []byte, areas []automa
 		for y := 0; y < dest.H; y++ {
 			for x := 0; x < dest.W; x++ {
 				rr, g, b, _ := img.At(r.X+x/scale, r.Y+y/scale).RGBA()
-				canvas.SetNRGBA(dest.X+x, dest.Y+y, color.NRGBA{uint8(rr >> 8), uint8(g >> 8), uint8(b >> 8), 255})
+				if threshold == 0 {
+					canvas.SetNRGBA(dest.X+x, dest.Y+y, color.NRGBA{uint8(rr >> 8), uint8(g >> 8), uint8(b >> 8), 255})
+				} else {
+					// Isolate the white UI lettering from the coloured HUD background.
+					// No character replacements or numeric inference are performed.
+					v := uint8(255)
+					if min(rr, g, b)>>8 >= uint32(threshold) {
+						v = 0
+					}
+					canvas.SetNRGBA(dest.X+x, dest.Y+y, color.NRGBA{v, v, v, 255})
+				}
 			}
 		}
 	}
@@ -141,11 +158,7 @@ func ReadFields(ctx context.Context, reader Reader, frame []byte, areas []automa
 	return out, nil
 }
 
-func ReadAmounts(ctx context.Context, reader Reader, frame []byte, areas []automation.Rect) ([]Amount, error) {
-	raw, e := ReadFields(ctx, reader, frame, areas)
-	if e != nil {
-		return nil, e
-	}
+func parseAmounts(raw []string) ([]Amount, error) {
 	var out []Amount
 	for _, text := range raw {
 		n, e := ParseAmount(text)
@@ -155,4 +168,47 @@ func ReadAmounts(ctx context.Context, reader Reader, frame []byte, areas []autom
 		out = append(out, n)
 	}
 	return out, nil
+}
+func ReadAmounts(ctx context.Context, reader Reader, frame []byte, areas []automation.Rect) ([]Amount, error) {
+	raw, e := ReadFields(ctx, reader, frame, areas)
+	if e != nil {
+		return nil, e
+	}
+	direct, e := parseAmounts(raw)
+	if e == nil {
+		return direct, nil
+	}
+	// An invalid glyph is never silently changed to a digit. Two independently
+	// thresholded images must produce identical valid values and precision.
+	var confirmed []Amount
+	for _, threshold := range []uint8{180, 210} {
+		alternate, err := readFields(ctx, reader, frame, areas, threshold)
+		if err != nil {
+			return nil, err
+		}
+		amounts, err := parseAmounts(alternate)
+		if err != nil {
+			return nil, errors.New("数字原图和二值图均未读清，不猜测余额")
+		}
+		if confirmed == nil {
+			confirmed = amounts
+			continue
+		}
+		for i, n := range amounts {
+			p := confirmed[i]
+			if p.Value != n.Value || p.Exact != n.Exact || p.Lower != n.Lower || p.Upper != n.Upper {
+				return nil, errors.New("两种数字图像读数不一致，不写余额")
+			}
+		}
+	}
+	// Even a valid field from the original must agree with fallback results.
+	for i, text := range raw {
+		if p, err := ParseAmount(text); err == nil {
+			n := confirmed[i]
+			if p.Value != n.Value || p.Exact != n.Exact || p.Lower != n.Lower || p.Upper != n.Upper {
+				return nil, errors.New("数字原图与二值图冲突，不写余额")
+			}
+		}
+	}
+	return confirmed, nil
 }
