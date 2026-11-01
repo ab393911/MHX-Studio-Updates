@@ -88,12 +88,20 @@ func (c Client) Bind(ctx context.Context, inventory []Instance) ([]Instance, err
 			all[i].ConnectionError = "实例 ADB 未就绪：" + e.Error()
 			return
 		}
-		if e = adbOutputError(b); e != nil {
+		if e = adbOutputError([]byte(b)); e != nil {
 			all[i].ConnectionError = "实例ADB明确报告传输故障：" + e.Error()
 			return
 		}
 		ids[i].android = idFrom(string(b))
 		b, e = c.run(ctx, c.Console, "adb", "--index", strconv.Itoa(x.Index), "--command", "shell cat /proc/sys/kernel/random/boot_id")
+		if e == nil {
+			e = adbOutputError([]byte(b))
+		}
+		if transientADB(e) {
+			ids[i] = identity{}
+			all[i].ConnectionError = "实例ADB身份读取期间掉线：" + e.Error()
+			return
+		}
 		if e == nil {
 			ids[i].boot = bootFrom(string(b))
 		}
@@ -151,6 +159,13 @@ func (c Client) Bind(ctx context.Context, inventory []Instance) ([]Instance, err
 		}
 		direct[i].android = idFrom(string(b))
 		b, e = read(ctx, serials[i], "cat /proc/sys/kernel/random/boot_id")
+		if e == nil {
+			e = adbOutputError([]byte(b))
+		}
+		if transientADB(e) {
+			direct[i] = identity{}
+			return
+		}
 		if e == nil {
 			direct[i].boot = bootFrom(string(b))
 		}

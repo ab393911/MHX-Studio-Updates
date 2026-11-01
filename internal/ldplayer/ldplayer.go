@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -146,14 +147,18 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 }
 
 type Client struct {
-	Console      string
-	ADB          string
-	Runner       Runner
-	OnConnection func(string) // optional connection diagnostics; must be concurrency-safe
-	Server       string       // optional read-only discovery via an existing local ADB server
+	actionRecovery *atomic.Bool
+	Console        string
+	ADB            string
+	Runner         Runner
+	OnConnection   func(string) // optional connection diagnostics; must be concurrency-safe
+	Server         string       // optional read-only discovery via an existing local ADB server
 }
 
 func (c Client) run(ctx context.Context, exe string, args ...string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	r := c.Runner
 	if r == nil {
 		r = OSRunner{}
@@ -229,6 +234,9 @@ func (c Client) verifyOnce(ctx context.Context, d Instance) error {
 		if e != nil {
 			return e
 		}
+		if e := adbOutputError(b); e != nil {
+			return e
+		}
 		if bootFrom(string(b)) != d.BootID {
 			return errors.New("Android restarted or ADB binding changed; detect again")
 		}
@@ -254,6 +262,9 @@ func (c Client) verifyIndexIdentity(ctx context.Context, d Instance) error {
 		if e != nil {
 			return e
 		}
+		if e := adbOutputError(b); e != nil {
+			return e
+		}
 		if bootFrom(string(b)) != d.BootID {
 			return errors.New("instance boot identity changed; detect again")
 		}
@@ -270,9 +281,48 @@ func (c Client) Tap(ctx context.Context, d Instance, x, y int) error {
 	if x < 0 || x >= 960 || y < 0 || y >= 540 {
 		return errors.New("tap outside 960x540")
 	}
+	c = c.ForAction()
 	if e := c.Verify(ctx, d); e != nil {
 		return e
 	}
-	_, e := c.adb(ctx, d.Serial, "shell", "input", "tap", strconv.Itoa(x), strconv.Itoa(y))
+	_, e := actionResult(c.adb(ctx, d.Serial, "shell", "input", "tap", strconv.Itoa(x), strconv.Itoa(y)))
 	return e
+}
+
+// Shell verifies identity and dispatches the requested command once. Only Verify
+// retries read-only checks; a failed/ambiguous action is never replayed here.
+func (c Client) Shell(ctx context.Context, d Instance, args ...string) ([]byte, error) {
+	isAction := len(args) > 0 && (args[0] == "input" || args[0] == "am")
+	if isAction {
+		c = c.ForAction()
+	}
+	if err := c.Verify(ctx, d); err != nil {
+		return nil, err
+	}
+	b, err := c.adb(ctx, d.Serial, append([]string{"shell"}, args...)...)
+	if isAction {
+		return actionResult(b, err)
+	}
+	return b, err
+}
+
+// A foreground check and its action share a sticky barrier. ReadForeground may
+// fall back to another query; that must not erase an observed disconnect.
+func (c Client) ForAction() Client {
+	if c.actionRecovery == nil {
+		c.actionRecovery = &atomic.Bool{}
+	}
+	return c
+}
+
+var ErrActionOutcomeUnknown = errors.New("动作已发送但结果未确认；禁止自动重放")
+
+func actionResult(b []byte, err error) ([]byte, error) {
+	if err == nil {
+		err = adbOutputError(b)
+	}
+	if err != nil {
+		return b, fmt.Errorf("%w: %w", ErrActionOutcomeUnknown, err)
+	}
+	return b, nil
 }

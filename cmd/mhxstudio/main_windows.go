@@ -98,7 +98,7 @@ type app struct {
 	cal                                               *calibration
 	healthPath, healthToken, healthVersion, smokePath string
 	healthDone                                        bool
-	pendingGameDiscovery                              int
+	pendingGameContinuation                           *gameContinuation
 	connectionHistory                                 connectionHistory
 	nextScan                                          time.Time
 	lastInventory                                     string
@@ -253,8 +253,13 @@ func (a *app) work(f func(context.Context) error) {
 		if err != nil && ctx.Err() != nil {
 			err = ctx.Err()
 		}
-		cancel()
 		a.ui(func() {
+			defer cancel()
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			}
+			continuation := a.pendingGameContinuation
+			a.pendingGameContinuation = nil
 			a.busy.Store(false)
 			a.cancel = nil
 			a.backgroundScan = false
@@ -273,15 +278,19 @@ func (a *app) work(f func(context.Context) error) {
 				destroyWindow.Call(a.hwnd)
 				return
 			}
-			if next := a.pendingGameDiscovery; next != 0 {
-				a.pendingGameDiscovery = 0
-				a.discoverGame(next)
-				return
-			}
+
 			if a.pendingAction != 0 {
 				id := a.pendingAction
 				a.pendingAction = 0
 				a.handle(id)
+				return
+			}
+			if err == nil && continuation.Take(a.currentGameTarget()) {
+				if continuation.Discover {
+					a.discoverGame(continuation.Action)
+				} else {
+					a.handle(continuation.Action)
+				}
 				return
 			}
 			if id := a.pendingStudioAction; id != 0 && a.workbench != nil {
@@ -672,6 +681,7 @@ func (a *app) handle(id int) {
 	case 106:
 		a.openWorkbench()
 	case 107:
+		a.pendingGameContinuation = nil
 		a.pendingAction = 0
 		a.pendingStudioAction = 0
 		if a.cancel != nil {

@@ -24,19 +24,7 @@ type gameShell struct {
 }
 
 func (s gameShell) Shell(ctx context.Context, args ...string) ([]byte, error) {
-	if e := s.client.Verify(ctx, s.device); e != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, e
-	}
-	sub, cancel := context.WithTimeout(ctx, 12*time.Second)
-	defer cancel()
-	r := s.client.Runner
-	if r == nil {
-		r = ldplayer.OSRunner{}
-	}
-	return r.Run(sub, s.client.ADB, append([]string{"-s", s.device.Serial, "shell"}, args...)...)
+	return s.client.Shell(ctx, s.device, args...)
 }
 
 type gameDevice struct {
@@ -60,10 +48,12 @@ func (d *gameDevice) Capture(ctx context.Context) ([]byte, error) {
 	return b, e
 }
 func (d *gameDevice) Tap(ctx context.Context, x, y int) error {
-	if e := gameapp.RequireForeground(ctx, d.shell, d.pkg); e != nil {
+	client := d.boundDevice.client.ForAction()
+	shell := gameShell{client, d.boundDevice.device}
+	if e := gameapp.RequireForeground(ctx, shell, d.pkg); e != nil {
 		return e
 	}
-	e := d.boundDevice.Tap(ctx, x, y)
+	e := client.Tap(ctx, d.boundDevice.device, x, y)
 	if e != nil && ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -95,7 +85,26 @@ func (a *app) gameStatus(d ldplayer.Instance, role int, page, step string) {
 		setText(a.controls[211], fmt.Sprintf("当前模拟器：%d；目标角色：%d；页面：%s；步骤：%s", d.Index, role, page, step))
 	})
 }
+func (a *app) currentGameTarget() gameTarget {
+	i := comboIndex(a.controls[202])
+	if i < 0 || i >= len(a.devices) {
+		return gameTarget{Index: -1}
+	}
+	return targetForGame(a.client, a.devices[i], comboIndex(a.controls[210])+1)
+}
+func (a *app) gameUI(ctx context.Context, target gameTarget, f func()) {
+	a.ui(func() {
+		gate := gameContinuation{Context: ctx, Target: target}
+		if !a.closing {
+			gate.Apply(a.currentGameTarget(), f)
+		}
+	})
+}
+func (a *app) continueGame(ctx context.Context, action int, discover bool) {
+	a.pendingGameContinuation = &gameContinuation{Context: ctx, Target: a.currentGameTarget(), Action: action, Discover: discover}
+}
 func (a *app) startGame(enter bool) {
+	request := a.currentGameTarget()
 	if e := a.save(); e != nil {
 		a.log(e.Error())
 		return
@@ -114,7 +123,7 @@ func (a *app) startGame(enter bool) {
 			if err != nil {
 				return err
 			}
-			a.ui(func() {
+			a.gameUI(ctx, request, func() {
 				current := comboIndex(a.controls[202])
 				if current != i || current >= len(a.devices) || a.devices[current].Index != stale.Index {
 					return
@@ -124,10 +133,11 @@ func (a *app) startGame(enter bool) {
 				a.showInstances(client, updated, true)
 				setText(a.controls[208], fmt.Sprintf("编号%d按需核验完成；其他实例为最近扫描结果；空闲扫描间隔12秒。", fresh.Index))
 				a.connectionLog(fmt.Sprintf("编号%d按需恢复于%s，身份重新核验完成", fresh.Index, time.Now().Format(time.RFC3339)))
-				a.pendingAction = 118
+				action := 118
 				if enter {
-					a.pendingAction = 117
+					action = 117
 				}
+				a.continueGame(ctx, action, false)
 			})
 			return nil
 		})
@@ -139,7 +149,7 @@ func (a *app) startGame(enter bool) {
 	}
 	key := strconv.Itoa(d.Index)
 	b := a.cfg.Games[key]
-	if !b.Confirmed || b.AndroidID != d.AndroidID {
+	if !b.Confirmed || b.AndroidID != d.AndroidID || !b.Component.GameCandidate() {
 		id := 118
 		if enter {
 			id = 117
@@ -159,13 +169,13 @@ func (a *app) startGame(enter bool) {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			a.ui(func() {
+			a.gameUI(ctx, request, func() {
 				selected, e := a.selected()
 				if e != nil || selected.Index != d.Index {
 					return
 				}
 				if err != nil {
-					a.pendingGameDiscovery = id
+					a.continueGame(ctx, id, true)
 					return
 				}
 				if e := a.cfg.storeGame(a.root, d.Index, candidate); e != nil {
@@ -174,7 +184,7 @@ func (a *app) startGame(enter bool) {
 				}
 				a.roleInstanceKey = ""
 				a.log(fmt.Sprintf("实例%d 已核验并保存相同游戏入口：%s", d.Index, candidate.String()))
-				a.pendingAction = id
+				a.continueGame(ctx, id, false)
 			})
 			return nil
 		})
@@ -285,13 +295,14 @@ func (a *app) discoverGame(next int) {
 	if a.gameSelector != nil {
 		return
 	}
+	request := a.currentGameTarget()
 	shell := gameShell{a.client, d}
 	a.work(func(ctx context.Context) error {
 		inv, e := gameapp.Discover(ctx, shell)
 		if e != nil {
 			return e
 		}
-		a.ui(func() {
+		a.gameUI(ctx, request, func() {
 			c := &gameSelector{app: a, d: d, inv: inv, next: next, shell: shell}
 			a.gameSelector = c
 			c.open()
@@ -349,12 +360,13 @@ func (c *gameSelector) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 				c.app.info("请先选择游戏入口，或在模拟器内打开游戏后重新读取。")
 				return 0
 			}
+			request := c.app.currentGameTarget()
 			b := gameapp.Binding{Component: c.inv.Apps[i], AndroidID: c.d.AndroidID, Confirmed: true}
 			c.app.work(func(ctx context.Context) error {
 				if e := gameapp.Confirm(ctx, c.shell, b, c.d.AndroidID); e != nil {
 					return e
 				}
-				c.app.ui(func() {
+				c.app.gameUI(ctx, request, func() {
 					if c.app.gameSelector != c {
 						return
 					}
@@ -364,18 +376,21 @@ func (c *gameSelector) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 					}
 					c.app.log(fmt.Sprintf("实例%d 已由用户确认游戏：%s；设备和启动入口已核验。", c.d.Index, b.Component.String()))
 					c.app.roleInstanceKey = ""
-					c.app.pendingAction = c.next
+					if c.next != 0 {
+						c.app.continueGame(ctx, c.next, false)
+					}
 					destroyWindow.Call(c.hwnd)
 				})
 				return nil
 			})
 		case 402:
+			request := c.app.currentGameTarget()
 			c.app.work(func(ctx context.Context) error {
 				inv, e := gameapp.Discover(ctx, c.shell)
 				if e != nil {
 					return e
 				}
-				c.app.ui(func() {
+				c.app.gameUI(ctx, request, func() {
 					if c.app.gameSelector == c {
 						c.inv = inv
 						c.populate()
@@ -392,6 +407,7 @@ func (c *gameSelector) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 			c.app.cancel()
 		}
 		c.app.pendingAction = 0
+		c.app.pendingGameContinuation = nil
 		destroyWindow.Call(h)
 		return 0
 	case wmDestroy:
@@ -452,9 +468,10 @@ func (d *gameDevice) Swipe(ctx context.Context, x1, y1, x2, y2 int, duration tim
 	if x1 < 0 || x1 >= 960 || x2 < 0 || x2 >= 960 || y1 < 0 || y1 >= 540 || y2 < 0 || y2 >= 540 || duration < 100*time.Millisecond || duration > time.Second {
 		return errors.New("滚动范围无效")
 	}
-	if e := gameapp.RequireForeground(ctx, d.shell, d.pkg); e != nil {
+	shell := gameShell{d.boundDevice.client.ForAction(), d.boundDevice.device}
+	if e := gameapp.RequireForeground(ctx, shell, d.pkg); e != nil {
 		return e
 	}
-	_, e := d.shell.Shell(ctx, "input", "touchscreen", "swipe", strconv.Itoa(x1), strconv.Itoa(y1), strconv.Itoa(x2), strconv.Itoa(y2), strconv.Itoa(int(duration/time.Millisecond)))
+	_, e := shell.Shell(ctx, "input", "touchscreen", "swipe", strconv.Itoa(x1), strconv.Itoa(y1), strconv.Itoa(x2), strconv.Itoa(y2), strconv.Itoa(int(duration/time.Millisecond)))
 	return e
 }
