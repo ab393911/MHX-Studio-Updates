@@ -69,6 +69,19 @@ func (a *app) runTaskMode(ctx context.Context, ready login.Report, devices []ldp
 	}
 	if mode != "chain" {
 		switch mode {
+		case "market_inspect":
+			report, e := taskflow.InspectMarket(ctx, actors, leader)
+			if saved := filesafe.JSON(filepath.Join(a.root, "profiles", "market-quote-last.json"), report); saved != nil {
+				return errors.Join(e, saved)
+			}
+			if e == nil && len(report.Actors) == 1 && report.Actors[0].Quote != nil {
+				q := report.Actors[0].Quote
+				a.ui(func() {
+					setText(a.controls[211], fmt.Sprintf("交易行报价：%s；最低单价%d银锭，当前单价%d，库存%d；仅核对，未上架。", q.Item, q.Lowest, q.CurrentUnit, q.Owned))
+				})
+			}
+			return e
+
 		case "stronghold_prepare":
 			report, e := taskflow.InspectStronghold(ctx, actors, leader)
 			if saved := filesafe.JSON(filepath.Join(a.root, "profiles", "stronghold-inspection-last.json"), report); saved != nil {

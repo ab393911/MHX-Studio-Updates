@@ -14,6 +14,7 @@ type ModuleActor struct {
 	Part     Part          `json:"part"`
 	Assets   *AssetReading `json:"assets,omitempty"`
 	Error    string        `json:"error,omitempty"`
+	Quote    *MarketQuote  `json:"quote,omitempty"`
 	Target   string        `json:"target,omitempty"`
 }
 type ModuleReport struct {

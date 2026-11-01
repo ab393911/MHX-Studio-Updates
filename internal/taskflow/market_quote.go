@@ -5,9 +5,11 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/ab393911/MHX-Studio-Updates/internal/automation"
+	"github.com/ab393911/MHX-Studio-Updates/internal/studio"
 	"github.com/ab393911/MHX-Studio-Updates/internal/vision"
 )
 
@@ -15,6 +17,7 @@ import (
 // controller must separately verify item identity, exclusion, stock, legal price
 // step, minimum, final fields and the actual result before recording success.
 type MarketQuote struct {
+	Item                                 string
 	Lowest, CurrentUnit, Quantity, Owned int64
 	OfferPrices                          []int64
 	Currency                             string
@@ -59,12 +62,17 @@ func quoteAreas() []automation.Rect {
 			a = append(a, automation.Rect{X: 263 + col*179, Y: 178 + row*86, W: 58, H: 26})
 		}
 	}
-	return append(a, automation.Rect{X: 630, Y: 337, W: 52, H: 28}, automation.Rect{X: 624, Y: 285, W: 46, H: 30}, automation.Rect{X: 753, Y: 257, W: 24, H: 26})
+	return append(a, automation.Rect{X: 630, Y: 337, W: 52, H: 28}, automation.Rect{X: 624, Y: 285, W: 46, H: 30}, automation.Rect{X: 753, Y: 257, W: 50, H: 26})
 }
 func (c *controller) readMarketQuote(ctx context.Context, s snapshot) (MarketQuote, error) {
 	out := MarketQuote{Currency: "silver_ingot", ScreenSHA: s.sha, ObservedAt: s.at}
 	if e := listingPage(s); e != nil {
 		return out, e
+	}
+	name := strings.Split(s.ocr.Text(automation.Rect{X: 610, Y: 102, W: 150, H: 39}), "\n")[0]
+	out.Item = vision.Normal(name)
+	if out.Item == "" || len([]rune(out.Item)) > 32 {
+		return out, errors.New("当前上架物品名未读清")
 	}
 	if !marketSilver(s) {
 		return out, errors.New("单价旁币种不是截图核验的蓝白银锭；不读取为卖价")
@@ -125,6 +133,9 @@ func (c *controller) inspectMarketQuote(ctx context.Context) (MarketQuote, error
 	if e != nil {
 		return b, e
 	}
+	if a.Item != b.Item {
+		return b, errors.New("两次报价物品不同，不生成报价")
+	}
 	if a.CurrentUnit != b.CurrentUnit || a.Quantity != b.Quantity || a.Owned != b.Owned {
 		return b, errors.New("上架字段在两次观察间变化，不生成报价")
 	}
@@ -134,4 +145,74 @@ func (c *controller) inspectMarketQuote(ctx context.Context) (MarketQuote, error
 		}
 	}
 	return b, nil
+}
+
+func marketShelf(s snapshot) error {
+	if e := title("商行")(s); e != nil {
+		return e
+	}
+	if !has(s, "出售", automation.Rect{X: 175, Y: 48, W: 135, H: 45}) || !has(s, "我的货架", automation.Rect{X: 525, Y: 105, W: 160, H: 40}) || !has(s, "我的订单", automation.Rect{X: 850, Y: 450, W: 100, H: 65}) {
+		return errors.New("商行出售货架未核验")
+	}
+	return nil
+}
+func marketHome(s snapshot) error {
+	if e := title("商行")(s); e != nil {
+		return e
+	}
+	if !has(s, "购买", automation.Rect{X: 40, Y: 48, W: 130, H: 45}) || !has(s, "出售", automation.Rect{X: 175, Y: 48, W: 135, H: 45}) {
+		return errors.New("不是商行购买/出售页面")
+	}
+	return nil
+}
+
+// InspectMarket opens only a quote draft for the first visible item, then
+// returns to the main screen. It never submits a listing, cancels an order,
+// collects proceeds, or completes the market task in SQLite.
+func InspectMarket(ctx context.Context, actors []Actor, leader int) (report ModuleReport, err error) {
+	report.Module = "market_inspect"
+	controls, lead, e := validateActors(actors, leader)
+	if e != nil {
+		return report, e
+	}
+	c := controls[lead]
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	result := ModuleActor{Instance: c.Instance, Part: Part{State: studio.Review, Reason: "quote_only_not_market_completion"}}
+	defer func() {
+		if err != nil {
+			result.Error = err.Error()
+			if c.OnError != nil && ctx.Err() != context.Canceled {
+				c.OnError(c.last, err)
+			}
+		}
+		report.Actors = append(report.Actors, result)
+		report.Verified = err == nil
+	}()
+	if _, err = c.await(ctx, c.game, 8*time.Second); err != nil {
+		return report, err
+	}
+	if _, err = c.tap(ctx, c.game, textButton("交易", whole), marketHome); err != nil {
+		return report, err
+	}
+	if _, err = c.tap(ctx, marketHome, textButton("出售", automation.Rect{X: 175, Y: 48, W: 135, H: 45}), marketShelf); err != nil {
+		return report, err
+	}
+	if _, err = c.tap(ctx, marketShelf, fixedButton(automation.Rect{X: 181, Y: 117, W: 46, H: 42}), listingPage); err != nil {
+		return report, err
+	}
+	quote, e := c.inspectMarketQuote(ctx)
+	if e != nil {
+		return report, e
+	}
+	result.Quote = &quote
+	result.Target = quote.Item
+	if _, err = c.tap(ctx, listingPage, fixedButton(automation.Rect{X: 778, Y: 51, W: 28, H: 28}), marketShelf); err != nil {
+		return report, err
+	}
+	if _, err = c.tap(ctx, marketShelf, fixedButton(automation.Rect{X: 25, Y: 8, W: 30, H: 26}), c.game); err != nil {
+		return report, err
+	}
+	result.Part.ScreenSHA = quote.ScreenSHA
+	return report, nil
 }

@@ -101,7 +101,7 @@ func (p *workbench) openGroupLogin() {
 	}
 	child(hwnd, "STATIC", "测试项目", 18, 523, 85, 25, 0, 0)
 	g.taskMode = child(hwnd, "COMBOBOX", "", 110, 518, 650, 180, 3, 542)
-	for _, name := range []string{"组队→八星→资产→后续计划", "只读取当前五角色银锭/功绩", "只测聚福激活", "只测仙盟战令/打工簿", "只识别本周赛季据点"} {
+	for _, name := range []string{"组队→八星→资产→后续计划", "只读取当前五角色银锭/功绩", "只测聚福激活", "只测仙盟战令/打工簿", "只识别本周赛季据点", "只核对队长交易行报价（不上架）"} {
 		comboAdd(g.taskMode, name)
 	}
 	send(g.taskMode, 0x14E, 0, 0)
@@ -169,7 +169,7 @@ func (g *groupLoginPanel) start() {
 		return
 	}
 	needTasks := send(controlOf(g.hwnd, 540), 0xF0, 0, 0) == 1
-	modes := []string{"chain", "assets", "fortune", "battle_pass", "stronghold_prepare"}
+	modes := []string{"chain", "assets", "fortune", "battle_pass", "stronghold_prepare", "market_inspect"}
 	modeIndex := comboIndex(g.taskMode)
 	if modeIndex < 0 || modeIndex >= len(modes) {
 		setText(g.status, "请选择测试项目")
@@ -233,7 +233,9 @@ func (g *groupLoginPanel) start() {
 			if report.Ready && e == nil {
 				setText(g.status, "五台同槽位角色及本次区服图像依据已复核；仅登录准备完成，未组队、未完成任务。")
 				if needTasks {
-					if mode == "stronghold_prepare" {
+					if mode == "market_inspect" {
+						setText(g.status, "交易行报价检查已结束，结果见主窗口；没有上架、下架或领取收益。")
+					} else if mode == "stronghold_prepare" {
 						setText(g.status, "本周赛季首领识别已结束；首领名称见主窗口，未执行挑战。")
 					} else {
 						setText(g.status, "所选测试已核验结束；资产测试的成功读数可在工作台四区统计中查看。")
