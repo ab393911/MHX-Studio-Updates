@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -70,6 +71,23 @@ func onOpenGUI(exe, install, data, version, out string, ids []int) map[string]an
 	if saved.Startup == nil || !saved.Startup.Enabled || saved.Startup.Target.Role != 3 || saved.Startup.RunTasks {
 		fail(fmt.Errorf("incorrect saved login-only plan %+v", saved))
 	}
+	// The module selector must never silently persist a full consumptive chain.
+	originalConfig, e := os.ReadFile(filepath.Join(data2, "config.json"))
+	fail(e)
+	click(g, 540)
+	user.NewProc("SendMessageW").Call(control(g, 542), 0x14E, 1, 0)
+	click(g, 539)
+	if !strings.Contains(readText(control(g, 536)), "单项测试不能保存") {
+		fail(fmt.Errorf("single item was saved as full chain: %s", readText(control(g, 536))))
+	}
+	afterRejected, e := os.ReadFile(filepath.Join(data2, "config.json"))
+	fail(e)
+	if !bytes.Equal(originalConfig, afterRejected) {
+		fail(fmt.Errorf("rejected single-item save changed config"))
+	}
+	click(g, 540)
+	user.NewProc("SendMessageW").Call(control(g, 542), 0x14E, 0, 0)
+	click(g, 539)
 	fail(captureWindow(g, filepath.Join(out, "on-open-settings-gui-preview.png")))
 	closeTitle(groupTitle)
 	closeTitle(panelTitle)
