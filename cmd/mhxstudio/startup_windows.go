@@ -44,6 +44,10 @@ func (g *groupLoginPanel) saveOnOpen() {
 	spec := login.Spec{Server: strings.TrimSpace(text(g.server)), Role: comboIndex(g.role) + 1}
 	p := login.StartupPlan{Enabled: true, Console: g.app.client.Console, Target: spec}
 	p.RunTasks = send(controlOf(g.hwnd, 540), 0xF0, 0, 0) == 1
+	if e := validateSavedTaskMode(p.RunTasks, comboIndex(g.taskMode)); e != nil {
+		setText(g.status, e.Error())
+		return
+	}
 	if p.RunTasks {
 		if _, e := g.app.stateStore.LatestPlan(); e != nil {
 			setText(g.status, "先建立持久化五开计划，避免每次打开重复消耗；"+e.Error())

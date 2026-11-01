@@ -44,51 +44,11 @@ jobs:
           go-version: '1.26.10'
           cache: false
       - run: go vet ./...
-      - name: Provision Chinese OCR on the disposable Windows test runner
-        timeout-minutes: 20
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force dist | Out-Null
-          $report = [ordered]@{ status='preparing'; basic=$null; ocr=$null; error=$null; started_at=[DateTime]::UtcNow.ToString('o') }
-          function Save-ProvisionReport { $report | ConvertTo-Json | Set-Content -Encoding utf8 dist/ocr-provision.json }
-          Save-ProvisionReport
-          try {
-            # Language features depend on their Basic language capability.
-            # This modifies only the disposable CI VM, never the user's PC.
-            foreach ($kind in @('Basic', 'OCR')) {
-              $name = "Language.$kind~~~zh-CN~0.0.1.0"
-              $cap = Get-WindowsCapability -Online -Name $name -ErrorAction Stop
-              $report.status = "checking-$kind"
-              $report[$kind.ToLowerInvariant()] = [string]$cap.State
-              Save-ProvisionReport
-              if ($cap.State -ne 'Installed') {
-                $report.status = "installing-$kind"
-                Save-ProvisionReport
-                Write-Host "Installing $name from Windows Update on the test runner"
-                Add-WindowsCapability -Online -Name $name -ErrorAction Stop | Out-Null
-              }
-              $cap = Get-WindowsCapability -Online -Name $name -ErrorAction Stop
-              $report[$kind.ToLowerInvariant()] = [string]$cap.State
-              Save-ProvisionReport
-              if ($cap.State -ne 'Installed') { throw "$name was not installed" }
-            }
-            $report.status = 'installed'
-          } catch {
-            $report.status = 'failed'
-            $report.error = $_.Exception.Message
-            throw
-          } finally {
-            Save-ProvisionReport
-            if (Test-Path "$env:windir/Logs/DISM/dism.log") {
-              Get-Content "$env:windir/Logs/DISM/dism.log" -Tail 200 | Set-Content -Encoding utf8 dist/ocr-provision-dism.log
-            }
-          }
       - name: Verify native Windows OCR bridge
         run: go test -count=1 -v -run '^TestNativeWindowsOCR' ./internal/vision
         env:
           MHX_OCR_REPORT: ${{ github.workspace }}\dist\native-ocr-capability.json
-      - run: go test -count=1 -skip '^TestNativeWindowsOCR' ./...
+      - run: go test -count=1 -skip '^TestNativeWindows(OCR|AssetAmounts)' ./...
       - name: Build Windows x64 GUI and previous-version test binary
         id: build
         shell: pwsh
@@ -118,6 +78,9 @@ jobs:
         run: |
           go run ./cmd/windowsverify -old "$pwd/dist/old-test.exe" -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '${{ steps.build.outputs.version }}' -published19 "$pwd/dist/published19.exe" -published21 "$pwd/dist/published21.exe" -out dist/windows-tests.json
           if ($LASTEXITCODE) { throw 'Native Windows tests failed' }
+          $report = Get-Content dist/windows-tests.json -Raw | ConvertFrom-Json
+          $report | Add-Member -NotePropertyName currency_fixture_acceptance -NotePropertyValue 'separate_experimental_job_not_a_core_pass' -Force
+          $report | ConvertTo-Json -Depth 30 | Set-Content -Encoding utf8 dist/windows-tests.json
       - name: Package verified preview
         shell: pwsh
         run: |
@@ -151,6 +114,33 @@ jobs:
             dist/old-test.exe
             dist/ldfixture.exe
           if-no-files-found: error
+
+  experimental-chinese-currency:
+    # User requested a machine-test preview before new game features are fully
+    # accepted. Keep this actual fixture test visible and independent; its
+    # result must never be reported as a passed core test or real-game approval.
+    continue-on-error: true
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Prepare disposable Chinese OCR test VM
+        timeout-minutes: 20
+        shell: pwsh
+        run: ./tools/Prepare-TestChineseOCR.ps1
+      - name: Validate actual game currency fields (experimental acceptance)
+        run: go test -count=1 -v -run '^TestNativeWindowsAssetAmounts$' ./internal/taskflow
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: experimental-currency-diagnostics
+          path: |
+            dist/ocr-provision.json
+            dist/ocr-provision-dism.log
+          if-no-files-found: warn
 
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/mhx-studio-recovery' || startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/codex/mhx-startup-flow-20261030' && contains(github.event.head_commit.message, '[deliver-preview]')))
