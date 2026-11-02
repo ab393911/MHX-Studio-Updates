@@ -419,9 +419,6 @@ func (c *gameSelector) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 	return r
 }
 
-func init() {
-	calibrationNames = append(calibrationNames, calibrationName{"game", "游戏主界面公共特征（仅确认进入，不证明角色身份）", "menu"})
-}
 func (a *app) loginCalibrationGuide() {
 	d, e := a.selected()
 	if e != nil {

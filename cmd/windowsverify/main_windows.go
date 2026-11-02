@@ -100,6 +100,7 @@ func main() {
 	published21 := flag.String("published21", "", "")
 	published40 := flag.String("published40", "", "")
 	updateOnly := flag.Bool("update-only", false, "")
+	recognitionOnly := flag.Bool("recognition-only", false, "")
 	interrupt := flag.String("interrupt-update", "", "")
 	newExe := flag.String("new", "", "")
 	exitExe := flag.String("exit-fixture", "", "")
@@ -121,6 +122,14 @@ func main() {
 			return err
 		}}).Install(context.Background(), p)
 		fail(fmt.Errorf("interruption point not reached: %v", err))
+		return
+	}
+	if *recognitionOnly {
+		if *newExe == "" || *emulatorFixture == "" || *version == "" {
+			fail(errors.New("recognition verifier requires new EXE, fixture and version"))
+		}
+		result := recognitionGUI(*newExe, *emulatorFixture, *version, *out)
+		fail(filesafe.JSON(*out, result))
 		return
 	}
 	if *live != "" {

@@ -48,7 +48,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'Database schema changed; explicit migration acceptance required' }
           New-Item -ItemType Directory -Force dist | Out-Null
           $env:CGO_ENABLED = '0'
-          $version = '3.5.0-preview.41-issue2.1'
+          $version = '3.5.0-preview.41-issue2.2'
           go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version -X main.sourceCommit=$env:GITHUB_SHA" -o dist/MHXStudio.exe ./cmd/mhxstudio
           if ($LASTEXITCODE) { throw 'Candidate build failed' }
           go build -trimpath -ldflags '-H windowsgui -s -w' -o dist/exit-test.exe ./cmd/testexit
@@ -74,9 +74,15 @@ jobs:
       - name: Native GUI, preview40 helper, backups, rollback and interruption
         shell: pwsh
         run: |
-          ./dist/windowsverify.exe -old "$pwd/dist/published40.exe" -old-version '3.5.0-preview.40' -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '3.5.0-preview.41-issue2.1' -update-only -published40 "$pwd/dist/published40.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -out dist/issue2-native-update.json 2>&1 | Tee-Object -FilePath dist/native-update.log
+          ./dist/windowsverify.exe -old "$pwd/dist/published40.exe" -old-version '3.5.0-preview.40' -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '3.5.0-preview.41-issue2.2' -update-only -published40 "$pwd/dist/published40.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -out dist/issue2-native-update.json 2>&1 | Tee-Object -FilePath dist/native-update.log
           $verifyExit = $LASTEXITCODE
           if ($verifyExit) { throw 'Native update acceptance failed; publication blocked' }
+      - name: Real GUI calibration save, pixel mapping, reload and read-only recognition
+        shell: pwsh
+        run: |
+          ./dist/windowsverify.exe -recognition-only -new "$pwd/dist/MHXStudio.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.2' -out dist/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/recognition.log
+          $recognitionExit = $LASTEXITCODE
+          if ($recognitionExit) { throw 'Calibration/recognition regression failed; publication remains blocked' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -86,6 +92,9 @@ jobs:
             dist/windows-unit-tests.json
             dist/issue2-native-update.json
             dist/native-update.log
+            dist/recognition-tests.json
+            dist/recognition.log
+            dist/calibration-roundtrip.png
             dist/preview40-direct/
             dist/MHXStudio.exe
           if-no-files-found: error

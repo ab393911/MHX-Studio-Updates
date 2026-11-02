@@ -87,14 +87,59 @@ func (p Profile) Validate() error {
 	}
 	return nil
 }
-func (p Profile) Match(img image.Image, name string) bool {
+
+// AnchorScore reports the existing grayscale metric without relaxing its limits.
+type OffsetScore struct {
+	DX                      int     `json:"dx"`
+	DY                      int     `json:"dy"`
+	MeanAbsoluteError       float64 `json:"mean_absolute_error"`
+	ChangedPixels           int     `json:"changed_pixels"`
+	WouldPassExistingLimits bool    `json:"would_pass_existing_limits"`
+}
+type AnchorScore struct {
+	Rect                  Rect         `json:"rect"`
+	MeanAbsoluteError     float64      `json:"mean_absolute_error"`
+	MeanLimit             float64      `json:"mean_limit"`
+	ChangedPixels         int          `json:"changed_pixels"`
+	ChangedPixelLimit     int          `json:"changed_pixel_limit"`
+	PixelDeltaLimit       int          `json:"pixel_delta_limit"`
+	Passed                bool         `json:"passed"`
+	Error                 string       `json:"error,omitempty"`
+	ReferencePixels       []byte       `json:"reference_pixels,omitempty"`
+	CurrentPixels         []byte       `json:"current_pixels,omitempty"`
+	BorderMeanError       float64      `json:"border_mean_error,omitempty"`
+	InteriorMeanError     float64      `json:"interior_mean_error,omitempty"`
+	BorderChangedPixels   int          `json:"border_changed_pixels,omitempty"`
+	InteriorChangedPixels int          `json:"interior_changed_pixels,omitempty"`
+	BrightnessDelta       float64      `json:"brightness_delta,omitempty"`
+	BestOffsetDiagnostic  *OffsetScore `json:"best_offset_diagnostic,omitempty"`
+}
+type PageScore struct {
+	Name    string        `json:"name"`
+	Anchors []AnchorScore `json:"anchors"`
+	Passed  bool          `json:"passed"`
+	Error   string        `json:"error,omitempty"`
+}
+
+func (p Profile) Score(img image.Image, name string) PageScore {
+	result := PageScore{Name: name}
 	page, ok := p.Pages[name]
 	if !ok || len(page.Anchors) != 2 {
-		return false
+		result.Error = "page missing or requires exactly two anchors"
+		return result
 	}
+	if img == nil || img.Bounds() != image.Rect(0, 0, 960, 540) {
+		result.Error = "requires original 960x540 image, origin 0,0; no scaling"
+		return result
+	}
+	result.Passed = true
 	for _, a := range page.Anchors {
+		score := AnchorScore{Rect: a.Rect, MeanLimit: page.Threshold, ChangedPixelLimit: 40, PixelDeltaLimit: 40}
 		if !a.Rect.Valid() || len(a.Pixels) != 512 {
-			return false
+			score.Error = "invalid stored anchor"
+			result.Passed = false
+			result.Anchors = append(result.Anchors, score)
+			continue
 		}
 		now := sample(img, a.Rect)
 		sum, bad := 0, 0
@@ -108,12 +153,93 @@ func (p Profile) Match(img image.Image, name string) bool {
 				bad++
 			}
 		}
-		if float64(sum)/512 > page.Threshold || bad > 40 {
-			return false
+		score.MeanAbsoluteError = float64(sum) / 512
+		score.ChangedPixels = bad
+		score.Passed = score.MeanAbsoluteError <= page.Threshold && bad <= 40
+		if !score.Passed {
+			result.Passed = false
 		}
+		result.Anchors = append(result.Anchors, score)
 	}
-	return true
+	return result
 }
+
+// Explain adds read-only diagnostics. Offset comparisons NEVER change Passed,
+// which always comes from the original fixed-coordinate, unchanged-limit test.
+func (p Profile) Explain(img image.Image, name string) PageScore {
+	report := p.Score(img, name)
+	if name != "game" || report.Error != "" {
+		return report
+	}
+	page := p.Pages[name]
+	for i := range report.Anchors {
+		score := &report.Anchors[i]
+		if score.Error != "" {
+			continue
+		}
+		ref := page.Anchors[i].Pixels
+		now := sample(img, score.Rect)
+		score.ReferencePixels = append([]byte(nil), ref...)
+		score.CurrentPixels = now
+		borderSum, insideSum, borderN, insideN, signed := 0, 0, 0, 0, 0
+		for n, v := range now {
+			d := int(v) - int(ref[n])
+			signed += d
+			if d < 0 {
+				d = -d
+			}
+			x, y := n%32, n/32
+			if x < 2 || x >= 30 || y < 2 || y >= 14 {
+				borderSum += d
+				borderN++
+				if d > 40 {
+					score.BorderChangedPixels++
+				}
+			} else {
+				insideSum += d
+				insideN++
+				if d > 40 {
+					score.InteriorChangedPixels++
+				}
+			}
+		}
+		score.BorderMeanError = float64(borderSum) / float64(borderN)
+		score.InteriorMeanError = float64(insideSum) / float64(insideN)
+		score.BrightnessDelta = float64(signed) / 512
+		best := OffsetScore{MeanAbsoluteError: 1e9}
+		for dy := -2; dy <= 2; dy++ {
+			for dx := -2; dx <= 2; dx++ {
+				r := score.Rect
+				r.X += dx
+				r.Y += dy
+				if !r.Valid() {
+					continue
+				}
+				pixels := sample(img, r)
+				sum, bad := 0, 0
+				for n, v := range pixels {
+					d := int(v) - int(ref[n])
+					if d < 0 {
+						d = -d
+					}
+					sum += d
+					if d > 40 {
+						bad++
+					}
+				}
+				candidate := OffsetScore{DX: dx, DY: dy, MeanAbsoluteError: float64(sum) / 512, ChangedPixels: bad}
+				candidate.WouldPassExistingLimits = candidate.MeanAbsoluteError <= score.MeanLimit && bad <= score.ChangedPixelLimit
+				if candidate.MeanAbsoluteError < best.MeanAbsoluteError || (candidate.MeanAbsoluteError == best.MeanAbsoluteError && candidate.ChangedPixels < best.ChangedPixels) {
+					best = candidate
+				}
+			}
+		}
+		score.BestOffsetDiagnostic = &best
+	}
+	return report
+}
+
+func (p Profile) Match(img image.Image, name string) bool { return p.Score(img, name).Passed }
 
 // Require rejects competing character identities, even when a generic page matches.
 func (p Profile) Require(img image.Image, name string) error {

@@ -73,6 +73,7 @@ func (a *app) startCalibration() {
 		a.log(e.Error())
 		return
 	}
+	request := a.currentGameTarget()
 	client := a.client
 	a.work(func(ctx context.Context) error {
 		b, e := client.Screenshot(ctx, d)
@@ -84,7 +85,12 @@ func (a *app) startCalibration() {
 		if e != nil {
 			return e
 		}
-		a.ui(func() {
+		a.gameUI(ctx, request, func() {
+			if comboIndex(a.controls[206]) != i {
+				a.log("标定页面选择已变化，旧截图不再打开标定窗口。")
+				return
+			}
+			a.log(fmt.Sprintf("标定取图：实例%d serial=%s AndroidID=%s boot=%s；实时960×540截图；无缓存", d.Index, d.Serial, d.AndroidID, d.BootID))
 			c := &calibration{app: a, index: d.Index, name: name, profile: profile, img: img}
 			a.cal = c
 			c.open()
@@ -164,6 +170,14 @@ func (c *calibration) save() {
 	if e = saveProfile(c.app.root, c.index, c.profile); e != nil {
 		c.app.info(e.Error())
 		return
+	}
+	reloaded, loadErr := loadProfile(c.app.root, c.index)
+	if loadErr != nil || !reloaded.Match(c.img, c.name.key) {
+		c.app.log(fmt.Sprintf("标定已写入但重读自检未通过：%v；原文件与历史保留。", loadErr))
+		return
+	}
+	for i, score := range reloaded.Score(c.img, c.name.key).Anchors {
+		c.app.log(fmt.Sprintf("保存后重读自检（本次标定截图）：%s特征%d误差%.3f/阈值%.3f，超差像素%d/上限%d；通过=%t", c.name.key, i+1, score.MeanAbsoluteError, score.MeanLimit, score.ChangedPixels, score.ChangedPixelLimit, score.Passed))
 	}
 	delete(c.app.cfg.SingleValidations, strconv.Itoa(c.index))
 	if e = c.app.cfg.Save(c.app.root); e != nil {

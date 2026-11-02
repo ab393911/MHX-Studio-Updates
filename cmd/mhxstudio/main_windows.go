@@ -23,6 +23,7 @@ import (
 
 	"github.com/ab393911/MHX-Studio-Updates/internal/automation"
 	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
+	"github.com/ab393911/MHX-Studio-Updates/internal/gameapp"
 	"github.com/ab393911/MHX-Studio-Updates/internal/ldplayer"
 	"github.com/ab393911/MHX-Studio-Updates/internal/studio"
 	"github.com/ab393911/MHX-Studio-Updates/internal/update"
@@ -513,37 +514,59 @@ func (a *app) checkRecognition() {
 		a.log(e.Error())
 		return
 	}
-	p, e := loadProfile(a.root, d.Index)
-	if e != nil {
-		a.log(e.Error())
-		return
-	}
-	p, e = effectiveProfile(p)
-	if e != nil {
-		a.log(e.Error())
-		return
-	}
 	client := a.client
+	expectedPackage := a.cfg.Games[strconv.Itoa(d.Index)].Package
 	a.work(func(ctx context.Context) error {
-		b, e := client.Screenshot(ctx, d)
-		if e != nil {
-			return e
+		b, err := client.Screenshot(ctx, d)
+		if err != nil {
+			return err
 		}
-		a.cache.Add(strconv.Itoa(d.Index), b)
-		img, e := automation.Decode(b)
-		if e != nil {
-			return e
+		a.logAsync(fmt.Sprintf("识别实时取图：实例%d serial=%s AndroidID=%s boot=%s；ADB=%s；截图SHA256=%x", d.Index, d.Serial, d.AndroidID, d.BootID, client.ADB, sha256.Sum256(b)))
+		img, err := automation.Decode(b)
+		if err != nil {
+			return err
 		}
-		var matches []string
-		for _, s := range calibrationNames {
-			if p.Require(img, s.key) == nil {
-				matches = append(matches, s.label)
+		report, err := inspectRecognition(a.root, d.Index, img)
+		if err != nil {
+			return err
+		}
+		report.ScreenshotSHA = fmt.Sprintf("%x", sha256.Sum256(b))
+		foreground, foregroundErr := gameapp.ReadForeground(ctx, gameShell{client, d})
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		a.logAsync(fmt.Sprintf("识别来源：实例%d serial=%s AndroidID=%s boot=%s；实时ADB 960×540，无缩放/缓存；前台=%s；绑定包=%s", d.Index, d.Serial, d.AndroidID, d.BootID, foreground, expectedPackage))
+		if foregroundErr != nil {
+			a.logAsync("前台诊断：" + foregroundErr.Error())
+		}
+		a.logAsync(fmt.Sprintf("标定重新读取：%s；文件SHA256=%s；时间=%s", report.ProfilePath, report.ProfileSHA, report.LoadedAt))
+		for _, page := range report.Pages {
+			if page.Source != "local" {
+				continue
+			}
+			for i, score := range page.Anchors {
+				a.logAsync(fmt.Sprintf("页面%s（本地）特征%d rect=%+v：平均灰度误差=%.3f/阈值%.3f；差值>%d像素=%d/上限%d；匹配=%t %s", page.Name, i+1, score.Rect, score.MeanAbsoluteError, score.MeanLimit, score.PixelDeltaLimit, score.ChangedPixels, score.ChangedPixelLimit, score.Passed, score.Error))
+				if shift := score.BestOffsetDiagnostic; shift != nil {
+					a.logAsync(fmt.Sprintf("game特征%d诊断：边缘误差%.3f/超差%d；内部误差%.3f/超差%d；亮度偏差%.3f；最佳偏移(%d,%d)误差%.3f/超差%d（仅诊断，不用于放行）", i+1, score.BorderMeanError, score.BorderChangedPixels, score.InteriorMeanError, score.InteriorChangedPixels, score.BrightnessDelta, shift.DX, shift.DY, shift.MeanAbsoluteError, shift.ChangedPixels))
+				}
 			}
 		}
-		if len(matches) == 0 {
-			return errors.New("当前画面未识别；没有进行点击")
+		dir := filepath.Join(a.root, "diagnostics")
+		if err = os.MkdirAll(dir, 0700); err != nil {
+			return err
 		}
-		a.logAsync("当前识别：" + strings.Join(matches, "；"))
+		path := filepath.Join(dir, fmt.Sprintf("recognition-latest-%d.json", d.Index))
+		err = filesafe.JSON(path, map[string]any{"version": version, "console": client.Console, "adb_executable": client.ADB, "command": "-s " + d.Serial + " exec-out screencap -p", "instance": d.Index, "serial": d.Serial, "android_id": d.AndroidID, "boot_id": d.BootID, "expected_package": expectedPackage, "foreground": foreground, "foreground_error": fmt.Sprint(foregroundErr), "report": report})
+		if err != nil {
+			return err
+		}
+		a.logAsync("识别诊断已保存：" + path)
+		if len(report.Matches) == 0 {
+			err = errors.New("当前画面未识别；没有进行点击；两特征分数及标定来源见识别诊断")
+			a.errorCapture(d, b, err)
+			return err
+		}
+		a.logAsync("当前识别：" + strings.Join(report.Matches, "；") + "；只读检查，没有进行点击")
 		return nil
 	})
 }

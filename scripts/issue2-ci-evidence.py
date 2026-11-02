@@ -14,9 +14,11 @@ report['published'] = False
 report['stable_manifest_changed'] = False
 report['reports'] = {}
 for p in Path('verification-artifacts').rglob('*.json'):
-    if p.name in {'candidate.json', 'issue2-native-update.json', 'upgrade.json'}:
+    if p.name in {'candidate.json', 'issue2-native-update.json', 'upgrade.json', 'recognition-tests.json'}:
         report['reports'][str(p)] = json.loads(p.read_text(encoding='utf-8-sig'))
 for p in Path('verification-artifacts').rglob('*tests.json'):
+    if p.name not in {'portable-tests.json','windows-unit-tests.json'}:
+        continue
     counts = {}
     for line in p.read_text(encoding='utf-8-sig').splitlines():
         try:
