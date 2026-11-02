@@ -2,7 +2,7 @@
   "SOURCE_SHA": "1d68b82251853371b644a8ac6792ecfd319c7d53",
   "RUN_ID": "41467109198",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "not-yet-aggregated",
+  "PORTABLE_RESULT": "cancelled",
   "WINDOWS_RESULT": "cancelled",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41467109198",
   "published": false,
@@ -15,6 +15,9 @@
       "sha256": "c3276a0d89f0a653e7c47596ed54631cc533a7a8ad4ea97841af9561f1a4156e",
       "size": 8365056,
       "version": "3.5.0-preview.41-issue2.2"
+    },
+    "verification-artifacts/issue2-portable-results/portable-tests.json": {
+      "pass": 237
     }
   },
   "ready_for_publication": false,
