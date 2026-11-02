@@ -2,12 +2,20 @@
   "SOURCE_SHA": "1a4a229336b545c1a3f0213c0745d94494dca78b",
   "RUN_ID": "41476626758",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "not-yet-aggregated",
+  "PORTABLE_RESULT": "success",
   "WINDOWS_RESULT": "failure",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41476626758",
   "published": false,
   "stable_manifest_changed": false,
   "reports": {
+    "verification-artifacts/issue2-windows-results/candidate.json": {
+      "sha256": "f5edaa9ae5a009ab225414c8bba9d5801dbd22ad647732537f21877dc72b0f28",
+      "published": false,
+      "source_commit": "1a4a229336b545c1a3f0213c0745d94494dca78b",
+      "isolated_test_id": "",
+      "size": 8494592,
+      "version": "3.5.0-preview.41-issue2.2"
+    },
     "verification-artifacts/issue2-windows-results/issue2-native-update.json": {
       "active_scenario": "preview40_direct_gui_upgrade",
       "arch": "amd64",
@@ -129,14 +137,6 @@
       "version": "3.5.0-preview.41-issue2.2",
       "windows_game_tested": false
     },
-    "verification-artifacts/issue2-windows-results/candidate.json": {
-      "sha256": "f5edaa9ae5a009ab225414c8bba9d5801dbd22ad647732537f21877dc72b0f28",
-      "published": false,
-      "source_commit": "1a4a229336b545c1a3f0213c0745d94494dca78b",
-      "isolated_test_id": "",
-      "size": 8494592,
-      "version": "3.5.0-preview.41-issue2.2"
-    },
     "verification-artifacts/issue2-windows-results/preview40-direct/upgrade.json": {
       "anonymous_manifest_download": true,
       "baseline_published": true,
@@ -180,11 +180,14 @@
       "window_and_critical_buttons_on_screen": true,
       "windows_game_tested": false
     },
+    "verification-artifacts/issue2-portable-results/portable-tests.json": {
+      "pass": 268
+    },
     "verification-artifacts/issue2-windows-results/windows-unit-tests.json": {
       "pass": 270
     },
-    "verification-artifacts/issue2-windows-results/recognition.log": "clipboard report differs: 31504 vs 14254\n",
-    "verification-artifacts/issue2-windows-results/native-update.log": "Native Windows update scenario: success\nNative Windows update scenario: startup_timeout\nNative Windows update scenario: sha_tamper\nNative Windows update scenario: sharing_violation\nNative Windows update scenario: interrupted_recovery\nNative Windows update scenario: immediate_exit\nNative Windows update scenario: config_migration_exit\nPreparing private HTTPS candidate for published baseline: 3.5.0-preview.40\nPrivate HTTPS trust ready: 3.5.0-preview.40\nGUI upgrade begins: 3.5.0-preview.40 -> 3.5.0-preview.41-issue2.2\nLive GUI update passed: 3.5.0-preview.41-issue2.2 one click: true legacy confirmations: 0\nNative Windows GUI/update checks passed; LDPlayer/game tests remain pending.\n"
+    "verification-artifacts/issue2-windows-results/native-update.log": "Native Windows update scenario: success\nNative Windows update scenario: startup_timeout\nNative Windows update scenario: sha_tamper\nNative Windows update scenario: sharing_violation\nNative Windows update scenario: interrupted_recovery\nNative Windows update scenario: immediate_exit\nNative Windows update scenario: config_migration_exit\nPreparing private HTTPS candidate for published baseline: 3.5.0-preview.40\nPrivate HTTPS trust ready: 3.5.0-preview.40\nGUI upgrade begins: 3.5.0-preview.40 -> 3.5.0-preview.41-issue2.2\nLive GUI update passed: 3.5.0-preview.41-issue2.2 one click: true legacy confirmations: 0\nNative Windows GUI/update checks passed; LDPlayer/game tests remain pending.\n",
+    "verification-artifacts/issue2-windows-results/recognition.log": "clipboard report differs: 31504 vs 14254\n"
   },
   "ready_for_publication": false,
   "release_gate_note": "Diagnostic candidate only: real intermittent recognition root cause remains unconfirmed; no automatic publication is configured. Accepted legacy first-hop interruption risk is documented separately.",
