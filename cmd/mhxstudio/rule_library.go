@@ -120,6 +120,21 @@ func validateExportDestination(root, target string) error {
 	if err != nil {
 		return err
 	}
+	// Resolve existing directories so a junction/symlink cannot redirect an export
+	// into application data. A different Windows volume is a valid export location.
+	if resolved, e := filepath.EvalSymlinks(base); e == nil {
+		base = resolved
+	} else {
+		return e
+	}
+	parent, e := filepath.EvalSymlinks(filepath.Dir(dest))
+	if e != nil {
+		return e
+	}
+	dest = filepath.Join(parent, filepath.Base(dest))
+	if !strings.EqualFold(filepath.VolumeName(base), filepath.VolumeName(dest)) {
+		return nil
+	}
 	rel, err := filepath.Rel(base, dest)
 	if err != nil {
 		return err

@@ -162,3 +162,13 @@ func TestRuleEditRevisionAndExportCannotOverwriteDataDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+func TestExportRejectsAliasIntoExistingApplicationData(t *testing.T) {
+	root := t.TempDir()
+	alias := filepath.Join(t.TempDir(), "data-alias")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Skip("symlink creation unavailable")
+	}
+	if validateExportDestination(root, filepath.Join(alias, "config.json")) == nil {
+		t.Fatal("export can overwrite data through alias")
+	}
+}

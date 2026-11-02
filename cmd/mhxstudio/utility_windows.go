@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -75,6 +76,7 @@ func chooseDocument(owner uintptr, save bool, title, initialDir, pattern string)
 	if save {
 		proc = "GetSaveFileNameW"
 		of.Flags |= 2
+		of.DefaultExt = utf(strings.TrimPrefix(pattern, "*."))
 	} else {
 		of.Flags |= 0x1000
 	}
@@ -207,8 +209,9 @@ func (p *utilityPanel) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 			_ = exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", filepath.Join(p.bundle.Directory, "screenshot.png")).Start()
 		case 1303:
 			if path := chooseDocument(h, true, "导出诊断ZIP", "", "*.zip"); path != "" {
-				if filepath.Ext(path) != ".zip" {
-					path += ".zip"
+				if !strings.EqualFold(filepath.Ext(path), ".zip") {
+					p.app.info("请选择.zip文件名；未写入文件。")
+					return 0
 				}
 				if err := validateExportDestination(p.app.root, path); err != nil {
 					p.app.info(err.Error())
@@ -273,8 +276,9 @@ func (p *utilityPanel) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 				return 0
 			}
 			if path := chooseDocument(h, true, "导出页面规则JSON", "", "*.json"); path != "" {
-				if filepath.Ext(path) != ".json" {
-					path += ".json"
+				if !strings.EqualFold(filepath.Ext(path), ".json") {
+					p.app.info("请选择.json文件名；未写入文件。")
+					return 0
 				}
 				if err := validateExportDestination(p.app.root, path); err != nil {
 					p.app.info(err.Error())
