@@ -125,7 +125,7 @@ func simulator(t *testing.T) *visualSimulator {
 		}
 		a, _ := CaptureAnchor(img, rects[0])
 		b, _ := CaptureAnchor(img, rects[1])
-		p.Pages[name] = Page{[]Anchor{a, b}, 5}
+		p.Pages[name] = Page{Anchors: []Anchor{a, b}, Threshold: 5}
 		var out bytes.Buffer
 		png.Encode(&out, img)
 		s.images[name] = out.Bytes()

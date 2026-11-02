@@ -25,17 +25,19 @@ var calibrationNames = func() []calibrationName {
 }()
 
 type calibration struct {
-	app      *app
-	hwnd     uintptr
-	index    int
-	name     calibrationName
-	profile  automation.Profile
-	img      image.Image
-	pixels   []byte
-	rects    []automation.Rect
-	start    point
-	dragging bool
-	label    uintptr
+	shared       bool
+	featureCount int
+	app          *app
+	hwnd         uintptr
+	index        int
+	name         calibrationName
+	profile      automation.Profile
+	img          image.Image
+	pixels       []byte
+	rects        []automation.Rect
+	start        point
+	dragging     bool
+	label        uintptr
 }
 type bitmapInfo struct {
 	Size                   uint32
@@ -58,21 +60,30 @@ func (a *app) startCalibration() {
 		a.info("已有标定窗口，请先保存或取消。")
 		return
 	}
+	i := comboIndex(a.controls[206])
+	if i < 0 || i >= len(calibrationNames) {
+		return
+	}
+	a.startRuleCalibration(calibrationNames[i], false, 2)
+}
+func (a *app) startRuleCalibration(name calibrationName, shared bool, count int) {
+	if a.cal != nil || count < 2 || count > 8 {
+		return
+	}
 	d, e := a.selected()
 	if e != nil {
 		a.log(e.Error())
 		return
 	}
-	i := comboIndex(a.controls[206])
-	if i < 0 || i >= len(calibrationNames) {
-		return
+	profile, e := loadLocalProfile(a.root, d.Index)
+	if shared {
+		profile, e = readProfile(sharedProfilePath(a.root))
 	}
-	name := calibrationNames[i]
-	profile, e := loadProfile(a.root, d.Index)
 	if e != nil {
 		a.log(e.Error())
 		return
 	}
+	selection := comboIndex(a.controls[206])
 	request := a.currentGameTarget()
 	client := a.client
 	a.work(func(ctx context.Context) error {
@@ -86,12 +97,12 @@ func (a *app) startCalibration() {
 			return e
 		}
 		a.gameUI(ctx, request, func() {
-			if comboIndex(a.controls[206]) != i {
+			if comboIndex(a.controls[206]) != selection {
 				a.log("标定页面选择已变化，旧截图不再打开标定窗口。")
 				return
 			}
 			a.log(fmt.Sprintf("标定取图：实例%d serial=%s AndroidID=%s boot=%s；实时960×540截图；无缓存", d.Index, d.Serial, d.AndroidID, d.BootID))
-			c := &calibration{app: a, index: d.Index, name: name, profile: profile, img: img}
+			c := &calibration{shared: shared, featureCount: count, app: a, index: d.Index, name: name, profile: profile, img: img}
 			a.cal = c
 			c.open()
 		})
@@ -122,7 +133,8 @@ func (c *calibration) open() {
 	child(h, "BUTTON", "清除重画", 20, 640, 130, 34, 0, 301)
 	child(h, "BUTTON", "保存这次标定", 165, 640, 165, 34, 0, 302)
 	child(h, "BUTTON", "取消", 345, 640, 110, 34, 0, 303)
-	child(h, "STATIC", "截图仅在内存中；只保存所框特征的低分辨率灰度数据和按钮范围。", 475, 644, 490, 40, 0, 0)
+	c.hint()
+	child(h, "STATIC", "仅保存特征灰度数据和按钮范围；已保存规则先备份，不自动修改其他页面。", 475, 644, 490, 40, 0, 0)
 }
 func (c *calibration) paint() {
 	var ps paintStruct
@@ -142,42 +154,68 @@ func (c *calibration) paint() {
 	gdi32.NewProc("DeleteObject").Call(pen)
 }
 func (c *calibration) hint() {
-	hints := []string{"第1框：稳定的页面特征（避开动画、人物和计时数字）。在截图上拖出矩形。", "第2框：另一处独立特征。角色选中标定须包含该行高亮；主界面不需昵称。", "第3框：按钮可点击范围（" + c.name.button + "）。框在按钮内部，点击只在中央小范围随机。", "三框已完成。确认页面和角色序号正确后点“保存这次标定”。"}
-	setText(c.label, hints[len(c.rects)])
+	label := fmt.Sprintf("第%d框：稳定特征（共%d处，避开动画、人物、背景和变化数字）。", len(c.rects)+1, c.featureCount)
+	if len(c.rects) == c.featureCount {
+		label = "最后一框：按钮可点击范围（" + c.name.button + "）。"
+	}
+	if len(c.rects) == c.featureCount+1 {
+		label = "框选已完成，点击保存后立即重读自检。"
+	}
+	setText(c.label, label)
 }
 func (c *calibration) save() {
-	if len(c.rects) != 3 {
-		c.app.info("请依次框选两处识别特征和一个按钮范围。")
+	if len(c.rects) != c.featureCount+1 {
+		c.app.info("请依次框选全部稳定特征和最后的按钮范围。")
 		return
 	}
-	a, e := automation.CaptureAnchor(c.img, c.rects[0])
-	if e != nil {
-		c.app.info(e.Error())
-		return
+	anchors := []automation.Anchor{}
+	for _, r := range c.rects[:c.featureCount] {
+		a, err := automation.CaptureAnchor(c.img, r)
+		if err != nil {
+			c.app.info(err.Error())
+			return
+		}
+		anchors = append(anchors, a)
 	}
-	b, e := automation.CaptureAnchor(c.img, c.rects[1])
-	if e != nil {
-		c.app.info(e.Error())
-		return
+	old := c.profile.Pages[c.name.key]
+	threshold := old.Threshold
+	if threshold == 0 {
+		threshold = 10
 	}
-	c.profile.Pages[c.name.key] = automation.Page{Anchors: []automation.Anchor{a, b}, Threshold: 10}
-	c.profile.Buttons[c.name.button] = c.rects[2]
+	revision := old.Revision + 1
+	if revision < 1 {
+		revision = 1
+	}
+	page := automation.Page{ButtonID: c.name.button, CalibrationImageSHA: automation.FrameSHA(c.img), Label: c.name.label, Revision: revision, Anchors: anchors, Threshold: threshold}
+	if len(old.FeatureThresholds) == len(anchors) {
+		page.FeatureThresholds = old.FeatureThresholds
+	}
+	c.profile.Pages[c.name.key] = page
+	c.profile.Buttons[c.name.button] = c.rects[c.featureCount]
+	var e error
 	// An identical role identity calibration would allow the wrong character.
 	if e = c.profile.Require(c.img, c.name.key); e != nil {
 		c.app.info("标定有冲突：" + e.Error() + "。请使用独立页面特征或该角色行选中标记。")
 		return
 	}
-	if e = saveProfile(c.app.root, c.index, c.profile); e != nil {
+	if e = saveRuleLibrary(c.app.root, c.index, c.profile, c.shared); e != nil {
 		c.app.info(e.Error())
 		return
 	}
 	// Invalidate the previous proof as soon as the calibration changes, even if
 	// the subsequent disk-read self-check fails.
-	delete(c.app.cfg.SingleValidations, strconv.Itoa(c.index))
+	if c.shared {
+		c.app.cfg.SingleValidations = map[string]proof{}
+	} else {
+		delete(c.app.cfg.SingleValidations, strconv.Itoa(c.index))
+	}
 	if e = c.app.cfg.Save(c.app.root); e != nil {
 		c.app.log("单机验证记录保存失败：" + e.Error())
 	}
-	reloaded, loadErr := loadProfile(c.app.root, c.index)
+	reloaded, loadErr := loadLocalProfile(c.app.root, c.index)
+	if c.shared {
+		reloaded, loadErr = readProfile(sharedProfilePath(c.app.root))
+	}
 	if loadErr != nil || !reloaded.Match(c.img, c.name.key) {
 		c.app.log(fmt.Sprintf("标定已写入但重读自检未通过：%v；原文件与历史保留。", loadErr))
 		return
@@ -194,7 +232,7 @@ func (c *calibration) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 		c.paint()
 		return 0
 	case 0x201:
-		if len(c.rects) >= 3 {
+		if len(c.rects) >= c.featureCount+1 {
 			return 0
 		}
 		x, y := int32(int16(l&0xffff))-20, int32(int16((l>>16)&0xffff))-70

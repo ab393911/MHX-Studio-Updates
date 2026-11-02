@@ -3,8 +3,10 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"github.com/ab393911/MHX-Studio-Updates/internal/automation"
 	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
@@ -14,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 	"unsafe"
 )
@@ -137,6 +140,7 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	if !bytes.Equal(old, kept) {
 		fail(fmt.Errorf("original calibration backup changed"))
 	}
+	exported := false
 	inspect := func(expect bool) recognitionNative {
 		path := filepath.Join(data, "diagnostics", "recognition-latest-1.json")
 		_ = os.Remove(path)
@@ -144,6 +148,47 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 		var report recognitionNative
 		until(h, "fresh recognition report not written", func() bool { return filesafe.ReadJSON(path, &report) == nil })
 		gameIdle(h)
+		fail(waitWindow("页面识别诊断"))
+		diagnostic := findWindow("页面识别诊断")
+		displayed := readText(control(diagnostic, 1300))
+		if !strings.Contains(displayed, "fixture-1") || !strings.Contains(displayed, "平均误差") || !strings.Contains(displayed, "algorithm_version") {
+			fail(fmt.Errorf("GUI diagnostic incomplete: %s", displayed))
+		}
+		click(diagnostic, 1301)
+		clipboardText := readClipboard()
+		if strings.ReplaceAll(clipboardText, "\r\n", "\n") != strings.ReplaceAll(displayed, "\r\n", "\n") {
+			fail(fmt.Errorf("clipboard report differs: %d vs %d", len(clipboardText), len(displayed)))
+		}
+		if !exported {
+			destination, e := filepath.Abs(filepath.Join(filepath.Dir(out), "recognition-export.zip"))
+			fail(e)
+			_ = os.Remove(destination)
+			user.NewProc("PostMessageW").Call(control(diagnostic, 1303), 0xF5, 0, 0)
+			fail(waitWindow("导出诊断ZIP"))
+			dialog := findWindow("导出诊断ZIP")
+			filename := control(dialog, 1152)
+			if filename == 0 {
+				filename = control(dialog, 1148)
+			}
+			if filename == 0 {
+				fail(fmt.Errorf("native save dialog filename missing"))
+			}
+			writeText(filename, destination)
+			click(dialog, 1)
+			until(diagnostic, "GUI ZIP export missing", func() bool { _, e := os.Stat(destination); return e == nil })
+			z, e := zip.OpenReader(destination)
+			fail(e)
+			names := map[string]bool{}
+			for _, entry := range z.File {
+				names[entry.Name] = true
+			}
+			fail(z.Close())
+			if !names["screenshot.png"] || !names["report.json"] || !names["instance-profile.json"] || names["config.json"] {
+				fail(fmt.Errorf("bad GUI ZIP export %v", names))
+			}
+			exported = true
+		}
+		closeTitle("页面识别诊断")
 		found := false
 		for _, s := range report.Report.Pages {
 			if s.Name == "game" {
@@ -179,6 +224,28 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	if again.Report.ProfileSHA != first.Report.ProfileSHA {
 		fail(fmt.Errorf("restart profile changed"))
 	}
+	// Edit and persist a custom rule through the actual GUI, never hand-edit production files.
+	click(h, 122)
+	fail(waitWindow("页面规则管理"))
+	manager := findWindow("页面规则管理")
+	var edited automation.Profile
+	fail(json.Unmarshal([]byte(readText(control(manager, 1409))), &edited))
+	edited.Pages["custom_fixture"] = edited.Pages["game"]
+	editorJSON, e := json.MarshalIndent(edited, "", "  ")
+	fail(e)
+	writeText(control(manager, 1409), string(editorJSON))
+	user.NewProc("PostMessageW").Call(control(manager, 1402), 0xF5, 0, 0)
+	fail(waitWindow("确认规则修改"))
+	click(findWindow("确认规则修改"), 6)
+	until(manager, "rule manager save not durable", func() bool {
+		var p automation.Profile
+		if filesafe.ReadJSON(profile, &p) != nil {
+			return false
+		}
+		_, ok := p.Pages["custom_fixture"]
+		return ok
+	})
+	closeTitle("页面规则管理")
 	state.Page = "unknown"
 	fail(filesafe.JSON(statePath, state))
 	unknown := inspect(false)
@@ -191,5 +258,27 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	}
 	closeTitle(title)
 	fail(wait(app, 10*time.Second))
-	return map[string]any{"passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
+	return map[string]any{"passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_rule_edit_confirmed_and_persisted": true, "gui_zip_export_without_file_hunting": true, "gui_diagnostic_report_visible_and_clipboard_verified": true, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
+}
+
+func readClipboard() string {
+	ok, _, err := user.NewProc("OpenClipboard").Call(0)
+	if ok == 0 {
+		fail(err)
+	}
+	defer user.NewProc("CloseClipboard").Call()
+	mem, _, err := user.NewProc("GetClipboardData").Call(13)
+	if mem == 0 {
+		fail(err)
+	}
+	kernel := syscall.NewLazyDLL("kernel32.dll")
+	size, _, _ := kernel.NewProc("GlobalSize").Call(mem)
+	ptr, _, err := kernel.NewProc("GlobalLock").Call(mem)
+	if ptr == 0 {
+		fail(err)
+	}
+	defer kernel.NewProc("GlobalUnlock").Call(mem)
+	values := make([]uint16, int(size)/2)
+	kernel.NewProc("RtlMoveMemory").Call(uintptr(unsafe.Pointer(&values[0])), ptr, size)
+	return syscall.UTF16ToString(values)
 }

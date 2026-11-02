@@ -73,7 +73,7 @@ func (p Profile) Recognize(img image.Image) (string, error) {
 	if len(base) > 1 {
 		return "", fmt.Errorf("页面同时匹配 %v，未点击", base)
 	}
-	return "", errors.New("未知页面：请用截图标定稳定特征；未点击")
+	return "", p.failure(img, "未知页面：未点击；请使用一键识别诊断检查特征分数")
 }
 
 // WithoutNicknamePages keeps page and selected-slot evidence, while ignoring

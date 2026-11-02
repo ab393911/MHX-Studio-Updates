@@ -14,7 +14,7 @@ func TestScoreBothFeaturesWithoutRelaxingEitherThreshold(t *testing.T) {
 	a, _ := CaptureAnchor(img, Rect{10, 10, 32, 16})
 	b, _ := CaptureAnchor(img, Rect{100, 10, 32, 16})
 	p := NewProfile()
-	p.Pages["game"] = Page{[]Anchor{a, b}, 10}
+	p.Pages["game"] = Page{Anchors: []Anchor{a, b}, Threshold: 10}
 	for y := 10; y < 26; y++ {
 		for x := 10; x < 42; x++ {
 			img.Set(x, y, color.Gray{11})
@@ -34,7 +34,7 @@ func TestChangedPixelGateCannotBeHiddenByLowMean(t *testing.T) {
 	a, _ := CaptureAnchor(img, r)
 	b, _ := CaptureAnchor(img, Rect{100, 10, 32, 16})
 	p := NewProfile()
-	p.Pages["game"] = Page{[]Anchor{a, b}, 10}
+	p.Pages["game"] = Page{Anchors: []Anchor{a, b}, Threshold: 10}
 	for i := 0; i < 41; i++ {
 		img.Set(r.X+i%32, r.Y+i/32, color.Gray{50})
 	}
@@ -60,7 +60,7 @@ func TestAnchorPixelCoordinatesAndOriginalImageDimensions(t *testing.T) {
 		t.Fatal("sampling shifted")
 	}
 	p := NewProfile()
-	p.Pages["game"] = Page{[]Anchor{a, a}, 10}
+	p.Pages["game"] = Page{Anchors: []Anchor{a, a}, Threshold: 10}
 	if !p.Match(img, "game") || p.Match(image.NewRGBA(image.Rect(0, 0, 1920, 1080)), "game") || p.Match(image.NewRGBA(image.Rect(1, 1, 961, 541)), "game") {
 		t.Fatal("invalid frame dimensions accepted")
 	}
@@ -98,7 +98,7 @@ func TestDiagnosticOffsetNeverLetsShiftedUnknownFramePass(t *testing.T) {
 	a, _ := CaptureAnchor(img, r1)
 	b, _ := CaptureAnchor(img, r2)
 	p := NewProfile()
-	p.Pages["game"] = Page{[]Anchor{a, b}, 10}
+	p.Pages["game"] = Page{Anchors: []Anchor{a, b}, Threshold: 10}
 	shifted := image.NewRGBA(image.Rect(0, 0, 960, 540))
 	for y := 0; y < 540; y++ {
 		for x := 1; x < 960; x++ {

@@ -3,6 +3,7 @@ package automation
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -27,9 +28,18 @@ type Anchor struct {
 	Rect   Rect   `json:"rect"`
 	Pixels []byte `json:"pixels"`
 }
+
+const RuleAlgorithmVersion = "gray32x16-mae-v1"
+
 type Page struct {
-	Anchors   []Anchor `json:"anchors"`
-	Threshold float64  `json:"threshold"`
+	ButtonID            string    `json:"button_id,omitempty"`
+	Label               string    `json:"label,omitempty"`
+	Revision            int       `json:"revision,omitempty"`
+	FeatureThresholds   []float64 `json:"feature_thresholds,omitempty"`
+	MinMatches          int       `json:"min_matches,omitempty"`
+	CalibrationImageSHA string    `json:"calibration_image_sha256,omitempty"`
+	Anchors             []Anchor  `json:"anchors"`
+	Threshold           float64   `json:"threshold"`
 }
 type Profile struct {
 	Schema  int             `json:"schema"`
@@ -71,8 +81,13 @@ func (p Profile) Validate() error {
 		return errors.New("invalid recognition profile")
 	}
 	for name, page := range p.Pages {
-		if len(page.Anchors) != 2 || page.Threshold < 1 || page.Threshold > 20 {
-			return fmt.Errorf("%s needs two anchors and threshold 1..20", name)
+		if !page.valid() {
+			return fmt.Errorf("%s needs 2..8 anchors, valid per-feature thresholds 1..20 and at least two required matches", name)
+		}
+		if page.ButtonID != "" {
+			if _, ok := p.Buttons[page.ButtonID]; !ok {
+				return fmt.Errorf("%s missing button %s", name, page.ButtonID)
+			}
 		}
 		for _, a := range page.Anchors {
 			if !a.Rect.Valid() || len(a.Pixels) != 512 {
@@ -114,27 +129,72 @@ type AnchorScore struct {
 	BrightnessDelta       float64      `json:"brightness_delta,omitempty"`
 	BestOffsetDiagnostic  *OffsetScore `json:"best_offset_diagnostic,omitempty"`
 }
+
+func (page Page) valid() bool {
+	if len(page.Anchors) < 2 || len(page.Anchors) > 8 || math.IsNaN(page.Threshold) || math.IsInf(page.Threshold, 0) || page.Threshold < 1 || page.Threshold > 20 || page.Revision < 0 || len(page.Label) > 128 {
+		return false
+	}
+	if page.MinMatches != 0 && (page.MinMatches < 2 || page.MinMatches > len(page.Anchors)) {
+		return false
+	}
+	if len(page.FeatureThresholds) != 0 && len(page.FeatureThresholds) != len(page.Anchors) {
+		return false
+	}
+	for _, t := range page.FeatureThresholds {
+		if math.IsNaN(t) || math.IsInf(t, 0) || t < 1 || t > 20 {
+			return false
+		}
+	}
+	return true
+}
+func (page Page) RequiredMatches() int {
+	if page.MinMatches == 0 {
+		return len(page.Anchors)
+	}
+	return page.MinMatches
+}
+
 type PageScore struct {
-	Name    string        `json:"name"`
-	Anchors []AnchorScore `json:"anchors"`
-	Passed  bool          `json:"passed"`
-	Error   string        `json:"error,omitempty"`
+	Label               string        `json:"label"`
+	ButtonID            string        `json:"button_id,omitempty"`
+	CalibrationImageSHA string        `json:"calibration_image_sha256,omitempty"`
+	Revision            int           `json:"revision"`
+	RequiredMatches     int           `json:"required_matches"`
+	MatchedFeatures     int           `json:"matched_features"`
+	Confidence          float64       `json:"feature_pass_ratio"`
+	Name                string        `json:"name"`
+	Anchors             []AnchorScore `json:"anchors"`
+	Passed              bool          `json:"passed"`
+	Error               string        `json:"error,omitempty"`
 }
 
 func (p Profile) Score(img image.Image, name string) PageScore {
 	result := PageScore{Name: name}
 	page, ok := p.Pages[name]
-	if !ok || len(page.Anchors) != 2 {
-		result.Error = "page missing or requires exactly two anchors"
+	if !ok || !page.valid() {
+		result.Error = "page missing or invalid recognition rule"
 		return result
 	}
 	if img == nil || img.Bounds() != image.Rect(0, 0, 960, 540) {
 		result.Error = "requires original 960x540 image, origin 0,0; no scaling"
 		return result
 	}
-	result.Passed = true
-	for _, a := range page.Anchors {
+	result.Label = page.Label
+	if result.Label == "" {
+		result.Label = name
+	}
+	result.ButtonID = page.ButtonID
+	result.CalibrationImageSHA = page.CalibrationImageSHA
+	result.Revision = page.Revision
+	if result.Revision == 0 {
+		result.Revision = 1
+	}
+	result.RequiredMatches = page.RequiredMatches()
+	for featureIndex, a := range page.Anchors {
 		score := AnchorScore{Rect: a.Rect, MeanLimit: page.Threshold, ChangedPixelLimit: 40, PixelDeltaLimit: 40}
+		if len(page.FeatureThresholds) > 0 {
+			score.MeanLimit = page.FeatureThresholds[featureIndex]
+		}
 		if !a.Rect.Valid() || len(a.Pixels) != 512 {
 			score.Error = "invalid stored anchor"
 			result.Passed = false
@@ -155,11 +215,23 @@ func (p Profile) Score(img image.Image, name string) PageScore {
 		}
 		score.MeanAbsoluteError = float64(sum) / 512
 		score.ChangedPixels = bad
-		score.Passed = score.MeanAbsoluteError <= page.Threshold && bad <= 40
-		if !score.Passed {
-			result.Passed = false
+		score.Passed = score.MeanAbsoluteError <= score.MeanLimit && bad <= 40
+		if score.Passed {
+			result.MatchedFeatures++
+		} else {
+			score.Error = fmt.Sprintf("mean %.3f/%.3f; changed pixels %d/40", score.MeanAbsoluteError, score.MeanLimit, bad)
 		}
 		result.Anchors = append(result.Anchors, score)
+	}
+	result.Confidence = float64(result.MatchedFeatures) / float64(len(page.Anchors))
+	result.Passed = result.MatchedFeatures >= result.RequiredMatches
+	for _, a := range result.Anchors {
+		if a.Error == "invalid stored anchor" {
+			result.Passed = false
+		}
+	}
+	if !result.Passed {
+		result.Error = fmt.Sprintf("matched %d/%d features; requires %d", result.MatchedFeatures, len(page.Anchors), result.RequiredMatches)
 	}
 	return result
 }
@@ -168,13 +240,16 @@ func (p Profile) Score(img image.Image, name string) PageScore {
 // which always comes from the original fixed-coordinate, unchanged-limit test.
 func (p Profile) Explain(img image.Image, name string) PageScore {
 	report := p.Score(img, name)
-	if name != "game" || report.Error != "" {
+	if name != "game" || img == nil || img.Bounds() != image.Rect(0, 0, 960, 540) {
 		return report
 	}
-	page := p.Pages[name]
+	page, ok := p.Pages[name]
+	if !ok || !page.valid() {
+		return report
+	}
 	for i := range report.Anchors {
 		score := &report.Anchors[i]
-		if score.Error != "" {
+		if score.Error == "invalid stored anchor" {
 			continue
 		}
 		ref := page.Anchors[i].Pixels
@@ -244,7 +319,7 @@ func (p Profile) Match(img image.Image, name string) bool { return p.Score(img, 
 // Require rejects competing character identities, even when a generic page matches.
 func (p Profile) Require(img image.Image, name string) error {
 	if !p.Match(img, name) {
-		return fmt.Errorf("state %s not verified", name)
+		return p.failure(img, fmt.Sprintf("state %s not verified", name))
 	}
 	var prefix string
 	if len(name) > 5 && name[:5] == "game_" {
@@ -284,4 +359,24 @@ func Point(r Rect) (int, int, error) {
 }
 func Delay(min, max int) time.Duration {
 	return time.Duration(min+bounded(max-min+1)) * time.Millisecond
+}
+
+// FrameSHA is independent of PNG encoding and compares full original pixels.
+// It is diagnostic evidence, never a requirement that a dynamic game frame stay identical.
+func FrameSHA(img image.Image) string {
+	if img == nil || img.Bounds() != image.Rect(0, 0, 960, 540) {
+		return ""
+	}
+	h := sha256.New()
+	row := make([]byte, 960*3)
+	for y := 0; y < 540; y++ {
+		for x := 0; x < 960; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			row[x*3] = byte(r >> 8)
+			row[x*3+1] = byte(g >> 8)
+			row[x*3+2] = byte(b >> 8)
+		}
+		_, _ = h.Write(row)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
 }

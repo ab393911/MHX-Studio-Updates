@@ -84,6 +84,7 @@ type wndclass struct {
 	SmallIcon                          uintptr
 }
 type app struct {
+	panel                                             *utilityPanel
 	hwnd                                              uintptr
 	controls                                          map[int]uintptr
 	actions                                           chan func()
@@ -195,18 +196,19 @@ func (a *app) build() {
 	a.control("EDIT", strconv.Itoa(a.cfg.Retries), 150, 162, 60, 28, wsBorder, 204)
 	a.label("五开首编号", 230, 168, 115)
 	a.control("EDIT", strconv.Itoa(a.cfg.GroupStart), 350, 162, 70, 28, wsBorder, 205)
+	a.button("页面规则", 555, 204, 60, 122)
 	a.button("保存设置", 440, 160, 110, 104)
 	a.button("截图/职业预检", 670, 160, 170, 105)
 	a.button("五开工作台", 855, 160, 150, 106)
 	a.button("停止", 565, 160, 90, 107)
 	a.label("标定页面", 20, 213, 90)
-	cal := a.control("COMBOBOX", "", 115, 205, 500, 380, 3|0x200000, 206)
+	cal := a.control("COMBOBOX", "", 115, 205, 430, 380, 3|0x200000, 206)
 	for _, s := range calibrationNames {
 		comboAdd(cal, s.label)
 	}
 	send(cal, 0x14E, 0, 0)
 	a.button("截图并框选标定", 630, 204, 180, 108)
-	a.button("只检查当前识别", 825, 204, 180, 109)
+	a.button("一键识别诊断", 825, 204, 180, 109)
 	a.label("更新清单", 20, 256, 90)
 	a.control("EDIT", a.cfg.ManifestURL, 115, 250, 710, 28, wsBorder, 207)
 	a.button("一键检查更新", 840, 248, 165, 110)
@@ -391,7 +393,13 @@ func (a *app) errorCapture(d ldplayer.Instance, b []byte, err error) {
 			_ = filesafe.Write(filepath.Join(dir, base+".png"), b, 0600)
 		}
 	}
-	_ = filesafe.JSON(filepath.Join(dir, base+".json"), map[string]any{"instance": d.Index, "instance_name": d.Name, "adb_serial": d.Serial, "android_id": d.AndroidID, "boot_id": d.BootID, "screenshot_sha256": fmt.Sprintf("%x", sha256.Sum256(b)), "resources": "not_read", "counters": "not_read", "captured_at": time.Now().UTC().Format(time.RFC3339Nano), "error": err.Error(), "version": version})
+	metadata := map[string]any{"instance": d.Index, "instance_name": d.Name, "adb_serial": d.Serial, "android_id": d.AndroidID, "boot_id": d.BootID, "screenshot_sha256": fmt.Sprintf("%x", sha256.Sum256(b)), "resources": "not_read", "counters": "not_read", "captured_at": time.Now().UTC().Format(time.RFC3339Nano), "error": err.Error(), "version": version}
+	var failure *automation.RecognitionFailure
+	if errors.As(err, &failure) {
+		metadata["recognition_scores"] = failure.Scores
+		metadata["algorithm_version"] = automation.RuleAlgorithmVersion
+	}
+	_ = filesafe.JSON(filepath.Join(dir, base+".json"), metadata)
 	entries, _ := filepath.Glob(filepath.Join(dir, "error-*.json"))
 	if len(entries) > 20 {
 		for _, p := range entries[:len(entries)-20] {
@@ -509,6 +517,11 @@ func (a *app) cycle(five bool) {
 	})
 }
 func (a *app) checkRecognition() {
+	if a.panel != nil {
+		user32.NewProc("SetForegroundWindow").Call(a.panel.hwnd)
+		return
+	}
+	request := a.currentGameTarget()
 	d, e := a.selected()
 	if e != nil {
 		a.log(e.Error())
@@ -517,21 +530,47 @@ func (a *app) checkRecognition() {
 	client := a.client
 	expectedPackage := a.cfg.Games[strconv.Itoa(d.Index)].Package
 	a.work(func(ctx context.Context) error {
+		sourceFailure := func(cause error) error {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			report := recognitionReport{AlgorithmVersion: automation.RuleAlgorithmVersion, FailureReason: "未取得经身份核验的960×540截图：" + cause.Error()}
+			document := map[string]any{"instance": d.Index, "serial": d.Serial, "android_id": d.AndroidID, "boot_id": d.BootID, "source_verified": false, "version": version, "report": report}
+			bundle, saveErr := saveRecognitionBundle(a.root, d.Index, nil, document, report)
+			if saveErr != nil {
+				return saveErr
+			}
+			a.gameUI(ctx, request, func() { a.openDiagnostic(bundle) })
+			return cause
+		}
 		b, err := client.Screenshot(ctx, d)
 		if err != nil {
-			return err
+			return sourceFailure(err)
+		}
+		if err = client.Verify(ctx, d); err != nil {
+			return sourceFailure(fmt.Errorf("截图后实例身份复核失败：%w", err))
 		}
 		a.logAsync(fmt.Sprintf("识别实时取图：实例%d serial=%s AndroidID=%s boot=%s；ADB=%s；截图SHA256=%x", d.Index, d.Serial, d.AndroidID, d.BootID, client.ADB, sha256.Sum256(b)))
 		img, err := automation.Decode(b)
 		if err != nil {
-			return err
+			return sourceFailure(err)
 		}
-		report, err := inspectRecognition(a.root, d.Index, img)
-		if err != nil {
-			return err
+		report, inspectErr := inspectRecognition(a.root, d.Index, img)
+		if inspectErr != nil {
+			report.FailureReason = "规则读取或校验失败：" + inspectErr.Error()
+		}
+		if report.AlgorithmVersion == "" {
+			report.AlgorithmVersion = automation.RuleAlgorithmVersion
 		}
 		report.ScreenshotSHA = fmt.Sprintf("%x", sha256.Sum256(b))
 		foreground, foregroundErr := gameapp.ReadForeground(ctx, gameShell{client, d})
+		if foregroundErr != nil {
+			report.FailureReason = "前台包诊断失败，页面结果仅供分析：" + foregroundErr.Error()
+			report.Matches = nil
+		} else if expectedPackage != "" && foreground != expectedPackage {
+			report.FailureReason = "前台包与已绑定游戏不一致；未点击"
+			report.Matches = nil
+		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -541,7 +580,7 @@ func (a *app) checkRecognition() {
 		}
 		a.logAsync(fmt.Sprintf("标定重新读取：%s；文件SHA256=%s；时间=%s", report.ProfilePath, report.ProfileSHA, report.LoadedAt))
 		for _, page := range report.Pages {
-			if page.Source != "local" {
+			if page.Source == "built-in" {
 				continue
 			}
 			for i, score := range page.Anchors {
@@ -556,11 +595,20 @@ func (a *app) checkRecognition() {
 			return err
 		}
 		path := filepath.Join(dir, fmt.Sprintf("recognition-latest-%d.json", d.Index))
-		err = filesafe.JSON(path, map[string]any{"version": version, "console": client.Console, "adb_executable": client.ADB, "command": "-s " + d.Serial + " exec-out screencap -p", "instance": d.Index, "serial": d.Serial, "android_id": d.AndroidID, "boot_id": d.BootID, "expected_package": expectedPackage, "foreground": foreground, "foreground_error": fmt.Sprint(foregroundErr), "report": report})
+		document := map[string]any{"source_verified": true, "version": version, "console": client.Console, "adb_executable": client.ADB, "command": "-s " + d.Serial + " exec-out screencap -p", "instance": d.Index, "serial": d.Serial, "android_id": d.AndroidID, "boot_id": d.BootID, "expected_package": expectedPackage, "foreground": foreground, "foreground_matches_binding": foregroundErr == nil && expectedPackage != "" && foreground == expectedPackage, "foreground_error": fmt.Sprint(foregroundErr), "report": report}
+		if inspectErr != nil {
+			document["inspection_error"] = inspectErr.Error()
+		}
+		bundle, err := saveRecognitionBundle(a.root, d.Index, b, document, report)
+		if err != nil {
+			return err
+		}
+		err = filesafe.JSON(path, document)
 		if err != nil {
 			return err
 		}
 		a.logAsync("识别诊断已保存：" + path)
+		a.gameUI(ctx, request, func() { a.openDiagnostic(bundle) })
 		if len(report.Matches) == 0 {
 			err = errors.New("当前画面未识别；没有进行点击；两特征分数及标定来源见识别诊断")
 			a.errorCapture(d, b, err)
@@ -664,7 +712,7 @@ func (a *app) handle(id int) {
 		return
 	}
 	if a.busy.Load() && id != 107 && id != 111 && id != 116 {
-		if (a.backgroundScan && id >= 101 && id <= 121) || id == 110 {
+		if (a.backgroundScan && id >= 101 && id <= 122) || id == 110 {
 			a.pendingAction = id
 			if a.cancel != nil {
 				a.cancel()
@@ -717,6 +765,8 @@ func (a *app) handle(id int) {
 		a.startCalibration()
 	case 109:
 		a.checkRecognition()
+	case 122:
+		a.openRuleManager()
 	case 110:
 		a.onlineUpdate()
 	case 111:
@@ -747,6 +797,9 @@ func (a *app) handle(id int) {
 }
 func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 	a := active
+	if a != nil && a.panel != nil && h == a.panel.hwnd {
+		return a.panel.proc(h, m, w, l)
+	}
 	if a != nil && a.loginPanel != nil && h == a.loginPanel.hwnd {
 		return a.loginPanel.proc(h, m, w, l)
 	}
@@ -768,7 +821,7 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 			if id == 202 && w>>16 == 1 {
 				a.restoreTargetRole()
 			}
-			if id >= 101 && id <= 121 && w>>16 == 0 {
+			if id >= 101 && id <= 122 && w>>16 == 0 {
 				a.handle(id)
 			}
 			return 0
@@ -789,8 +842,8 @@ func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 			a.tick()
 			return 0
 		case wmClose:
-			if a.cal != nil || a.loginPanel != nil {
-				a.info("请先关闭标定或五台登录窗口。")
+			if a.cal != nil || a.panel != nil || a.loginPanel != nil {
+				a.info("请先关闭诊断、规则管理、标定或五台登录窗口。")
 				return 0
 			}
 			if a.busy.Load() {
@@ -889,7 +942,7 @@ func (a *app) tick() {
 	if a.tryOnOpen() {
 		return
 	}
-	if !a.busy.Load() && a.cal == nil && a.gameSelector == nil && a.loginPanel == nil && !a.closing && time.Now().After(a.nextScan) {
+	if !a.busy.Load() && a.cal == nil && a.panel == nil && a.gameSelector == nil && a.loginPanel == nil && !a.closing && time.Now().After(a.nextScan) {
 		a.detectInstances(false)
 	}
 }

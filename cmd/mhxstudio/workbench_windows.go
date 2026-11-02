@@ -438,7 +438,7 @@ func effectiveProfile(p automation.Profile) (automation.Profile, error) {
 	return c.Profile(p), nil
 }
 func (a *app) maintainStudio() bool {
-	if a.busy.Load() || a.cal != nil || a.gameSelector != nil || a.closing {
+	if a.busy.Load() || a.cal != nil || a.panel != nil || a.gameSelector != nil || a.closing {
 		return false
 	}
 	if a.stateStore == nil && !a.stateOpenFailed {

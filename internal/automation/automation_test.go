@@ -55,7 +55,7 @@ func TestAnchorsAndAmbiguity(t *testing.T) {
 	p := NewProfile()
 	a, _ := CaptureAnchor(img, Rect{10, 10, 80, 30})
 	b, _ := CaptureAnchor(img, Rect{300, 100, 60, 25})
-	p.Pages["game_1"] = Page{[]Anchor{a, b}, 10}
+	p.Pages["game_1"] = Page{Anchors: []Anchor{a, b}, Threshold: 10}
 	if e := p.Require(img, "game_1"); e != nil {
 		t.Fatal(e)
 	}

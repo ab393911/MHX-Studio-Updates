@@ -116,7 +116,7 @@ func (c settings) Save(root string) error {
 func profilePath(root string, index int) string {
 	return filepath.Join(root, "profiles", strconv.Itoa(index)+".json")
 }
-func loadProfile(root string, index int) (automation.Profile, error) {
+func loadLocalProfile(root string, index int) (automation.Profile, error) {
 	p := automation.NewProfile()
 	e := filesafe.ReadJSON(profilePath(root, index), &p)
 	if os.IsNotExist(e) {
@@ -133,16 +133,18 @@ func profileHash(p automation.Profile) string {
 	return hex.EncodeToString(h[:])
 }
 func saveProfile(root string, index int, p automation.Profile) error {
+	return saveProfileFile(root, profilePath(root, index), strconv.Itoa(index), p)
+}
+func saveProfileFile(root, path, historyPrefix string, p automation.Profile) error {
 	if e := p.Validate(); e != nil {
 		return e
 	}
-	path := profilePath(root, index)
 	if _, e := os.Stat(path); e == nil {
 		history := filepath.Join(root, "profiles", "history")
 		if e = os.MkdirAll(history, 0700); e != nil {
 			return e
 		}
-		if e = filesafe.CopyNew(path, filepath.Join(history, fmt.Sprintf("%d-%d.json", index, time.Now().UnixNano()))); e != nil {
+		if e = filesafe.CopyNew(path, filepath.Join(history, fmt.Sprintf("%s-%d.json", historyPrefix, time.Now().UnixNano()))); e != nil {
 			return e
 		}
 	} else if !os.IsNotExist(e) {
