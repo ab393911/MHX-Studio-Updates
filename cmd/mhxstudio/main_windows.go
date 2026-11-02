@@ -930,9 +930,12 @@ func main() {
 	if base == "" {
 		base = os.TempDir()
 	}
-	if data == "" {
-		data = filepath.Join(base, "MHXStudioNext")
+	dataRoot, dataErr := dataDirectory(base, data)
+	if dataErr != nil {
+		messageBox.Call(0, uintptr(unsafe.Pointer(utf(dataErr.Error()))), uintptr(unsafe.Pointer(utf("独立测试版数据隔离"))), 0x10)
+		return
 	}
+	data = dataRoot
 	if e := os.MkdirAll(data, 0700); e != nil {
 		messageBox.Call(0, uintptr(unsafe.Pointer(utf(e.Error()))), uintptr(unsafe.Pointer(utf("MHX Studio 启动失败"))), 0x10)
 		os.Exit(1)
