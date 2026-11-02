@@ -1,0 +1,11 @@
+{
+  "SOURCE_SHA": "ab4a316f3e976eace0d8b142e54cc6099d366e81",
+  "RUN_ID": "41445280254",
+  "NATIVE_RESULT": "failure",
+  "published": false,
+  "probe": {
+    "error": "wrong exit, killed=false: exit status 3",
+    "probe_completed": false
+  },
+  "log_tail": "Actual preview40 helper case; preinstalled guard: false\ndebugger: observing original helper API module kernel32.dll\nwrong exit, killed=false: exit status 3\n"
+}
