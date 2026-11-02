@@ -65,30 +65,72 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		defer func() { _ = host.Process.Kill(); _ = host.Wait() }()
 		fail(filesafe.JSON(filepath.Join(dataRoot, "ldplayer-discovery.json"), map[string]string{"directory": install, "adb": filepath.Join(install, "adb.exe")}))
 	}
+	bindings := map[string]any{}
+	for i := 1; i <= 5; i++ {
+		bindings[fmt.Sprint(i)] = map[string]any{"package": "com.fixture.confirmed", "activity": ".Main", "android_id": fmt.Sprintf("%016x", i), "user_confirmed": true}
+	}
 	jobs := map[string]any{}
 	for i, job := range []string{"合欢", "天音", "青云", "鬼王", "鬼王"} {
 		jobs[fmt.Sprint(i+1)] = []string{job, job, job, job, job}
 	}
+	initialManifest := manifest
+	if oldVersion == "3.5.0-preview.40" {
+		initialManifest = update.DefaultManifestURL
+	}
 	cfgPath := filepath.Join(dataRoot, "config.json")
-	fail(filesafe.JSON(cfgPath, map[string]any{"ldplayer_directory": install, "group_start_index": 1, "manifest_url": manifest, "retries": 7, "min_delay_ms": 250, "max_delay_ms": 650, "jobs": jobs, "single_validations": map[string]any{}, "future_unknown_field": map[string]any{"keep": true}, "target_roles": map[string]int{"1": 4}, "game_bindings": map[string]any{"1": map[string]any{"package": "com.fixture.confirmed", "activity": ".Main", "android_id": "abcdef0123456789", "user_confirmed": true}}}))
+	fail(filesafe.JSON(cfgPath, map[string]any{"ldplayer_directory": install, "group_start_index": 1, "manifest_url": initialManifest, "retries": 7, "min_delay_ms": 250, "max_delay_ms": 650, "jobs": jobs, "single_validations": map[string]any{}, "future_unknown_field": map[string]any{"keep": true}, "target_roles": map[string]int{"1": 4}, "game_bindings": bindings}))
+	preserved := map[string][]byte{}
+	for _, name := range []string{"progress.json", "diagnostics/previous.log", "discovery-history/previous.json"} {
+		path := filepath.Join(dataRoot, filepath.FromSlash(name))
+		fail(os.MkdirAll(filepath.Dir(path), 0700))
+		value := []byte("existing history retained: " + name)
+		fail(os.WriteFile(path, value, 0600))
+		preserved[path] = value
+	}
+	if install != "" {
+		for _, name := range []string{"vms/leidian1/config.json", "vms/leidian1/game-data.bin"} {
+			path := filepath.Join(install, filepath.FromSlash(name))
+			fail(os.MkdirAll(filepath.Dir(path), 0700))
+			value := []byte("emulator/game sentinel " + name)
+			fail(os.WriteFile(path, value, 0600))
+			preserved[path] = value
+		}
+	}
 	profile := filepath.Join(dataRoot, "profiles", "1.json")
 	fail(filesafe.JSON(profile, map[string]any{"future_calibration_sentinel": "preserve bytes"}))
 	before, e := os.ReadFile(cfgPath)
 	fail(e)
 	profileBefore, e := os.ReadFile(profile)
 	fail(e)
-	studioSeeded := oldVersion == "3.4.999"
+	studioSeeded := oldVersion == "3.4.999" || oldVersion == "3.5.0-preview.40"
 	studioOrderID := ""
+	studioPlanID, studioActor := "", ""
 	if studioSeeded {
 		s, e := studio.Open(dataRoot)
 		fail(e)
 		o, e := s.CreateOrder("ci-update-preserved", 90000)
 		fail(e)
 		studioOrderID = o.ID
+		if oldVersion == "3.5.0-preview.40" {
+			actors := []studio.Actor{}
+			for i := 1; i <= 5; i++ {
+				actors = append(actors, studio.Actor{Instance: i, Identity: fmt.Sprint(i), Profession: "合欢"})
+			}
+			p := studio.Plan{ID: studio.ID(), Day: studio.Day(time.Now()), Batches: []studio.Batch{{Actors: actors, Servers: []string{"CI synthetic server"}}}, Modules: []string{"team"}}
+			fail(s.CreatePlan(p))
+			studioPlanID = p.ID
+			ph, e := s.Next(p.ID, time.Now())
+			fail(e)
+			studioActor = ph.Tasks[0].Actor
+			fail(s.SetTask(p.ID, ph.Number, studioActor, studio.Running, "", "", 3))
+			fail(s.SetTask(p.ID, ph.Number, studioActor, studio.Done, strings.Repeat("a", 64), "synthetic pre-upgrade history", 3))
+		}
 		fail(s.Close())
 	}
 	target := filepath.Join(root, "Program", "MHXStudio.exe")
 	copyFile(old, target)
+	oldHistory := filepath.Join(filepath.Dir(target), ".mhx-backups", "previous-retained.exe")
+	copyFile(old, oldHistory)
 	oldHash, e := update.Hash(target)
 	fail(e)
 	parent := start(target)
@@ -99,6 +141,19 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		until(h, "published baseline did not detect 24 instances", func() bool {
 			return strings.Contains(readText(control(h, 208)), "检测到 24 台，已运行 5 台，ADB 已验证 5 台")
 		})
+	}
+	if oldVersion == "3.5.0-preview.40" {
+		gameIdle(h)
+		writeText(control(h, 207), manifest)
+		click(h, 104)
+		until(h, "preview40 did not save test channel through GUI", func() bool {
+			var cfg struct {
+				Manifest string `json:"manifest_url"`
+			}
+			return filesafe.ReadJSON(cfgPath, &cfg) == nil && cfg.Manifest == manifest
+		})
+		before, e = os.ReadFile(cfgPath)
+		fail(e)
 	}
 	legacyPlanID, legacyOrderID := "", ""
 	if oldVersion == "3.5.0-preview.21" {
@@ -210,6 +265,19 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		if o.Total != 90000 || o.Confirmed != 0 || o.Held != 0 {
 			fail(errors.New("studio database not preserved"))
 		}
+		if studioPlanID != "" {
+			ph, e := s.Next(studioPlanID, time.Now())
+			fail(e)
+			found := false
+			for _, task := range ph.Tasks {
+				if task.Actor == studioActor {
+					found = task.State == studio.Done && task.Attempt == 1 && task.Evidence == strings.Repeat("a", 64)
+				}
+			}
+			if !found {
+				fail(errors.New("pre-upgrade role execution history changed"))
+			}
+		}
 		fail(s.Close())
 		snapshot, e := update.ReadConfigBackup(plan.ConfigBackupPath(), dataRoot, plan.Token)
 		fail(e)
@@ -256,6 +324,14 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	until(h, "latest-version check did not show the expected message", func() bool { return strings.Contains(readText(control(h, 209)), "当前已是最新版本") })
 	fail(captureWindow(h, filepath.Join(filepath.Dir(out), prefix+"-after.png")))
 	closeTitle(newTitle)
+	for path, want := range preserved {
+		got, err := os.ReadFile(path)
+		fail(err)
+		if !bytes.Equal(got, want) {
+			fail(fmt.Errorf("history/emulator sentinel changed: %s", path))
+		}
+	}
+	fail(update.Verify(oldHistory, oldHash))
 	resultMap := map[string]any{"native_windows": true, "previous_version": oldVersion, "baseline_published": published, "real_update_button_clicked": true, "update_button_clicks": 1, "confirmation_clicks": confirmations, "one_click_without_confirmation": oneClick, "anonymous_manifest_download": true, "sha256_verified": true, "old_exe_backup_retained": true, "configuration_snapshot_verified": true, "configuration_byte_identical": true, "calibration_byte_identical": true, "game_settings_byte_preserved": true, "new_gui_restarted": true, "new_gui_visible": true, "explicit_success_message": true, "latest_version_message": true, "post_upgrade_24_instance_detection_fixture": detectionVerified, "post_upgrade_start_and_adb_fixture": launchVerified, "post_upgrade_five_launch_and_adb_fixture": fiveVerified, "emulator_fixture_only": true, "real_ldplayer_tested": false, "version": expected, "source_commit": m.SourceCommit, "windows_game_tested": false, "passed": true, "completed_at": time.Now().UTC().Format(time.RFC3339)}
 	if !oneClick {
 		resultMap["previous_published_version"] = oldVersion
@@ -267,6 +343,11 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		resultMap["previous_published_version"] = oldVersion
 	}
 	resultMap["window_and_critical_buttons_on_screen"] = true
+	resultMap["test_channel_enrolled_via_preview40_gui"] = oldVersion == "3.5.0-preview.40"
+	resultMap["progress_history_logs_preserved"] = true
+	resultMap["emulator_directory_sentinels_preserved"] = install != ""
+	resultMap["previous_update_backup_preserved"] = true
+	resultMap["role_execution_history_preserved"] = studioPlanID != ""
 	resultMap["studio_data_seeded"] = studioSeeded
 	resultMap["studio_database_preserved"] = studioPreserved
 	if legacyPlanID != "" {

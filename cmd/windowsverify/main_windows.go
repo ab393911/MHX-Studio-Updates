@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -90,6 +91,9 @@ func main() {
 	old := flag.String("old", "", "")
 	published19 := flag.String("published19", "", "")
 	published21 := flag.String("published21", "", "")
+	published40 := flag.String("published40", "", "")
+	updateOnly := flag.Bool("update-only", false, "")
+	interrupt := flag.String("interrupt-update", "", "")
 	newExe := flag.String("new", "", "")
 	exitExe := flag.String("exit-fixture", "", "")
 	emulatorFixture := flag.String("emulator-fixture", "", "")
@@ -99,6 +103,19 @@ func main() {
 	oldVersion := flag.String("old-version", "3.4.999", "")
 	oneClick := flag.Bool("expect-one-click", false, "")
 	flag.Parse()
+	if *interrupt != "" {
+		var p update.Plan
+		fail(filesafe.ReadJSON(*interrupt, &p))
+		err := (update.Installer{Runtime: interruptionRuntime{}, Rename: func(a, b string) error {
+			err := os.Rename(a, b)
+			if err == nil && b == p.Backup {
+				os.Exit(77)
+			}
+			return err
+		}}).Install(context.Background(), p)
+		fail(fmt.Errorf("interruption point not reached: %v", err))
+		return
+	}
 	if *live != "" {
 		if *old == "" || *version == "" {
 			fail(errors.New("old EXE and expected version required"))
@@ -131,14 +148,14 @@ func main() {
 		fail(errors.New("native GUI is hidden"))
 	}
 	results := map[string]any{"native_windows": true, "arch": "amd64", "gui_smoke": sm, "windows_game_tested": false, "version": *version}
-	if *emulatorFixture != "" {
+	if *emulatorFixture != "" && !*updateOnly {
 		results["emulator_gui_fixture"] = emulatorGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 		results["adb_fallback_gui_fixture"] = adbFallbackGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 		results["single_game_gui_fixture"] = gameGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 		results["studio_gui_fixture"] = studioGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 		results["group_login_gui_fixture"] = groupLoginGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 	}
-	scenarios := []string{"success", "startup_timeout", "sha_tamper", "sharing_violation"}
+	scenarios := []string{"success", "startup_timeout", "sha_tamper", "sharing_violation", "interrupted_recovery"}
 	ledger, e := studio.Open(filepath.Dir(cfg))
 	fail(e)
 	sentinelOrder, e := ledger.CreateOrder("native-preserved-buyer", 40000)
@@ -192,10 +209,26 @@ func main() {
 		if scenario == "config_migration_exit" {
 			fail(os.Setenv("MHX_TEST_MUTATE_CONFIG", "1"))
 		}
-		helperCmd := start(helper, "--apply-update", filepath.Join(tx, "plan.json"))
-		fail(os.Unsetenv("MHX_TEST_MUTATE_CONFIG"))
-		fail(wait(parent, 20*time.Second))
-		helperErr := wait(helperCmd, 50*time.Second)
+		var helperErr error
+		if scenario == "interrupted_recovery" {
+			fail(wait(parent, 20*time.Second))
+			self, e := os.Executable()
+			fail(e)
+			interrupted := start(self, "--interrupt-update", filepath.Join(tx, "plan.json"))
+			if err := wait(interrupted, 20*time.Second); err == nil || interrupted.ProcessState == nil || interrupted.ProcessState.ExitCode() != 77 {
+				fail(fmt.Errorf("did not exit at injected interruption: %v", err))
+			}
+			if _, err := os.Stat(target); !os.IsNotExist(err) {
+				fail(errors.New("interruption did not leave missing EXE"))
+			}
+			fail(update.Verify(p.Backup, p.OldSHA))
+			helperErr = wait(start(helper, "--apply-update", filepath.Join(tx, "plan.json")), 50*time.Second)
+		} else {
+			helperCmd := start(helper, "--apply-update", filepath.Join(tx, "plan.json"))
+			fail(os.Unsetenv("MHX_TEST_MUTATE_CONFIG"))
+			fail(wait(parent, 20*time.Second))
+			helperErr = wait(helperCmd, 50*time.Second)
+		}
 		if lock != 0 {
 			syscall.CloseHandle(lock)
 		}
@@ -210,21 +243,21 @@ func main() {
 			fail(update.Verify(p.Backup, p.OldSHA))
 			fail(waitWindow("知夏 · MHX Studio " + *version))
 			closeTitle("知夏 · MHX Studio " + *version)
-		case "startup_timeout", "immediate_exit", "config_migration_exit":
+		case "startup_timeout", "immediate_exit", "config_migration_exit", "interrupted_recovery":
 			if result.Status != "rolled_back" {
 				fail(fmt.Errorf("rollback failed: %+v", result))
 			}
 			fail(update.Verify(target, p.OldSHA))
 			fail(update.Verify(p.Backup, p.OldSHA))
-			fail(waitWindow("知夏 · MHX Studio 3.4.999"))
-			closeTitle("知夏 · MHX Studio 3.4.999")
+			fail(waitWindow("知夏 · MHX Studio " + *oldVersion))
+			closeTitle("知夏 · MHX Studio " + *oldVersion)
 		default:
 			if helperErr == nil || result.Status != "unchanged" {
 				fail(fmt.Errorf("preflight protection failed: %+v %v", result, helperErr))
 			}
 			fail(update.Verify(target, p.OldSHA))
-			fail(waitWindow("知夏 · MHX Studio 3.4.999"))
-			closeTitle("知夏 · MHX Studio 3.4.999")
+			fail(waitWindow("知夏 · MHX Studio " + *oldVersion))
+			closeTitle("知夏 · MHX Studio " + *oldVersion)
 		}
 		b, e := os.ReadFile(cfg)
 		fail(e)
@@ -263,9 +296,23 @@ func main() {
 		fail(os.MkdirAll(folder, 0700))
 		results["preview21_scope_gui_upgrade"] = localGUIUpgrade(*published21, "3.5.0-preview.21", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
 	}
+	if *published40 != "" {
+		folder := filepath.Join(filepath.Dir(*out), "preview40-direct")
+		fail(os.MkdirAll(folder, 0700))
+		results["preview40_direct_gui_upgrade"] = localGUIUpgrade(*published40, "3.5.0-preview.40", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
+	}
 	// Also prove settings saves preserve unknown fields (unit tests cover detail).
 	results["passed"] = true
 	results["completed_at"] = time.Now().UTC().Format(time.RFC3339)
 	fail(filesafe.JSON(*out, results))
 	fmt.Println("Native Windows GUI/update checks passed; LDPlayer/game tests remain pending.")
+}
+
+// Test-only process: the parent EXE was already waited for by the harness.
+// The injected rename exits before Launch, exactly after the retained backup.
+type interruptionRuntime struct{}
+
+func (interruptionRuntime) WaitParent(context.Context, int) error { return nil }
+func (interruptionRuntime) Launch(string, ...string) (update.Child, error) {
+	return nil, errors.New("unexpected launch before interruption")
 }

@@ -128,8 +128,9 @@ func (e *Engine) click(ctx context.Context, before, button, after string) error 
 		}
 		e.log(fmt.Sprintf("%s → %s（尝试 %d/%d）", before, after, attempt+1, e.Options.Retries+1))
 		if err = e.Device.Tap(ctx, x, y); err != nil {
-			last = err
-			continue
+			// The device may have sent the action before its transport failed.
+			// Never let this outer loop replay an uncertain/recovered click.
+			return err
 		}
 		if err = e.wait(ctx, after); err == nil {
 			return nil

@@ -1,0 +1,119 @@
+name: Issue2 preview40 update verification (no publication)
+on:
+  push:
+    branches: [codex/fix-preview40-bindings-adb]
+    paths:
+      - '.github/workflows/issue2-update-test.yml'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'scripts/issue2-ci-evidence.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: issue2-update-verification
+  cancel-in-progress: false
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - run: go vet ./...
+      - run: go test -race -count=1 -json ./... > portable-tests.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue2-portable-results
+          path: portable-tests.json
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Verify unchanged database schema and build native candidate
+        shell: pwsh
+        run: |
+          git fetch --no-tags origin bfc5e2f0336ede93e963d364cac21fb1a2f15a43
+          if ($LASTEXITCODE) { throw 'Cannot read published source' }
+          git diff --exit-code bfc5e2f0336ede93e963d364cac21fb1a2f15a43 HEAD -- internal/studio
+          if ($LASTEXITCODE) { throw 'Database schema changed; explicit migration acceptance required' }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $env:CGO_ENABLED = '0'
+          $version = '3.5.0-preview.41-issue2.1'
+          go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version -X main.sourceCommit=$env:GITHUB_SHA" -o dist/MHXStudio.exe ./cmd/mhxstudio
+          if ($LASTEXITCODE) { throw 'Candidate build failed' }
+          go build -trimpath -ldflags '-H windowsgui -s -w' -o dist/exit-test.exe ./cmd/testexit
+          if ($LASTEXITCODE) { throw 'Exit fixture build failed' }
+          go build -trimpath -ldflags '-H windowsgui -s -w' -o dist/ldfixture.exe ./cmd/ldfixture
+          if ($LASTEXITCODE) { throw 'Emulator fixture build failed' }
+          go build -o dist/windowsverify.exe ./cmd/windowsverify
+          if ($LASTEXITCODE) { throw 'Native verifier build failed' }
+          $hash = (Get-FileHash dist/MHXStudio.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          @{version=$version;source_commit=$env:GITHUB_SHA;sha256=$hash;size=(Get-Item dist/MHXStudio.exe).Length;isolated_test_id='';published=$false} | ConvertTo-Json | Set-Content -Encoding utf8 dist/candidate.json
+      - name: Verify published preview40 baseline
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.40/MHXStudio.exe' -OutFile dist/published40.exe
+          if ((Get-FileHash dist/published40.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2') { throw 'Published preview40 SHA mismatch' }
+      - name: Native Windows static checks and unit tests
+        shell: pwsh
+        run: |
+          go vet ./...
+          if ($LASTEXITCODE) { throw 'Windows vet failed' }
+          go test -count=1 -json -skip '^TestNativeWindowsAssetAmounts$' ./... > dist/windows-unit-tests.json
+          if ($LASTEXITCODE) { throw 'Windows unit tests failed (experimental game currency fixture was not run)' }
+      - name: Native GUI, preview40 helper, backups, rollback and interruption
+        shell: pwsh
+        run: |
+          ./dist/windowsverify.exe -old "$pwd/dist/published40.exe" -old-version '3.5.0-preview.40' -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '3.5.0-preview.41-issue2.1' -update-only -published40 "$pwd/dist/published40.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -out dist/issue2-native-update.json
+          if ($LASTEXITCODE) { throw 'Native update acceptance failed; publication blocked' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue2-windows-results
+          path: |
+            dist/candidate.json
+            dist/windows-unit-tests.json
+            dist/issue2-native-update.json
+            dist/preview40-direct/
+            dist/MHXStudio.exe
+          if-no-files-found: error
+      - name: Publish execution summary only
+        if: always()
+        shell: pwsh
+        run: |
+          "## Issue2 Windows verification" >> $env:GITHUB_STEP_SUMMARY
+          foreach ($name in @('candidate.json','issue2-native-update.json','preview40-direct/upgrade.json')) {
+            if (Test-Path "dist/$name") { "### $name" >> $env:GITHUB_STEP_SUMMARY; '```json' >> $env:GITHUB_STEP_SUMMARY; Get-Content "dist/$name" >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY }
+          }
+  evidence:
+    if: always()
+    needs: [portable, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: verification-artifacts
+      - name: Persist reports only (no releases or channel changes)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PORTABLE_RESULT: ${{ needs.portable.result }}
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: python3 scripts/issue2-ci-evidence.py
