@@ -71,7 +71,11 @@ func saveRuleLibrary(root string, index int, p automation.Profile, shared bool) 
 				page.Revision = 1
 			}
 		} else {
-			page.Revision = previous.Revision + 1
+			previousRevision := previous.Revision
+			if exists && previousRevision < 1 {
+				previousRevision = 1
+			}
+			page.Revision = previousRevision + 1
 			if page.Revision < 1 {
 				page.Revision = 1
 			}

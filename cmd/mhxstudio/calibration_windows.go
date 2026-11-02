@@ -187,6 +187,9 @@ func (c *calibration) save() {
 		revision = 1
 	}
 	page := automation.Page{ButtonID: c.name.button, CalibrationImageSHA: automation.FrameSHA(c.img), Label: c.name.label, Revision: revision, Anchors: anchors, Threshold: threshold}
+	if old.MinMatches <= len(anchors) {
+		page.MinMatches = old.MinMatches
+	}
 	if len(old.FeatureThresholds) == len(anchors) {
 		page.FeatureThresholds = old.FeatureThresholds
 	}

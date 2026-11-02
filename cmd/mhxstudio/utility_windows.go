@@ -175,7 +175,11 @@ func (p *utilityPanel) loadRules() {
 }
 func (p *utilityPanel) rules() (automation.Profile, error) {
 	v := automation.NewProfile()
-	err := json.Unmarshal([]byte(text(p.editor)), &v)
+	raw, err := readRuleEditor(p.editor)
+	if err != nil {
+		return v, err
+	}
+	err = json.Unmarshal([]byte(raw), &v)
 	if err != nil {
 		return v, err
 	}
@@ -303,4 +307,14 @@ func (p *utilityPanel) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 	}
 	v, _, _ := defWindow.Call(h, uintptr(m), w, l)
 	return v
+}
+
+func readRuleEditor(h uintptr) (string, error) {
+	n, _, _ := user32.NewProc("GetWindowTextLengthW").Call(h)
+	if n > 2<<20 {
+		return "", fmt.Errorf("规则内容超过2MiB，请拆分页面规则")
+	}
+	b := make([]uint16, int(n)+1)
+	getWindowText.Call(h, uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)))
+	return syscall.UTF16ToString(b), nil
 }

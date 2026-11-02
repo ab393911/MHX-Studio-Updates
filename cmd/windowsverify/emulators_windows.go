@@ -20,7 +20,11 @@ func control(h uintptr, id int) uintptr {
 	return v
 }
 func readText(h uintptr) string {
-	b := make([]uint16, 12000)
+	n, _, _ := user.NewProc("SendMessageW").Call(h, 0xE, 0, 0)
+	if n > 2<<20 {
+		fail(fmt.Errorf("GUI text exceeds bounded 2MiB test limit"))
+	}
+	b := make([]uint16, int(n)+1)
 	// GetWindowTextW intentionally does not read another process's edit text.
 	// WM_GETTEXT is a system-marshalled message and works for these controls.
 	user.NewProc("SendMessageW").Call(h, 0xD, uintptr(len(b)), uintptr(unsafe.Pointer(&b[0])))
