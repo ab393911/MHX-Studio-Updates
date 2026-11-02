@@ -1,0 +1,87 @@
+name: Issue2 immutable preview40 first-hop interruption probe
+on:
+  push:
+    branches: [codex/fix-preview40-bindings-adb]
+    paths:
+      - '.github/workflows/issue2-firsthop-probe.yml'
+      - 'tools/firsthopverify/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-firsthop:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Build diagnostic only and verify immutable published helper
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $env:CGO_ENABLED = '0'
+          go vet ./tools/firsthopverify
+          if ($LASTEXITCODE) { throw 'Probe vet failed' }
+          go build -o dist/firsthopverify.exe ./tools/firsthopverify
+          if ($LASTEXITCODE) { throw 'Probe build failed' }
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.40/MHXStudio.exe' -OutFile dist/published40.exe
+          if ((Get-FileHash dist/published40.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2') { throw 'Published helper SHA mismatch' }
+      - name: Terminate real old helper at rename return, with and without a prerequisite guard
+        shell: pwsh
+        run: |
+          ./dist/firsthopverify.exe -old "$pwd/dist/published40.exe" -out "$pwd/dist/firsthop-result.json" 2>&1 | Tee-Object -FilePath dist/firsthop.log
+          $probeExit = $LASTEXITCODE
+          if ($probeExit) { throw 'Probe could not establish a result; publication remains blocked' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: immutable-firsthop-results
+          path: |
+            dist/firsthop-result.json
+            dist/firsthop.log
+      - name: Job summary
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path dist/firsthop-result.json) { '```json' >> $env:GITHUB_STEP_SUMMARY; Get-Content dist/firsthop-result.json >> $env:GITHUB_STEP_SUMMARY; '```' >> $env:GITHUB_STEP_SUMMARY }
+  evidence:
+    if: always()
+    needs: native-firsthop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: immutable-firsthop-results
+          path: evidence
+      - name: Persist bounded results only, never publish a build or channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          NATIVE_RESULT: ${{ needs.native-firsthop.result }}
+        run: |
+          python3 - <<'PY'
+          import os,json,base64,subprocess
+          from pathlib import Path
+          def gh(*args): return subprocess.run(['gh','api',*args],check=True,capture_output=True,text=True).stdout
+          repo=os.environ['REPO'];branch='issue2-ci-evidence'
+          r={k:os.environ[k] for k in ['SOURCE_SHA','RUN_ID','NATIVE_RESULT']};r['published']=False
+          for p in Path('evidence').glob('*'):
+              if p.name=='firsthop-result.json': r['probe']=json.loads(p.read_text(encoding='utf-8-sig'))
+              elif p.suffix=='.log': r['log_tail']=p.read_text(encoding='utf-8-sig',errors='replace')[-20000:]
+          body={'branch':branch,'message':f'Immutable helper probe {r["RUN_ID"]}','content':base64.b64encode((json.dumps(r,ensure_ascii=False,indent=2)+'\n').encode()).decode()}
+          path='firsthop-probe.json'
+          try:body['sha']=json.loads(gh(f'repos/{repo}/contents/{path}?ref={branch}'))['sha']
+          except subprocess.CalledProcessError:pass
+          Path('/tmp/probe.json').write_text(json.dumps(body))
+          gh(f'repos/{repo}/contents/{path}','--method','PUT','--input','/tmp/probe.json')
+          print(json.dumps(r,ensure_ascii=False,indent=2))
+          PY
