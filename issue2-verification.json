@@ -2,7 +2,7 @@
   "SOURCE_SHA": "c453b2e20f119a26ecc443f7c7c64a84c88531a0",
   "RUN_ID": "41467387546",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "not-yet-aggregated",
+  "PORTABLE_RESULT": "success",
   "WINDOWS_RESULT": "failure",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41467387546",
   "published": false,
@@ -19,6 +19,9 @@
     "verification-artifacts/issue2-windows-results/windows-unit-tests.json": {
       "pass": 262,
       "fail": 1
+    },
+    "verification-artifacts/issue2-portable-results/portable-tests.json": {
+      "pass": 261
     }
   },
   "ready_for_publication": false,
