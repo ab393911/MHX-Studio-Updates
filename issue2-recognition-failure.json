@@ -1,0 +1,7 @@
+[
+  {
+    "package": "github.com/ab393911/MHX-Studio-Updates/internal/vision",
+    "test": "TestNativeWindowsOCRReadsGeneratedTextWithoutSavingScreenshot",
+    "output": "=== RUN   TestNativeWindowsOCRReadsGeneratedTextWithoutSavingScreenshot\n    ocr_windows_test.go:121: WinRT bridge failed: context deadline exceeded; Windows OCR: ocr-stage=init\r\n        ocr-stage=types-ready\r\n        \n--- FAIL: TestNativeWindowsOCRReadsGeneratedTextWithoutSavingScreenshot (30.07s)\n"
+  }
+]
