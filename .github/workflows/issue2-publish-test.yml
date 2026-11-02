@@ -1,0 +1,169 @@
+name: Publish Windows-verified Issue2 test channel (accepted legacy recovery risk)
+on:
+  push:
+    branches: [codex/fix-preview40-bindings-adb]
+    paths:
+      - '.github/workflows/issue2-publish-test.yml'
+      - 'scripts/issue2-release-control.py'
+      - 'tools/issue2manualverify/**'
+      - 'docs/ISSUE_2_TEST_CHANNEL_RECOVERY.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: issue2-test-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: issue2-windows-results
+          run-id: 41438510528
+          github-token: ${{ github.token }}
+          path: dist
+      - name: Validate exact native artifact and publish only Issue2 prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/issue2-release-control.py publish
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue2-publication-files
+          path: |
+            dist/update.json
+            dist/public-download.json
+            dist/ISSUE2-VERIFICATION.json
+  public-windows:
+    needs: publish
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Build verification tools only, obtain immutable preview40
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force reports,dist | Out-Null
+          $env:CGO_ENABLED = '0'
+          go build -o dist/windowsverify.exe ./cmd/windowsverify
+          if ($LASTEXITCODE) { throw 'Verifier build failed' }
+          go build -ldflags '-H windowsgui -s -w' -o dist/ldfixture.exe ./cmd/ldfixture
+          if ($LASTEXITCODE) { throw 'Fixture build failed' }
+          go vet ./tools/issue2manualverify
+          if ($LASTEXITCODE) { throw 'Manual recovery verifier vet failed' }
+          go build -o dist/manualverify.exe ./tools/issue2manualverify
+          if ($LASTEXITCODE) { throw 'Manual recovery verifier build failed' }
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.40/MHXStudio.exe' -OutFile dist/published40.exe
+          if ((Get-FileHash dist/published40.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2') { throw 'Old binary SHA mismatch' }
+      - name: Actual published preview40 GUI upgrades from public release assets
+        shell: pwsh
+        run: |
+          ./dist/windowsverify.exe -old "$pwd/dist/published40.exe" -old-version '3.5.0-preview.40' -expect-one-click -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.1/update.json' -version '3.5.0-preview.41-issue2.1' -emulator-fixture "$pwd/dist/ldfixture.exe" -out reports/published-gui-update.json 2>&1 | Tee-Object reports/public-gui.log
+          $code = $LASTEXITCODE
+          if ($code) { throw 'Public upgrade failed; test channel must not be promoted' }
+      - name: User double-click + Yes recovery, no command-line user procedure
+        shell: pwsh
+        run: |
+          ./dist/manualverify.exe -old "$pwd/dist/published40.exe" -out reports/manual-recovery.json 2>&1 | Tee-Object reports/manual-gui.log
+          $code = $LASTEXITCODE
+          if ($code) { throw 'Manual GUI recovery failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue2-public-windows-results
+          path: reports/
+  promote-test-channel:
+    needs: [publish, public-windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: issue2-publication-files
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: issue2-public-windows-results
+          path: reports
+      - name: Promote only updates/issue2-test.json and verify anonymous download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/issue2-release-control.py promote
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue2-final-publication-result
+          path: reports/
+  quarantine:
+    if: always() && needs.publish.result == 'success' && needs.promote-test-channel.result != 'success'
+    needs: [publish, public-windows, promote-test-channel]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Hide candidate when post-publication acceptance fails
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit issue2-v3.5.0-preview.41-issue2.1 --repo ab393911/MHX-Studio-Updates --draft=true
+  evidence:
+    if: always()
+    needs: [publish, public-windows, promote-test-channel, quarantine]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: artifacts
+      - name: Persist result without altering application channels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          WINDOWS_RESULT: ${{ needs.public-windows.result }}
+          PROMOTION_RESULT: ${{ needs.promote-test-channel.result }}
+        run: |
+          python3 - <<'PY'
+          import os,json,base64,subprocess
+          from pathlib import Path
+          def gh(*args):return subprocess.run(['gh','api',*args],check=True,capture_output=True,text=True).stdout
+          r={k:os.environ[k] for k in ['WORKFLOW_SHA','RUN_ID','PUBLISH_RESULT','WINDOWS_RESULT','PROMOTION_RESULT']}
+          r['reports']={}
+          for p in Path('artifacts').rglob('*'):
+              if p.suffix=='.json':
+                  try:r['reports'][str(p)]=json.loads(p.read_text(encoding='utf-8-sig'))
+                  except json.JSONDecodeError:pass
+              elif p.suffix=='.log':r['reports'][str(p)]=p.read_text(encoding='utf-8-sig',errors='replace')[-20000:]
+          endpoint='repos/ab393911/MHX-Studio-Updates/contents/issue2-publication.json'
+          body={'branch':'issue2-ci-evidence','message':f'Issue2 publication evidence {r["RUN_ID"]}','content':base64.b64encode((json.dumps(r,ensure_ascii=False,indent=2)+'\n').encode()).decode()}
+          try:body['sha']=json.loads(gh(endpoint+'?ref=issue2-ci-evidence'))['sha']
+          except subprocess.CalledProcessError:pass
+          Path('/tmp/request.json').write_text(json.dumps(body))
+          gh(endpoint,'--method','PUT','--input','/tmp/request.json')
+          print(json.dumps(r,ensure_ascii=False,indent=2))
+          PY
