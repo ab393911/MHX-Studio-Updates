@@ -2,7 +2,7 @@
   "SOURCE_SHA": "c5f536d71e677d4c941f09a36fde5a3399eb379d",
   "RUN_ID": "41469150145",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "not-yet-aggregated",
+  "PORTABLE_RESULT": "cancelled",
   "WINDOWS_RESULT": "cancelled",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41469150145",
   "published": false,
@@ -182,6 +182,9 @@
     },
     "verification-artifacts/issue2-windows-results/windows-unit-tests.json": {
       "pass": 263
+    },
+    "verification-artifacts/issue2-portable-results/portable-tests.json": {
+      "pass": 243
     },
     "verification-artifacts/issue2-windows-results/native-update.log": "Native Windows update scenario: success\nNative Windows update scenario: startup_timeout\nNative Windows update scenario: sha_tamper\nNative Windows update scenario: sharing_violation\nNative Windows update scenario: interrupted_recovery\nNative Windows update scenario: immediate_exit\nNative Windows update scenario: config_migration_exit\nPreparing private HTTPS candidate for published baseline: 3.5.0-preview.40\nPrivate HTTPS trust ready: 3.5.0-preview.40\nGUI upgrade begins: 3.5.0-preview.40 -> 3.5.0-preview.41-issue2.2\nLive GUI update passed: 3.5.0-preview.41-issue2.2 one click: true legacy confirmations: 0\nNative Windows GUI/update checks passed; LDPlayer/game tests remain pending.\n"
   },
