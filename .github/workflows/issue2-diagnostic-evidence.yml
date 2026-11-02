@@ -1,0 +1,40 @@
+name: Retrieve Issue2 failed-test evidence only
+on:
+  push:
+    branches: [codex/fix-preview40-bindings-adb]
+    paths: ['.github/workflows/issue2-diagnostic-evidence.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  retrieve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: issue2-windows-results
+          run-id: '41467387546'
+          github-token: ${{ github.token }}
+          path: verification-artifacts
+      - name: Retain failed tests without rerunning any tests or publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64,collections,json,os,pathlib,subprocess
+          output=collections.defaultdict(list); failed=[]
+          for line in pathlib.Path('verification-artifacts/windows-unit-tests.json').read_text(encoding='utf-8-sig').splitlines():
+              e=json.loads(line);key=(e.get('Package'),e.get('Test'))
+              if e.get('Output'): output[key].append(e['Output'])
+              if e.get('Test') and e['Action']=='fail': failed.append(key)
+          report=[{'package':p,'test':t,'output':''.join(output[p,t])[-12000:]} for p,t in failed]
+          repo=os.environ['GITHUB_REPOSITORY'];path='issue2-recognition-failure.json';branch='issue2-ci-evidence'
+          def gh(*args):return subprocess.check_output(['gh','api',*args],text=True)
+          body={'branch':branch,'message':'Retain native recognition test failure evidence','content':base64.b64encode(json.dumps(report,ensure_ascii=False,indent=2).encode()).decode()}
+          try: body['sha']=json.loads(gh(f'repos/{repo}/contents/{path}?ref={branch}'))['sha']
+          except subprocess.CalledProcessError:pass
+          pathlib.Path('/tmp/evidence.json').write_text(json.dumps(body))
+          gh(f'repos/{repo}/contents/{path}','--method','PUT','--input','/tmp/evidence.json')
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
