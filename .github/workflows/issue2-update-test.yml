@@ -12,7 +12,7 @@ permissions:
   contents: read
 concurrency:
   group: issue2-update-verification
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   portable:
     runs-on: ubuntu-latest
@@ -114,6 +114,31 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PORTABLE_RESULT: ${{ needs.portable.result }}
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: python3 scripts/issue2-ci-evidence.py
+
+  windows-evidence:
+    if: always()
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: issue2-windows-results
+          path: verification-artifacts/issue2-windows-results
+      - name: Retain native outcome without waiting for portable suite
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PORTABLE_RESULT: not-yet-aggregated
           WINDOWS_RESULT: ${{ needs.windows.result }}
           REPOSITORY: ${{ github.repository }}
           SOURCE_SHA: ${{ github.sha }}

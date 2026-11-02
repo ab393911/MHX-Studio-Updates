@@ -114,7 +114,7 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		if oldVersion == "3.5.0-preview.40" {
 			actors := []studio.Actor{}
 			for i := 1; i <= 5; i++ {
-				actors = append(actors, studio.Actor{Instance: i, Identity: fmt.Sprint(i), Profession: "合欢"})
+				actors = append(actors, studio.Actor{Instance: i, Identity: fmt.Sprint(i), Profession: []string{"合欢", "天音", "青云", "鬼王", "鬼王"}[i-1]})
 			}
 			p := studio.Plan{ID: studio.ID(), Day: studio.Day(time.Now()), Batches: []studio.Batch{{Actors: actors, Servers: []string{"CI synthetic server"}}}, Modules: []string{"team"}}
 			fail(s.CreatePlan(p))
