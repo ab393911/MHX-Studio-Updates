@@ -28,6 +28,8 @@ for p in Path('verification-artifacts').rglob('*tests.json'):
     report['reports'][str(p)] = counts
 for p in Path('verification-artifacts').rglob('*.log'):
     report['reports'][str(p)] = p.read_text(encoding='utf-8-sig',errors='replace')[-24000:]
+report['ready_for_publication'] = False
+report['release_gate_note'] = 'Requires all native acceptance including unattended interruption recovery; no automatic publication is configured.'
 repo = os.environ['REPOSITORY']
 if report['WINDOWS_RESULT'] != 'success':
     try:

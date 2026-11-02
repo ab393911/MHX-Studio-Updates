@@ -298,7 +298,7 @@ func main() {
 			fail(errors.New("progress/order database changed during native update/rollback"))
 		}
 		fail(ledger.Close())
-		results[scenario] = map[string]any{"passed": true, "status": result.Status, "config_unchanged": true, "configuration_snapshot_verified": configBacked, "backup_retained": scenario == "success" || scenario == "startup_timeout" || scenario == "immediate_exit" || scenario == "config_migration_exit"}
+		results[scenario] = map[string]any{"passed": true, "status": result.Status, "config_unchanged": true, "configuration_snapshot_verified": configBacked, "backup_retained": scenario == "success" || scenario == "startup_timeout" || scenario == "immediate_exit" || scenario == "config_migration_exit" || scenario == "interrupted_recovery"}
 		results[scenario].(map[string]any)["studio_order_database_preserved"] = true
 		if scenario == "interrupted_recovery" {
 			results[scenario].(map[string]any)["recovery_helper_restarted_by_test"] = true
