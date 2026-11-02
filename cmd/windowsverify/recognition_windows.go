@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"github.com/ab393911/MHX-Studio-Updates/internal/automation"
 	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
+	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -45,6 +47,30 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	}
 	fail(filesafe.JSON(filepath.Join(install, "emulator-fixture.json"), []map[string]any{{"Index": 1, "Running": true}}))
 	p := gameFixtureProfile(install)
+	// Reproduce the reported right-edge feature coordinates using synthetic pixels.
+	// This verifies crop/display geometry, not the user's unavailable live image.
+	rects := []automation.Rect{{X: 906, Y: 356, W: 36, H: 46}, {X: 908, Y: 411, W: 31, H: 44}, {X: 19, Y: 394, W: 30, H: 29}}
+	framePath := filepath.Join(install, "screens", "game_3.png")
+	frameBytes, e := os.ReadFile(framePath)
+	fail(e)
+	frame, e := png.Decode(bytes.NewReader(frameBytes))
+	fail(e)
+	textured := image.NewRGBA(frame.Bounds())
+	for y := 0; y < 540; y++ {
+		for x := 0; x < 960; x++ {
+			textured.Set(x, y, frame.At(x, y))
+		}
+	}
+	for _, r := range rects[:2] {
+		for y := r.Y; y < r.Y+r.H; y++ {
+			for x := r.X; x < r.X+r.W; x++ {
+				textured.SetRGBA(x, y, color.RGBA{R: byte(30 + (x*11+y*3)%200), G: byte(20 + (x*5+y*7)%210), B: byte(40 + (x+y*13)%190), A: 255})
+			}
+		}
+	}
+	var encoded bytes.Buffer
+	fail(png.Encode(&encoded, textured))
+	fail(filesafe.Write(framePath, encoded.Bytes(), 0600))
 	p.Pages["game"] = p.Pages["notice"] // stale calibration must actually be replaced by GUI save
 	state := gameFixtureState{Package: "com.pwrd.mzlite.laohu", Activity: ".Main", Foreground: "com.pwrd.mzlite.laohu", Page: "game_3", Running: true}
 	statePath := filepath.Join(install, "game-fixture.json")
@@ -68,7 +94,6 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	calTitle := "实例 1 标定 · 游戏主界面：两处稳定特征 + 菜单按钮"
 	fail(waitWindow(calTitle))
 	cal := findWindow(calTitle)
-	rects := []automation.Rect{{X: 10, Y: 10, W: 80, H: 24}, {X: 120, Y: 10, W: 80, H: 24}, {X: 20, Y: 480, W: 30, H: 24}}
 	for _, r := range rects {
 		a := uintptr(uint32(r.X+20) | uint32(r.Y+70)<<16)
 		b := uintptr(uint32(r.X+r.W-1+20) | uint32(r.Y+r.H-1+70)<<16)
@@ -166,5 +191,5 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	}
 	closeTitle(title)
 	fail(wait(app, 10*time.Second))
-	return map[string]any{"passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
+	return map[string]any{"passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
 }

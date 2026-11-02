@@ -31,7 +31,7 @@ for p in Path('verification-artifacts').rglob('*tests.json'):
 for p in Path('verification-artifacts').rglob('*.log'):
     report['reports'][str(p)] = p.read_text(encoding='utf-8-sig',errors='replace')[-24000:]
 report['ready_for_publication'] = False
-report['release_gate_note'] = 'Requires all native acceptance including unattended interruption recovery; no automatic publication is configured.'
+report['release_gate_note'] = 'Diagnostic candidate only: real intermittent recognition root cause remains unconfirmed; no automatic publication is configured. Accepted legacy first-hop interruption risk is documented separately.'
 repo = os.environ['REPOSITORY']
 if report['WINDOWS_RESULT'] != 'success':
     try:
