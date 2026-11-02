@@ -2,7 +2,7 @@
   "SOURCE_SHA": "bcf360ab9ae873ea50aed4d5b0638615971a77e3",
   "RUN_ID": "41478351153",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "not-yet-aggregated",
+  "PORTABLE_RESULT": "cancelled",
   "WINDOWS_RESULT": "failure",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41478351153",
   "published": false,
@@ -15,6 +15,9 @@
       "source_commit": "bcf360ab9ae873ea50aed4d5b0638615971a77e3",
       "published": false,
       "isolated_test_id": ""
+    },
+    "verification-artifacts/issue2-portable-results/portable-tests.json": {
+      "pass": 238
     },
     "verification-artifacts/issue2-windows-results/recognition.log": "native save dialog filename missing\n"
   },
