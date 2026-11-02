@@ -1,23 +1,20 @@
 {
-  "SOURCE_SHA": "ecbd9e58c4fea7eac09ff98a01a06756a3d7d5f6",
-  "RUN_ID": "41478085699",
+  "SOURCE_SHA": "bcf360ab9ae873ea50aed4d5b0638615971a77e3",
+  "RUN_ID": "41478351153",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "cancelled",
+  "PORTABLE_RESULT": "not-yet-aggregated",
   "WINDOWS_RESULT": "failure",
-  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41478085699",
+  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41478351153",
   "published": false,
   "stable_manifest_changed": false,
   "reports": {
     "verification-artifacts/issue2-windows-results/candidate.json": {
-      "published": false,
-      "sha256": "3cee9c9c94942d14f07acbc35b7802452cd1c22574bb9f60241834142848d5af",
-      "size": 8495616,
+      "size": 8510464,
       "version": "3.5.0-preview.41-issue2.2",
-      "source_commit": "ecbd9e58c4fea7eac09ff98a01a06756a3d7d5f6",
+      "sha256": "1f962e7cd80a73a6d4119617926fef0a8fc104d0276fb4820ef244180048966c",
+      "source_commit": "bcf360ab9ae873ea50aed4d5b0638615971a77e3",
+      "published": false,
       "isolated_test_id": ""
-    },
-    "verification-artifacts/issue2-portable-results/portable-tests.json": {
-      "pass": 223
     },
     "verification-artifacts/issue2-windows-results/recognition.log": "native save dialog filename missing\n"
   },
