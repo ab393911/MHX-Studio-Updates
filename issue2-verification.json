@@ -1,17 +1,17 @@
 {
-  "SOURCE_SHA": "c5f536d71e677d4c941f09a36fde5a3399eb379d",
-  "RUN_ID": "41469150145",
+  "SOURCE_SHA": "efaf2f0b9880b12be63cc3bb5e70f7a399ae1dd9",
+  "RUN_ID": "41469994377",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "cancelled",
-  "WINDOWS_RESULT": "cancelled",
-  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41469150145",
+  "PORTABLE_RESULT": "not-yet-aggregated",
+  "WINDOWS_RESULT": "success",
+  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41469994377",
   "published": false,
   "stable_manifest_changed": false,
   "reports": {
     "verification-artifacts/issue2-windows-results/issue2-native-update.json": {
       "active_scenario": "preview40_direct_gui_upgrade",
       "arch": "amd64",
-      "completed_at": "2026-11-02T15:17:45Z",
+      "completed_at": "2026-11-02T15:26:22Z",
       "config_migration_exit": {
         "backup_retained": true,
         "config_unchanged": true,
@@ -23,7 +23,7 @@
       "gui_smoke": {
         "controls": 33,
         "message_loop": true,
-        "source_commit": "c5f536d71e677d4c941f09a36fde5a3399eb379d",
+        "source_commit": "efaf2f0b9880b12be63cc3bb5e70f7a399ae1dd9",
         "version": "3.5.0-preview.41-issue2.2",
         "window_created": true,
         "window_visible": true,
@@ -55,7 +55,7 @@
         "calibration_byte_identical": true,
         "candidate_published": false,
         "candidate_transport": "ephemeral_loopback_https_trusted_certificate",
-        "completed_at": "2026-11-02T15:17:45Z",
+        "completed_at": "2026-11-02T15:26:22Z",
         "configuration_backup_timing": "before_executable_replacement",
         "configuration_byte_identical": true,
         "configuration_snapshot_verified": true,
@@ -83,7 +83,7 @@
         "real_update_button_clicked": true,
         "role_execution_history_preserved": true,
         "sha256_verified": true,
-        "source_commit": "c5f536d71e677d4c941f09a36fde5a3399eb379d",
+        "source_commit": "efaf2f0b9880b12be63cc3bb5e70f7a399ae1dd9",
         "studio_data_seeded": true,
         "studio_database_preserved": true,
         "test_channel_enrolled_via_preview40_gui": true,
@@ -129,10 +129,26 @@
       "version": "3.5.0-preview.41-issue2.2",
       "windows_game_tested": false
     },
+    "verification-artifacts/issue2-windows-results/recognition-tests.json": {
+      "fixture_only": true,
+      "fresh_instance_identity_and_frame_sha_verified": true,
+      "gdi_960x540_client_coordinate_roundtrip": true,
+      "gui_saved_calibration_immediate_reload": true,
+      "native_windows": true,
+      "old_calibration_backup_preserved": true,
+      "passed": true,
+      "real_game_tested": false,
+      "real_ldplayer_tested": false,
+      "reported_right_edge_feature_rectangles_verified": true,
+      "restart_preserves_calibration": true,
+      "thresholds_unchanged": true,
+      "two_anchor_scores_verified": true,
+      "unknown_frame_rejected_without_click": true
+    },
     "verification-artifacts/issue2-windows-results/candidate.json": {
       "size": 8365056,
-      "source_commit": "c5f536d71e677d4c941f09a36fde5a3399eb379d",
-      "sha256": "375fa4b83b1b013fffaa05b2add0d9a7afb362e61171abec638bda8e6c1c0c16",
+      "sha256": "1b0ed196c2a7ebe1caa4d7fb463b2c7503448b467683002666030abd673e75a2",
+      "source_commit": "efaf2f0b9880b12be63cc3bb5e70f7a399ae1dd9",
       "published": false,
       "version": "3.5.0-preview.41-issue2.2",
       "isolated_test_id": ""
@@ -143,7 +159,7 @@
       "calibration_byte_identical": true,
       "candidate_published": false,
       "candidate_transport": "ephemeral_loopback_https_trusted_certificate",
-      "completed_at": "2026-11-02T15:17:45Z",
+      "completed_at": "2026-11-02T15:26:22Z",
       "configuration_backup_timing": "before_executable_replacement",
       "configuration_byte_identical": true,
       "configuration_snapshot_verified": true,
@@ -171,7 +187,7 @@
       "real_update_button_clicked": true,
       "role_execution_history_preserved": true,
       "sha256_verified": true,
-      "source_commit": "c5f536d71e677d4c941f09a36fde5a3399eb379d",
+      "source_commit": "efaf2f0b9880b12be63cc3bb5e70f7a399ae1dd9",
       "studio_data_seeded": true,
       "studio_database_preserved": true,
       "test_channel_enrolled_via_preview40_gui": true,
@@ -183,12 +199,8 @@
     "verification-artifacts/issue2-windows-results/windows-unit-tests.json": {
       "pass": 263
     },
-    "verification-artifacts/issue2-portable-results/portable-tests.json": {
-      "pass": 243
-    },
     "verification-artifacts/issue2-windows-results/native-update.log": "Native Windows update scenario: success\nNative Windows update scenario: startup_timeout\nNative Windows update scenario: sha_tamper\nNative Windows update scenario: sharing_violation\nNative Windows update scenario: interrupted_recovery\nNative Windows update scenario: immediate_exit\nNative Windows update scenario: config_migration_exit\nPreparing private HTTPS candidate for published baseline: 3.5.0-preview.40\nPrivate HTTPS trust ready: 3.5.0-preview.40\nGUI upgrade begins: 3.5.0-preview.40 -> 3.5.0-preview.41-issue2.2\nLive GUI update passed: 3.5.0-preview.41-issue2.2 one click: true legacy confirmations: 0\nNative Windows GUI/update checks passed; LDPlayer/game tests remain pending.\n"
   },
   "ready_for_publication": false,
-  "release_gate_note": "Diagnostic candidate only: real intermittent recognition root cause remains unconfirmed; no automatic publication is configured. Accepted legacy first-hop interruption risk is documented separately.",
-  "log_retrieval_error": "CalledProcessError"
+  "release_gate_note": "Diagnostic candidate only: real intermittent recognition root cause remains unconfirmed; no automatic publication is configured. Accepted legacy first-hop interruption risk is documented separately."
 }
