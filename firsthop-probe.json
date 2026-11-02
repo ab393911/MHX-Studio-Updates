@@ -1,11 +1,46 @@
 {
-  "SOURCE_SHA": "ab4a316f3e976eace0d8b142e54cc6099d366e81",
-  "RUN_ID": "41445280254",
-  "NATIVE_RESULT": "failure",
+  "SOURCE_SHA": "49c35c27e9f918390dce09395e6b2e5735c995e0",
+  "RUN_ID": "41446573082",
+  "NATIVE_RESULT": "success",
   "published": false,
   "probe": {
-    "error": "wrong exit, killed=false: exit status 3",
-    "probe_completed": false
+    "first_hop_solved_under_existing_constraints": false,
+    "probe_completed": true,
+    "publication_ready": false,
+    "reason": "preview40 cannot install or start the prerequisite supervisor before its first destructive rename; candidate code runs too late",
+    "source_binary": "actual published preview40",
+    "with_preinstalled_supervisor": {
+      "actual_published_helper": true,
+      "automatic_recovery_with_preinstalled_guard": true,
+      "fault_point": "successful old EXE -> retained backup, before Go caller resumes",
+      "helper_file_unchanged": true,
+      "old_exe_config_database_restorable": true,
+      "preinstalled_supervisor": true,
+      "production_user_data_touched": false,
+      "published_helper_sha256": "e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2",
+      "restored_gui_pid": 5016,
+      "supervisor": {
+        "deployable_via_preview40_update": false,
+        "preinstalled_before_termination": true,
+        "restored": true,
+        "user_action_after_termination": false
+      },
+      "termination_exit_code": 77
+    },
+    "without_supervisor": {
+      "actual_published_helper": true,
+      "automatic_recovery_without_prerequisite": false,
+      "explicit_test_cleanup_restarted_helper": true,
+      "fault_point": "successful old EXE -> retained backup, before Go caller resumes",
+      "helper_file_unchanged": true,
+      "old_exe_config_database_restorable": true,
+      "preinstalled_supervisor": false,
+      "production_user_data_touched": false,
+      "published_helper_sha256": "e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2",
+      "restored_gui_pid": 5888,
+      "target_missing_after_observation": true,
+      "termination_exit_code": 77
+    }
   },
-  "log_tail": "Actual preview40 helper case; preinstalled guard: false\ndebugger: observing original helper API module kernel32.dll\nwrong exit, killed=false: exit status 3\n"
+  "log_tail": "Actual preview40 helper case; preinstalled guard: false\ndebugger: verified remote system syscall mapping ntdll.dll\ndebugger: observing original helper API module ntdll.dll\ndebugger: original helper entered native rename of target EXE\ndebugger: original helper native rename returned STATUS_SUCCESS; terminating before caller resumes\nActual preview40 helper case; preinstalled guard: true\ndebugger: verified remote system syscall mapping ntdll.dll\ndebugger: observing original helper API module ntdll.dll\ndebugger: original helper entered native rename of target EXE\ndebugger: original helper native rename returned STATUS_SUCCESS; terminating before caller resumes\n{\"first_hop_solved_under_existing_constraints\":false,\"probe_completed\":true,\"publication_ready\":false,\"reason\":\"preview40 cannot install or start the prerequisite supervisor before its first destructive rename; candidate code runs too late\",\"source_binary\":\"actual published preview40\",\"with_preinstalled_supervisor\":{\"actual_published_helper\":true,\"automatic_recovery_with_preinstalled_guard\":true,\"fault_point\":\"successful old EXE -\\u003e retained backup, before Go caller resumes\",\"helper_file_unchanged\":true,\"old_exe_config_database_restorable\":true,\"preinstalled_supervisor\":true,\"production_user_data_touched\":false,\"published_helper_sha256\":\"e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2\",\"restored_gui_pid\":5016,\"supervisor\":{\"deployable_via_preview40_update\":false,\"preinstalled_before_termination\":true,\"restored\":true,\"user_action_after_termination\":false},\"termination_exit_code\":77},\"without_supervisor\":{\"actual_published_helper\":true,\"automatic_recovery_without_prerequisite\":false,\"explicit_test_cleanup_restarted_helper\":true,\"fault_point\":\"successful old EXE -\\u003e retained backup, before Go caller resumes\",\"helper_file_unchanged\":true,\"old_exe_config_database_restorable\":true,\"preinstalled_supervisor\":false,\"production_user_data_touched\":false,\"published_helper_sha256\":\"e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2\",\"restored_gui_pid\":5888,\"target_missing_after_observation\":true,\"termination_exit_code\":77}}\n"
 }
