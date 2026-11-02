@@ -20,13 +20,22 @@ for p in Path('verification-artifacts').rglob('*tests.json'):
     if p.name not in {'portable-tests.json','windows-unit-tests.json'}:
         continue
     counts = {}
+    test_output = {}
+    failed_tests = []
     for line in p.read_text(encoding='utf-8-sig').splitlines():
         try:
             e = json.loads(line)
         except json.JSONDecodeError:
             continue
+        key = (e.get('Package',''),e.get('Test',''))
+        if e.get('Output'):
+            test_output[key] = (test_output.get(key,'') + e['Output'])[-12000:]
+        if e.get('Test') and e.get('Action') == 'fail':
+            failed_tests.append(key)
         if e.get('Test') and e.get('Action') in {'pass','fail','skip'}:
             counts[e['Action']] = counts.get(e['Action'],0)+1
+    if failed_tests:
+        counts['failure_details'] = [{'package':pkg,'test':test,'output':test_output.get((pkg,test),'')} for pkg,test in failed_tests]
     report['reports'][str(p)] = counts
 for p in Path('verification-artifacts').rglob('*.log'):
     report['reports'][str(p)] = p.read_text(encoding='utf-8-sig',errors='replace')[-24000:]
