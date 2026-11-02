@@ -69,7 +69,16 @@ func remoteString(process, address uintptr) string {
 	panic("remote path too long")
 }
 func samePath(a, b string) bool {
-	return strings.EqualFold(filepath.Clean(strings.TrimPrefix(a, `\\?\`)), filepath.Clean(strings.TrimPrefix(b, `\\?\`)))
+	canonical := func(path string) string {
+		path = strings.TrimPrefix(path, `\\?\`)
+		buf := make([]uint16, 4096)
+		n, _, _ := k.NewProc("GetLongPathNameW").Call(uintptr(unsafe.Pointer(utf(path))), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+		if n > 0 && n < uintptr(len(buf)) {
+			path = syscall.UTF16ToString(buf[:n])
+		}
+		return filepath.Clean(path)
+	}
+	return strings.EqualFold(canonical(a), canonical(b))
 }
 
 // AMD64 CONTEXT is 16-byte aligned. Offsets are from the Windows AMD64 ABI.
@@ -85,6 +94,7 @@ func threadCPU(tid uint32) (uintptr, *cpu) {
 	c.p = unsafe.Add(base, (-uintptr(base))&15)
 	binary.LittleEndian.PutUint32(unsafe.Slice((*byte)(unsafe.Add(c.p, 48)), 4), 0x00100013)
 	win("GetThreadContext", h, uintptr(c.p))
+	runtime.KeepAlive(c)
 	return h, c
 }
 func (c *cpu) get(off uintptr) uint64 {
@@ -104,15 +114,16 @@ func hardware(tid uint32, address uintptr) {
 	c.set(104, 0)
 	c.set(112, 1)
 	win("SetThreadContext", h, uintptr(c.p))
+	runtime.KeepAlive(c)
 }
-func localAPI() (string, uintptr) {
-	proc := k.NewProc("MoveFileExW")
+func localAPI() (string, uintptr, uintptr) {
+	proc := syscall.NewLazyDLL("ntdll.dll").NewProc("NtSetInformationFile")
 	check(proc.Find())
 	var module uintptr
 	win("GetModuleHandleExW", 6, proc.Addr(), uintptr(unsafe.Pointer(&module)))
 	name := make([]uint16, 1024)
 	n := win("GetModuleFileNameW", module, uintptr(unsafe.Pointer(&name[0])), uintptr(len(name)))
-	return filepath.Base(syscall.UTF16ToString(name[:n])), proc.Addr() - module
+	return filepath.Base(syscall.UTF16ToString(name[:n])), proc.Addr() - module, module
 }
 func moduleName(h uintptr) string {
 	if h == 0 {
@@ -126,16 +137,79 @@ func moduleName(h uintptr) string {
 	return filepath.Base(syscall.UTF16ToString(b[:r]))
 }
 
+func remoteHandlePath(process, remote uintptr) string {
+	var local uintptr
+	current := win("GetCurrentProcess")
+	win("DuplicateHandle", process, remote, current, uintptr(unsafe.Pointer(&local)), 0, 0, 2)
+	defer closeH(local)
+	buf := make([]uint16, 2048)
+	n := win("GetFinalPathNameByHandleW", local, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), 0)
+	if n >= uintptr(len(buf)) {
+		panic("remote file path too long")
+	}
+	return syscall.UTF16ToString(buf[:n])
+}
+
+// Known system DLLs normally share their boot-time mapping. Verify the remote
+// PE export-name and syscall bytes before using that mapping when the loader
+// supplies no DLL file handle. This is read-only observation, not injection.
+func sameSystemModule(process, base, offset uintptr, name string) bool {
+	read := func(address uintptr, n int) ([]byte, bool) {
+		b := make([]byte, n)
+		var got uintptr
+		r, _, _ := k.NewProc("ReadProcessMemory").Call(process, address, uintptr(unsafe.Pointer(&b[0])), uintptr(n), uintptr(unsafe.Pointer(&got)))
+		return b, r != 0 && got == uintptr(n)
+	}
+	dos, ok := read(base, 64)
+	if !ok || string(dos[:2]) != "MZ" {
+		return false
+	}
+	pe := uintptr(binary.LittleEndian.Uint32(dos[60:64]))
+	hdr, ok := read(base+pe, 144)
+	if !ok || string(hdr[:4]) != "PE\x00\x00" || binary.LittleEndian.Uint16(hdr[24:26]) != 0x20b {
+		return false
+	}
+	exportRVA := binary.LittleEndian.Uint32(hdr[136:140])
+	ex, ok := read(base+uintptr(exportRVA), 40)
+	if !ok {
+		return false
+	}
+	nameRVA := binary.LittleEndian.Uint32(ex[12:16])
+	var remote []byte
+	for i := 0; i < 128; i++ {
+		b, ok := read(base+uintptr(nameRVA)+uintptr(i), 1)
+		if !ok {
+			return false
+		}
+		if b[0] == 0 {
+			break
+		}
+		remote = append(remote, b[0])
+	}
+	if !strings.EqualFold(string(remote), name) {
+		return false
+	}
+	code, ok := read(base+offset, 16)
+	if !ok {
+		return false
+	}
+	local := make([]byte, 16)
+	var got uintptr
+	current := win("GetCurrentProcess")
+	okLocal, _, _ := k.NewProc("ReadProcessMemory").Call(current, base+offset, uintptr(unsafe.Pointer(&local[0])), 16, uintptr(unsafe.Pointer(&got)))
+	return okLocal != 0 && got == 16 && bytes.Equal(code, local)
+}
+
 // Stop the REAL preview40 helper at the return of its successful first rename.
 // Hardware breakpoints are thread-local; the helper file and code bytes stay intact.
 func killAfterBackup(helper, planPath string, p update.Plan, guard func(int)) *exec.Cmd {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	module, offset := localAPI()
+	module, offset, knownBase := localAPI()
 	cmd := exec.Command(helper, "--apply-update", planPath)
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 2} // DEBUG_ONLY_THIS_PROCESS
 	check(cmd.Start())
-	process := win("OpenProcess", 0x1011, 0, uintptr(cmd.Process.Pid))
+	process := win("OpenProcess", 0x1051, 0, uintptr(cmd.Process.Pid))
 	defer closeH(process)
 	defer func() {
 		if cmd.ProcessState == nil {
@@ -169,6 +243,10 @@ func killAfterBackup(helper, planPath string, p update.Plan, guard func(int)) *e
 			closeH(uintptr(binary.LittleEndian.Uint64(d[8:16])))
 			closeH(uintptr(binary.LittleEndian.Uint64(d[16:24])))
 			threads[tid] = true
+			if entry == 0 && sameSystemModule(process, knownBase, offset, module) {
+				entry = knownBase + offset
+				fmt.Println("debugger: verified remote system syscall mapping", module)
+			}
 			if entry != 0 {
 				hardware(tid, entry)
 			}
@@ -197,27 +275,31 @@ func killAfterBackup(helper, planPath string, p update.Plan, guard func(int)) *e
 				h, c := threadCPU(tid)
 				rip := uintptr(c.get(248))
 				if watched == tid && rip == returnPC {
-					if c.get(120) == 0 {
+					if uint32(c.get(120)) != 0 {
 						closeH(h)
 						panic("observed rename failed")
 					}
 					closeH(h)
-					fmt.Println("debugger: original helper rename returned TRUE; terminating before caller resumes")
+					fmt.Println("debugger: original helper native rename returned STATUS_SUCCESS; terminating before caller resumes")
 					win("TerminateProcess", process, 77)
 					killed = true
 				} else if rip == entry {
-					from := remoteString(process, uintptr(c.get(128)))
-					to := remoteString(process, uintptr(c.get(136)))
-					if samePath(from, p.Target) && samePath(to, p.Backup) {
-						fmt.Println("debugger: original helper entered target-to-backup rename")
-						returnPC = uintptr(binary.LittleEndian.Uint64(readMem(process, uintptr(c.get(152)), 8)))
-						watched = tid
-						c.set(72, uint64(returnPC))
-						c.set(104, 0)
-						c.set(112, 1)
+					class := binary.LittleEndian.Uint32(readMem(process, uintptr(c.get(152))+40, 4))
+					// Native rename classes; ignore other file-information operations.
+					if class == 10 || class == 56 || class == 65 || class == 66 {
+						from := remoteHandlePath(process, uintptr(c.get(128)))
+						if samePath(from, p.Target) {
+							fmt.Println("debugger: original helper entered native rename of target EXE")
+							returnPC = uintptr(binary.LittleEndian.Uint64(readMem(process, uintptr(c.get(152)), 8)))
+							watched = tid
+							c.set(72, uint64(returnPC))
+							c.set(104, 0)
+							c.set(112, 1)
+						}
 					}
 					c.resume()
 					win("SetThreadContext", h, uintptr(c.p))
+					runtime.KeepAlive(c)
 					closeH(h)
 				} else {
 					closeH(h)
@@ -230,7 +312,9 @@ func killAfterBackup(helper, planPath string, p update.Plan, guard func(int)) *e
 			win("ContinueDebugEvent", uintptr(pid), uintptr(tid), status)
 			err := cmd.Wait()
 			if !killed || err == nil || cmd.ProcessState.ExitCode() != 77 {
-				panic(fmt.Errorf("wrong exit, killed=%v: %v", killed, err))
+				var state update.Result
+				_ = filesafe.ReadJSON(filepath.Join(p.Dir(), "result.json"), &state)
+				panic(fmt.Errorf("wrong exit, killed=%v: %v; transaction=%+v", killed, err, state))
 			}
 			return cmd
 		}
