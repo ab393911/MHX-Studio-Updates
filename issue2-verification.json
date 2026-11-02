@@ -1,26 +1,27 @@
 {
-  "SOURCE_SHA": "1d68b82251853371b644a8ac6792ecfd319c7d53",
-  "RUN_ID": "41467109198",
+  "SOURCE_SHA": "c453b2e20f119a26ecc443f7c7c64a84c88531a0",
+  "RUN_ID": "41467387546",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "cancelled",
-  "WINDOWS_RESULT": "cancelled",
-  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41467109198",
+  "PORTABLE_RESULT": "not-yet-aggregated",
+  "WINDOWS_RESULT": "failure",
+  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41467387546",
   "published": false,
   "stable_manifest_changed": false,
   "reports": {
     "verification-artifacts/issue2-windows-results/candidate.json": {
       "published": false,
+      "source_commit": "c453b2e20f119a26ecc443f7c7c64a84c88531a0",
       "isolated_test_id": "",
-      "source_commit": "1d68b82251853371b644a8ac6792ecfd319c7d53",
-      "sha256": "c3276a0d89f0a653e7c47596ed54631cc533a7a8ad4ea97841af9561f1a4156e",
-      "size": 8365056,
-      "version": "3.5.0-preview.41-issue2.2"
+      "version": "3.5.0-preview.41-issue2.2",
+      "sha256": "6585cb4fe961b73606a9bbffe86e360acd032b759c035d7800b161a2c2b2b47d",
+      "size": 8365056
     },
-    "verification-artifacts/issue2-portable-results/portable-tests.json": {
-      "pass": 237
+    "verification-artifacts/issue2-windows-results/windows-unit-tests.json": {
+      "pass": 262,
+      "fail": 1
     }
   },
   "ready_for_publication": false,
-  "release_gate_note": "Requires all native acceptance including unattended interruption recovery; no automatic publication is configured.",
+  "release_gate_note": "Diagnostic candidate only: real intermittent recognition root cause remains unconfirmed; no automatic publication is configured. Accepted legacy first-hop interruption risk is documented separately.",
   "log_retrieval_error": "CalledProcessError"
 }
