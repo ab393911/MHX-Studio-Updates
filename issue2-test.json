@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "version": "3.5.0-preview.41-issue2.1",
+  "platform": "windows-amd64",
+  "download_url": "https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.1/MHXStudio.exe",
+  "sha256": "b7ac42b0800b96c4dd60a4245e31ebf054373675ae23702af4bb7ba978bf3cb7",
+  "size": 8340992,
+  "notes": "Issue2独立候选测试版：修复游戏绑定复用、ADB掉线身份重验、停止/切换实例后的异步回调及错误点击重放保护。保留现有业务、配置、SQLite和备份回滚。preview.40正常一键升级与启动失败回滚已通过Windows自动测试；首次升级助手若被强制终止，可能需在资源管理器双击原事务updater.exe并确认恢复。用户已接受此剩余风险；不是无人干预中断恢复。真实雷电/游戏尚待分阶段验收，不自动执行本轮游戏验收任务。",
+  "source_commit": "f3bc322408aaa92fcc91d8fac0133144238d8184",
+  "windows_game_tested": false
+}
