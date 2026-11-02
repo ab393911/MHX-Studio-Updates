@@ -74,8 +74,9 @@ jobs:
       - name: Native GUI, preview40 helper, backups, rollback and interruption
         shell: pwsh
         run: |
-          ./dist/windowsverify.exe -old "$pwd/dist/published40.exe" -old-version '3.5.0-preview.40' -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '3.5.0-preview.41-issue2.1' -update-only -published40 "$pwd/dist/published40.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -out dist/issue2-native-update.json
-          if ($LASTEXITCODE) { throw 'Native update acceptance failed; publication blocked' }
+          ./dist/windowsverify.exe -old "$pwd/dist/published40.exe" -old-version '3.5.0-preview.40' -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '3.5.0-preview.41-issue2.1' -update-only -published40 "$pwd/dist/published40.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -out dist/issue2-native-update.json 2>&1 | Tee-Object -FilePath dist/native-update.log
+          $verifyExit = $LASTEXITCODE
+          if ($verifyExit) { throw 'Native update acceptance failed; publication blocked' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -84,6 +85,7 @@ jobs:
             dist/candidate.json
             dist/windows-unit-tests.json
             dist/issue2-native-update.json
+            dist/native-update.log
             dist/preview40-direct/
             dist/MHXStudio.exe
           if-no-files-found: error
@@ -101,6 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

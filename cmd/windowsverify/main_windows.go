@@ -21,9 +21,16 @@ import (
 )
 
 var user = syscall.NewLazyDLL("user32.dll")
+var partialReport map[string]any
+var partialReportPath string
 
 func fail(e error) {
 	if e != nil {
+		if partialReport != nil && partialReportPath != "" {
+			partialReport["passed"] = false
+			partialReport["error"] = e.Error()
+			_ = filesafe.JSON(partialReportPath, partialReport)
+		}
 		fmt.Fprintln(os.Stderr, e)
 		os.Exit(1)
 	}
@@ -148,6 +155,7 @@ func main() {
 		fail(errors.New("native GUI is hidden"))
 	}
 	results := map[string]any{"native_windows": true, "arch": "amd64", "gui_smoke": sm, "windows_game_tested": false, "version": *version}
+	partialReport, partialReportPath = results, *out
 	if *emulatorFixture != "" && !*updateOnly {
 		results["emulator_gui_fixture"] = emulatorGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
 		results["adb_fallback_gui_fixture"] = adbFallbackGUI(*newExe, *emulatorFixture, *version, filepath.Dir(*out))
@@ -165,6 +173,7 @@ func main() {
 		scenarios = append(scenarios, "immediate_exit", "config_migration_exit")
 	}
 	for _, scenario := range scenarios {
+		results["active_scenario"] = scenario
 		fmt.Println("Native Windows update scenario:", scenario)
 		folder := filepath.Join(root, scenario)
 		fail(os.MkdirAll(folder, 0700))
@@ -297,6 +306,7 @@ func main() {
 		results["preview21_scope_gui_upgrade"] = localGUIUpgrade(*published21, "3.5.0-preview.21", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
 	}
 	if *published40 != "" {
+		results["active_scenario"] = "preview40_direct_gui_upgrade"
 		folder := filepath.Join(filepath.Dir(*out), "preview40-direct")
 		fail(os.MkdirAll(folder, 0700))
 		results["preview40_direct_gui_upgrade"] = localGUIUpgrade(*published40, "3.5.0-preview.40", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
