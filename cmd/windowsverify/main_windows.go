@@ -231,6 +231,12 @@ func main() {
 				fail(errors.New("interruption did not leave missing EXE"))
 			}
 			fail(update.Verify(p.Backup, p.OldSHA))
+			// Observe the terminated helper's persistent state before the harness
+			// explicitly restarts it. This is recoverability, not unattended rollback.
+			time.Sleep(2 * time.Second)
+			if _, err := os.Stat(target); !os.IsNotExist(err) {
+				fail(errors.New("unexpected automatic recovery; reassess interruption classification"))
+			}
 			helperErr = wait(start(helper, "--apply-update", filepath.Join(tx, "plan.json")), 50*time.Second)
 		} else {
 			helperCmd := start(helper, "--apply-update", filepath.Join(tx, "plan.json"))
@@ -294,6 +300,10 @@ func main() {
 		fail(ledger.Close())
 		results[scenario] = map[string]any{"passed": true, "status": result.Status, "config_unchanged": true, "configuration_snapshot_verified": configBacked, "backup_retained": scenario == "success" || scenario == "startup_timeout" || scenario == "immediate_exit" || scenario == "config_migration_exit"}
 		results[scenario].(map[string]any)["studio_order_database_preserved"] = true
+		if scenario == "interrupted_recovery" {
+			results[scenario].(map[string]any)["recovery_helper_restarted_by_test"] = true
+			results[scenario].(map[string]any)["automatic_without_restarting_helper"] = false
+		}
 	}
 	if *published19 != "" {
 		folder := filepath.Join(filepath.Dir(*out), "preview19-direct")
@@ -312,6 +322,8 @@ func main() {
 		results["preview40_direct_gui_upgrade"] = localGUIUpgrade(*published40, "3.5.0-preview.40", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
 	}
 	// Also prove settings saves preserve unknown fields (unit tests cover detail).
+	results["publication_ready"] = false
+	results["publication_blocker"] = "preview40 helper termination between renames leaves target absent; recovery requires restarting retained helper, not unattended rollback"
 	results["passed"] = true
 	results["completed_at"] = time.Now().UTC().Format(time.RFC3339)
 	fail(filesafe.JSON(*out, results))
