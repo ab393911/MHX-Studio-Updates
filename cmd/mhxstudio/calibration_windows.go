@@ -171,6 +171,12 @@ func (c *calibration) save() {
 		c.app.info(e.Error())
 		return
 	}
+	// Invalidate the previous proof as soon as the calibration changes, even if
+	// the subsequent disk-read self-check fails.
+	delete(c.app.cfg.SingleValidations, strconv.Itoa(c.index))
+	if e = c.app.cfg.Save(c.app.root); e != nil {
+		c.app.log("单机验证记录保存失败：" + e.Error())
+	}
 	reloaded, loadErr := loadProfile(c.app.root, c.index)
 	if loadErr != nil || !reloaded.Match(c.img, c.name.key) {
 		c.app.log(fmt.Sprintf("标定已写入但重读自检未通过：%v；原文件与历史保留。", loadErr))
@@ -178,10 +184,6 @@ func (c *calibration) save() {
 	}
 	for i, score := range reloaded.Score(c.img, c.name.key).Anchors {
 		c.app.log(fmt.Sprintf("保存后重读自检（本次标定截图）：%s特征%d误差%.3f/阈值%.3f，超差像素%d/上限%d；通过=%t", c.name.key, i+1, score.MeanAbsoluteError, score.MeanLimit, score.ChangedPixels, score.ChangedPixelLimit, score.Passed))
-	}
-	delete(c.app.cfg.SingleValidations, strconv.Itoa(c.index))
-	if e = c.app.cfg.Save(c.app.root); e != nil {
-		c.app.log("单机验证记录保存失败：" + e.Error())
 	}
 	c.app.log(fmt.Sprintf("实例 %d 已保存 %s；原标定已留存备份，需重新通过单机测试。", c.index, c.name.label))
 	destroyWindow.Call(c.hwnd)
