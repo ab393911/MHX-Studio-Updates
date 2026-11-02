@@ -166,13 +166,8 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 			user.NewProc("PostMessageW").Call(control(diagnostic, 1303), 0xF5, 0, 0)
 			fail(waitWindow("导出诊断ZIP"))
 			dialog := findWindow("导出诊断ZIP")
-			filename := control(dialog, 1152)
-			if filename == 0 {
-				filename = control(dialog, 1148)
-			}
-			if filename == 0 {
-				fail(fmt.Errorf("native save dialog filename missing"))
-			}
+			var filename uintptr
+			until(dialog, "native save dialog filename missing", func() bool { filename = findDialogFilename(dialog); return filename != 0 && control(dialog, 1) != 0 })
 			writeText(filename, destination)
 			click(dialog, 1)
 			until(diagnostic, "GUI ZIP export missing", func() bool { _, e := os.Stat(destination); return e == nil })
@@ -281,4 +276,40 @@ func readClipboard() string {
 	values := make([]uint16, int(size)/2)
 	kernel.NewProc("RtlMoveMemory").Call(uintptr(unsafe.Pointer(&values[0])), ptr, size)
 	return syscall.UTF16ToString(values)
+}
+
+// Common dialogs can nest the filename edit under a DirectUI/ComboBox host.
+// Inspect actual visible child controls after initialization, never assume one parent level.
+var filenameCandidate uintptr
+var filenameRank int32
+var enumFilenameCallback = syscall.NewCallback(func(h, l uintptr) uintptr {
+	var name [128]uint16
+	user.NewProc("GetClassNameW").Call(h, uintptr(unsafe.Pointer(&name[0])), 128)
+	if syscall.UTF16ToString(name[:]) != "Edit" {
+		return 1
+	}
+	visible, _, _ := user.NewProc("IsWindowVisible").Call(h)
+	enabled, _, _ := user.NewProc("IsWindowEnabled").Call(h)
+	if visible == 0 || enabled == 0 {
+		return 1
+	}
+	var rect screenRect
+	user.NewProc("GetWindowRect").Call(h, uintptr(unsafe.Pointer(&rect)))
+	id, _, _ := user.NewProc("GetDlgCtrlID").Call(h)
+	rank := rect.T
+	if id == 1152 {
+		rank += 100000
+	}
+	if rank > filenameRank {
+		filenameRank = rank
+		filenameCandidate = h
+	}
+	return 1
+})
+
+func findDialogFilename(dialog uintptr) uintptr {
+	filenameCandidate = 0
+	filenameRank = -1000000
+	user.NewProc("EnumChildWindows").Call(dialog, enumFilenameCallback, 0)
+	return filenameCandidate
 }
