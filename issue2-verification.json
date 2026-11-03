@@ -2,7 +2,7 @@
   "SOURCE_SHA": "49a96f0330776c4a5040520eecc2ae30018e034b",
   "RUN_ID": "41669657300",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "success",
+  "PORTABLE_RESULT": "not-yet-aggregated",
   "WINDOWS_RESULT": "failure",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41669657300",
   "published": false,
@@ -107,9 +107,6 @@
       "exact_user_trigger_confirmed": false,
       "source_commit": "25b5adcad0221cd3f6e1c90d569b8006ea4ebcc7",
       "reproduced": false
-    },
-    "verification-artifacts/issue2-portable-results/portable-tests.json": {
-      "pass": 269
     },
     "verification-artifacts/issue2-windows-results/native-update.log": "Native Windows update scenario: success\nwindow did not close: 知夏 · MHX Studio 3.5.0-preview.41-issue2.3-gui.1\n",
     "verification-artifacts/issue2-windows-results/desktop-png/recognition.log": "panic: native verifier exceeded 8 minutes; refusing an unbounded or incomplete pass\n\ngoroutine 12 [running]:\nmain.main.func1()\n\tD:/a/MHX-Studio-Updates/MHX-Studio-Updates/cmd/windowsverify/main_windows.go:96 +0x25\ncreated by time.goFunc\n\tC:/hostedtoolcache/windows/go/1.26.10/x64/src/time/sleep.go:215 +0x2d\n\ngoroutine 1 [syscall, 7 minutes]:\nsyscall.syscalln(0x203d72c81090?, 0x203d72c83220?, {0x203d72896320?, 0x7ff670c66969?, 0x203d726c6198?})\n\tC:/hostedtoolcache/windows/go/1.26.10/x64/src/runtime/syscall_windows.go:431 +0x4e\nsyscall.SyscallN(0x203d72896320?, {0x203d72896320?, 0x0?, 0x7ff670c66a00?})\n\tC:/hostedtoolcache/windows/go/1.26.10/x64/src/syscall/dll_windows.go:99 +0x1e\nsyscall.(*Proc).Call(0x203d72c87a40?, {0x203d72896320?, 0x7ff670fa7940?, 0x7ff6713af901?})\n\tC:/hostedtoolcache/windows/go/1.26.10/x64/src/syscall/dll_windows.go:256 +0x1c\nsyscall.(*LazyProc).Call(0x203d72c87a40, {0x203d72896320, 0x4, 0x4})\n\tC:/hostedtoolcache/windows/go/1.26.10/x64/src/syscall/dll_windows.go:376 +0x4a\nmain.click(0x203d72980000?, 0x515)\n\tD:/a/MHX-Studio-Updates/MHX-Studio-Updates/cmd/windowsverify/emulators_windows.go:47 +0x125\nmain.recognitionGUI.func4(0x1)\n\tD:/a/MHX-Studio-Updates/MHX-Studio-Updates/cmd/windowsverify/recognition_windows.go:172 +0x365\nmain.recognitionGUI({0x203d726dc800, 0x3d}, {0x203d726dc880, 0x3d}, {0x203d726e24a0, 0x1f}, {0x203d726de6c0, 0x27}, 0x1, 0x1)\n\tD:/a/MHX-Studio-Updates/MHX-Studio-Updates/cmd/windowsverify/recognition_windows.go:321 +0x30c2\nmain.main()\n\tD:/a/MHX-Studio-Updates/MHX-Studio-Updates/cmd/windowsverify/main_windows.go:134 +0x12bd\n",
