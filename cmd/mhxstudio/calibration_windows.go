@@ -33,7 +33,9 @@ type calibration struct {
 	name         calibrationName
 	profile      automation.Profile
 	img          image.Image
-	pixels       []byte
+	bitmap       *imageBitmap
+	rendered     bool
+	paintError   string
 	rects        []automation.Rect
 	start        point
 	dragging     bool
@@ -110,10 +112,17 @@ func (a *app) startRuleCalibration(name calibrationName, shared bool, count int)
 	})
 }
 func (c *calibration) open() {
-	c.pixels = originalImagePixels(c.img)
+	var err error
+	c.bitmap, err = newImageBitmap(c.img)
+	if err != nil {
+		c.app.cal = nil
+		c.app.info(err.Error())
+		return
+	}
 	inst, _, _ := moduleHandle.Call(0)
-	h, _, _ := createWindow.Call(0, uintptr(unsafe.Pointer(utf("MHXStudioNextWindow"))), uintptr(unsafe.Pointer(utf(fmt.Sprintf("实例 %d 标定 · %s", c.index, c.name.label)))), 0x00CA0000|wsVisible, 100, 50, 1015, 750, c.app.hwnd, 0, inst, 0)
+	h, _, _ := createWindow.Call(0, uintptr(unsafe.Pointer(utf("MHXStudioNextWindow"))), uintptr(unsafe.Pointer(utf(fmt.Sprintf("实例 %d 标定 · %s", c.index, c.name.label)))), 0x00CA0000|0x02000000, 100, 50, 1015, 750, c.app.hwnd, 0, inst, 0)
 	if h == 0 {
+		c.bitmap.close()
 		c.app.cal = nil
 		c.app.log("标定窗口创建失败")
 		return
@@ -126,23 +135,7 @@ func (c *calibration) open() {
 	child(h, "BUTTON", "取消", 345, 640, 110, 34, 0, 303)
 	c.hint()
 	child(h, "STATIC", "仅保存特征灰度数据和按钮范围；已保存规则先备份，不自动修改其他页面。", 475, 644, 490, 40, 0, 0)
-}
-func (c *calibration) paint() {
-	var ps paintStruct
-	dc, _, _ := user32.NewProc("BeginPaint").Call(c.hwnd, uintptr(unsafe.Pointer(&ps)))
-	defer user32.NewProc("EndPaint").Call(c.hwnd, uintptr(unsafe.Pointer(&ps)))
-	bi := bitmapInfo{Size: 40, Width: 960, Height: -540, Planes: 1, BitCount: 32, SizeImage: uint32(len(c.pixels))}
-	gdi32.NewProc("StretchDIBits").Call(dc, 20, 70, 960, 540, 0, 0, 960, 540, uintptr(unsafe.Pointer(&c.pixels[0])), uintptr(unsafe.Pointer(&bi)), 0, 0x00CC0020)
-	pen, _, _ := gdi32.NewProc("CreatePen").Call(0, 2, 0x0000ff)
-	oldPen, _, _ := gdi32.NewProc("SelectObject").Call(dc, pen)
-	brush, _, _ := gdi32.NewProc("GetStockObject").Call(5)
-	oldBrush, _, _ := gdi32.NewProc("SelectObject").Call(dc, brush)
-	for _, r := range c.rects {
-		gdi32.NewProc("Rectangle").Call(dc, uintptr(r.X+20), uintptr(r.Y+70), uintptr(r.X+r.W+20), uintptr(r.Y+r.H+70))
-	}
-	gdi32.NewProc("SelectObject").Call(dc, oldBrush)
-	gdi32.NewProc("SelectObject").Call(dc, oldPen)
-	gdi32.NewProc("DeleteObject").Call(pen)
+	showImageWindow(h)
 }
 func (c *calibration) hint() {
 	label := fmt.Sprintf("第%d框：稳定特征（共%d处，避开动画、人物、背景和变化数字）。", len(c.rects)+1, c.featureCount)
@@ -155,6 +148,10 @@ func (c *calibration) hint() {
 	setText(c.label, label)
 }
 func (c *calibration) save() {
+	if !c.rendered || c.paintError != "" {
+		c.app.info("图片未成功显示，未保存标定，原规则保持不变。")
+		return
+	}
 	if len(c.rects) != c.featureCount+1 {
 		c.app.info("请依次框选全部稳定特征和最后的按钮范围。")
 		return
@@ -221,11 +218,14 @@ func (c *calibration) save() {
 	destroyWindow.Call(c.hwnd)
 }
 func (c *calibration) proc(h uintptr, m uint32, w, l uintptr) uintptr {
+	if v, ok := c.imageMessage(m, w); ok {
+		return v
+	}
 	switch m {
-	case 0xF:
-		c.paint()
-		return 0
 	case 0x201:
+		if !c.rendered {
+			return 0
+		}
 		if len(c.rects) >= c.featureCount+1 {
 			return 0
 		}
@@ -287,6 +287,7 @@ func (c *calibration) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 		destroyWindow.Call(h)
 		return 0
 	case wmDestroy:
+		c.bitmap.close()
 		c.app.cal = nil
 		user32.NewProc("EnableWindow").Call(c.app.hwnd, 1)
 		return 0
@@ -341,6 +342,7 @@ func originalImagePixels(img image.Image) []byte {
 			pixels[i] = byte(b >> 8)
 			pixels[i+1] = byte(g >> 8)
 			pixels[i+2] = byte(r >> 8)
+			pixels[i+3] = 255
 		}
 	}
 	return pixels

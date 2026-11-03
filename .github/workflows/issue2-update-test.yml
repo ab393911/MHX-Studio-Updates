@@ -1,7 +1,7 @@
 name: Issue2 preview40 update verification (no publication)
 on:
   push:
-    branches: [codex/fix-preview40-bindings-adb, codex/recognition-diagnostics-20261102]
+    branches: [codex/fix-preview40-bindings-adb, codex/recognition-diagnostics-20261102, codex/windows-image-display-20261103]
     paths:
       - '.github/workflows/issue2-update-test.yml'
       - 'cmd/**'
@@ -48,7 +48,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'Database schema changed; explicit migration acceptance required' }
           New-Item -ItemType Directory -Force dist | Out-Null
           $env:CGO_ENABLED = '0'
-          $version = '3.5.0-preview.41-issue2.2'
+          $version = '3.5.0-preview.41-issue2.3-gui.1'
           go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version -X main.sourceCommit=$env:GITHUB_SHA" -o dist/MHXStudio.exe ./cmd/mhxstudio
           if ($LASTEXITCODE) { throw 'Candidate build failed' }
           go build -trimpath -ldflags '-H windowsgui -s -w' -o dist/exit-test.exe ./cmd/testexit
@@ -66,13 +66,32 @@ jobs:
           if ((Get-FileHash dist/published40.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2') { throw 'Published preview40 SHA mismatch' }
           Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.1/MHXStudio.exe' -OutFile dist/published41.exe
           if ((Get-FileHash dist/published41.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'b7ac42b0800b96c4dd60a4245e31ebf054373675ae23702af4bb7ba978bf3cb7') { throw 'Published preview41 Issue2 SHA mismatch' }
+      - name: Reproduce old shared image erase defect on actual screen pixels
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.2/MHXStudio.exe' -OutFile dist/published2.exe
+          if ((Get-FileHash dist/published2.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne '28a5f525f9df3c04d53818dc561cde21765c3850f7f3c5aea9182566daebd9a7') { throw 'Published issue2.2 SHA mismatch' }
+          New-Item -ItemType Directory -Force dist/display-baseline | Out-Null
+          ./dist/windowsverify.exe -recognition-only -display-probe -new "$pwd/dist/published2.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.2' -out dist/display-baseline/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/display-baseline/baseline.log
+          $baselineExit = $LASTEXITCODE
+          Stop-Process -Name published2,dnplayer,adb,ldconsole -Force -ErrorAction SilentlyContinue
+          $log = Get-Content dist/display-baseline/baseline.log -Raw
+          if ($baselineExit -eq 0 -or $log -notmatch 'calibration erase: screen pixel mismatch') { throw 'Expected old image erase regression was not reproduced; inspect evidence' }
+          @{reproduced=$true;expected_failure=$true;exit=$baselineExit;source_commit='25b5adcad0221cd3f6e1c90d569b8006ea4ebcc7';injection='WM_ERASEBKGND without following WM_PAINT';exact_user_trigger_confirmed=$false} | ConvertTo-Json | Set-Content -Encoding utf8 dist/display-baseline/baseline-display.json
+          $global:LASTEXITCODE = 0
       - name: Real GUI calibration save, pixel mapping, reload and read-only recognition
         id: recognition
         shell: pwsh
         run: |
-          ./dist/windowsverify.exe -recognition-only -new "$pwd/dist/MHXStudio.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.2' -out dist/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/recognition.log
+          ./dist/windowsverify.exe -recognition-only -display-probe -new "$pwd/dist/MHXStudio.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.3-gui.1' -out dist/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/recognition.log
           $recognitionExit = $LASTEXITCODE
           if ($recognitionExit) { throw 'Calibration/recognition regression failed; publication remains blocked' }
+      - name: Actual Windows desktop PNG display lifecycle and full pixel comparison
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/desktop-png | Out-Null
+          ./dist/windowsverify.exe -recognition-only -display-probe -screen-png -new "$pwd/dist/MHXStudio.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.3-gui.1' -out dist/desktop-png/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/desktop-png/recognition.log
+          if ($LASTEXITCODE) { throw 'Actual PNG onscreen rendering regression failed' }
       - name: Native Windows static checks and unit tests
         shell: pwsh
         run: |
@@ -84,7 +103,7 @@ jobs:
         if: ${{ !cancelled() && steps.recognition.outcome == 'success' }}
         shell: pwsh
         run: |
-          ./dist/windowsverify.exe -old "$pwd/dist/published40.exe" -old-version '3.5.0-preview.40' -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '3.5.0-preview.41-issue2.2' -update-only -published40 "$pwd/dist/published40.exe" -published41 "$pwd/dist/published41.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -out dist/issue2-native-update.json 2>&1 | Tee-Object -FilePath dist/native-update.log
+          ./dist/windowsverify.exe -old "$pwd/dist/published40.exe" -old-version '3.5.0-preview.40' -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '3.5.0-preview.41-issue2.3-gui.1' -update-only -published40 "$pwd/dist/published40.exe" -published41 "$pwd/dist/published41.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -out dist/issue2-native-update.json 2>&1 | Tee-Object -FilePath dist/native-update.log
           $verifyExit = $LASTEXITCODE
           if ($verifyExit) { throw 'Native update acceptance failed; publication blocked' }
       - uses: actions/upload-artifact@v4
@@ -101,6 +120,9 @@ jobs:
             dist/recognition.log
             dist/calibration-roundtrip.png
             dist/diagnostic-original-view.png
+            dist/*-screen-*.png
+            dist/display-baseline/
+            dist/desktop-png/
             dist/preview40-direct/
             dist/preview41-issue2/
             dist/MHXStudio.exe

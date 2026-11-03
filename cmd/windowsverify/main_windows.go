@@ -102,6 +102,8 @@ func main() {
 	published41 := flag.String("published41", "", "")
 	updateOnly := flag.Bool("update-only", false, "")
 	recognitionOnly := flag.Bool("recognition-only", false, "")
+	screenPNG := flag.Bool("screen-png", false, "use a real Windows desktop PNG as the fixture frame")
+	displayProbe := flag.Bool("display-probe", false, "verify actual screen rendering, never force PrintWindow")
 	interrupt := flag.String("interrupt-update", "", "")
 	newExe := flag.String("new", "", "")
 	exitExe := flag.String("exit-fixture", "", "")
@@ -129,7 +131,7 @@ func main() {
 		if *newExe == "" || *emulatorFixture == "" || *version == "" {
 			fail(errors.New("recognition verifier requires new EXE, fixture and version"))
 		}
-		result := recognitionGUI(*newExe, *emulatorFixture, *version, *out)
+		result := recognitionGUI(*newExe, *emulatorFixture, *version, *out, *displayProbe, *screenPNG)
 		fail(filesafe.JSON(*out, result))
 		return
 	}

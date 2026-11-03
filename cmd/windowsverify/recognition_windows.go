@@ -39,7 +39,7 @@ type recognitionNative struct {
 	}
 }
 
-func recognitionGUI(exe, fixture, version, out string) map[string]any {
+func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG bool) map[string]any {
 	user.NewProc("SetProcessDPIAware").Call()
 	root, e := os.MkdirTemp("", "MHX recognition calibration ")
 	fail(e)
@@ -94,6 +94,11 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	fail(waitWindow(title))
 	h := findWindow(title)
 	until(h, "recognition fixture identity not verified", func() bool { return strings.Contains(readText(control(h, 208)), "ADB 已验证 1 台") })
+	if screenPNG {
+		// Actual screen pixels of this disposable Windows GUI, not generated shapes.
+		fail(captureScreenRegion(image.Rect(0, 0, 960, 540), framePath))
+		copyFile(framePath, filepath.Join(filepath.Dir(out), "source-desktop.png"))
+	}
 	// Generic game is index 11, registered once; no nickname or login page is changed.
 	send := user.NewProc("SendMessageW")
 	send.Call(control(h, 206), 0x14e, 11, 0)
@@ -101,6 +106,10 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	calTitle := "实例 1 标定 · 游戏主界面：两处稳定特征 + 菜单按钮"
 	fail(waitWindow(calTitle))
 	cal := findWindow(calTitle)
+	dpi, _, _ := user.NewProc("GetDpiForWindow").Call(cal)
+	if displayProbe {
+		verifyDisplayLifecycle(cal, framePath, filepath.Dir(out), "calibration")
+	}
 	for _, r := range rects {
 		a := uintptr(uint32(r.X+20) | uint32(r.Y+70)<<16)
 		b := uintptr(uint32(r.X+r.W-1+20) | uint32(r.Y+r.H-1+70)<<16)
@@ -166,7 +175,7 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 			fail(fmt.Errorf("clipboard report differs: %d vs %d", len(clipboardText), len(displayed)))
 		}
 		if !exported {
-			verifyOriginalView(diagnostic, pngData, filepath.Join(filepath.Dir(out), "diagnostic-original-view.png"))
+			verifyOriginalView(diagnostic, pngData, filepath.Join(filepath.Dir(out), "diagnostic-original-view.png"), displayProbe, framePath)
 			destination, e := filepath.Abs(filepath.Join(filepath.Dir(out), "recognition-export.zip"))
 			fail(e)
 			_ = os.Remove(destination)
@@ -330,7 +339,11 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	}
 	closeTitle(title)
 	fail(wait(app, 10*time.Second))
-	return map[string]any{"passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_original_image_view_exact_pixels": true, "zip_original_png_and_report_sha_verified": true, "gui_history_preview_is_read_only": true, "gui_history_restore_confirmed_and_backed_up": true, "restored_rules_work_after_restart": true, "gui_rule_edit_confirmed_and_persisted": true, "gui_zip_export_without_file_hunting": true, "gui_diagnostic_report_visible_and_clipboard_verified": true, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
+	simulatedDPI := []int{}
+	if displayProbe {
+		simulatedDPI = []int{120, 144, 192}
+	}
+	return map[string]any{"source_png_sha256": fmt.Sprintf("%x", sha256.Sum256(pngData)), "host_window_dpi": dpi, "screen_rendering_without_printwindow": displayProbe, "actual_windows_desktop_png": screenPNG, "simulated_dpi_notifications": simulatedDPI, "passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_original_image_view_exact_pixels": true, "zip_original_png_and_report_sha_verified": true, "gui_history_preview_is_read_only": true, "gui_history_restore_confirmed_and_backed_up": true, "restored_rules_work_after_restart": true, "gui_rule_edit_confirmed_and_persisted": true, "gui_zip_export_without_file_hunting": true, "gui_diagnostic_report_visible_and_clipboard_verified": true, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
 }
 
 func readClipboard() string {
@@ -399,14 +412,19 @@ func selectNativeDocument(title, path string) {
 	writeText(filename, path)
 	click(dialog, 1)
 }
-func verifyOriginalView(diagnostic uintptr, expected []byte, out string) {
+func verifyOriginalView(diagnostic uintptr, expected []byte, out string, displayProbe bool, framePath string) {
 	click(diagnostic, 1302)
 	fail(waitWindow("诊断原图 · 960×540"))
 	viewer := findWindow("诊断原图 · 960×540")
 	if !onScreen(viewer) || !onScreen(control(viewer, 1310)) {
 		fail(fmt.Errorf("original image viewer exceeds desktop"))
 	}
-	fail(captureWindow(viewer, out))
+	if displayProbe {
+		verifyDisplayLifecycle(viewer, framePath, filepath.Dir(out), "original")
+		fail(captureWindowScreen(viewer, out))
+	} else {
+		fail(captureWindow(viewer, out))
+	}
 	raw, e := os.ReadFile(out)
 	fail(e)
 	rendered, e := png.Decode(bytes.NewReader(raw))
