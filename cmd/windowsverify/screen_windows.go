@@ -126,8 +126,8 @@ func verifyDisplayLifecycle(h uintptr, framePath, outDir, prefix string) {
 		fail(fmt.Errorf("%s %s: %w", prefix, stage, err))
 	}
 	verify("initial")
-	// Valid fault injection: the old shared class erases the image to white and
-	// never repaints it if no WM_PAINT follows. The new erase path draws immediately.
+	// Exercise background erasure and normal message-loop recovery. The old
+	// renderer may recover via a pending WM_PAINT; record that honestly.
 	dc, _, _ := user.NewProc("GetDC").Call(h)
 	user.NewProc("SendMessageW").Call(h, 0x14, dc, 0)
 	user.NewProc("ReleaseDC").Call(h, dc)

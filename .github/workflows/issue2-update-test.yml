@@ -66,7 +66,7 @@ jobs:
           if ((Get-FileHash dist/published40.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2') { throw 'Published preview40 SHA mismatch' }
           Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.1/MHXStudio.exe' -OutFile dist/published41.exe
           if ((Get-FileHash dist/published41.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'b7ac42b0800b96c4dd60a4245e31ebf054373675ae23702af4bb7ba978bf3cb7') { throw 'Published preview41 Issue2 SHA mismatch' }
-      - name: Reproduce old shared image erase defect on actual screen pixels
+      - name: Record published image baseline on actual screen pixels
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.2/MHXStudio.exe' -OutFile dist/published2.exe
@@ -76,8 +76,9 @@ jobs:
           $baselineExit = $LASTEXITCODE
           Stop-Process -Name published2,dnplayer,adb,ldconsole -Force -ErrorAction SilentlyContinue
           $log = Get-Content dist/display-baseline/baseline.log -Raw
-          if ($baselineExit -eq 0 -or $log -notmatch 'calibration erase: screen pixel mismatch') { throw 'Expected old image erase regression was not reproduced; inspect evidence' }
-          @{reproduced=$true;expected_failure=$true;exit=$baselineExit;source_commit='25b5adcad0221cd3f6e1c90d569b8006ea4ebcc7';injection='WM_ERASEBKGND without following WM_PAINT';exact_user_trigger_confirmed=$false} | ConvertTo-Json | Set-Content -Encoding utf8 dist/display-baseline/baseline-display.json
+          $pixelFailure = $baselineExit -ne 0 -and $log -match '(calibration|original) [a-z0-9-]+: screen pixel mismatch'
+          if ($baselineExit -ne 0 -and -not $pixelFailure) { throw 'Old baseline failed outside image pixel checks; inspect evidence' }
+          @{reproduced=$pixelFailure;baseline_passed_on_ci=($baselineExit -eq 0);exit=$baselineExit;source_commit='25b5adcad0221cd3f6e1c90d569b8006ea4ebcc7';injection='WM_ERASEBKGND followed by observation of normal message-loop repaint';exact_user_trigger_confirmed=$false} | ConvertTo-Json | Set-Content -Encoding utf8 dist/display-baseline/baseline-display.json
           $global:LASTEXITCODE = 0
       - name: Real GUI calibration save, pixel mapping, reload and read-only recognition
         id: recognition
