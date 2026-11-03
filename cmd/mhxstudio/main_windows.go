@@ -797,6 +797,9 @@ func (a *app) handle(id int) {
 }
 func windowProc(h uintptr, m uint32, w, l uintptr) uintptr {
 	a := active
+	if a != nil && a.panel != nil && a.panel.image != nil && h == a.panel.image.canvas.hwnd {
+		return a.panel.image.proc(h, m, w, l)
+	}
 	if a != nil && a.panel != nil && h == a.panel.hwnd {
 		return a.panel.proc(h, m, w, l)
 	}

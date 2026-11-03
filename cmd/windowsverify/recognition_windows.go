@@ -13,6 +13,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,7 +75,10 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	var encoded bytes.Buffer
 	fail(png.Encode(&encoded, textured))
 	fail(filesafe.Write(framePath, encoded.Bytes(), 0600))
-	p.Pages["game"] = p.Pages["notice"] // stale calibration must actually be replaced by GUI save
+	p.Pages["game"] = p.Pages["notice"] // stale features must be replaced; keep the reported threshold.
+	gamePage := p.Pages["game"]
+	gamePage.Threshold = 10
+	p.Pages["game"] = gamePage
 	state := gameFixtureState{Package: "com.pwrd.mzlite.laohu", Activity: ".Main", Foreground: "com.pwrd.mzlite.laohu", Page: "game_3", Running: true}
 	statePath := filepath.Join(install, "game-fixture.json")
 	fail(filesafe.JSON(statePath, state))
@@ -140,6 +144,8 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	if !bytes.Equal(old, kept) {
 		fail(fmt.Errorf("original calibration backup changed"))
 	}
+	validCalibrationRaw, e := os.ReadFile(profile)
+	fail(e)
 	exported := false
 	inspect := func(expect bool) recognitionNative {
 		path := filepath.Join(data, "diagnostics", "recognition-latest-1.json")
@@ -160,22 +166,33 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 			fail(fmt.Errorf("clipboard report differs: %d vs %d", len(clipboardText), len(displayed)))
 		}
 		if !exported {
+			verifyOriginalView(diagnostic, pngData, filepath.Join(filepath.Dir(out), "diagnostic-original-view.png"))
 			destination, e := filepath.Abs(filepath.Join(filepath.Dir(out), "recognition-export.zip"))
 			fail(e)
 			_ = os.Remove(destination)
 			user.NewProc("PostMessageW").Call(control(diagnostic, 1303), 0xF5, 0, 0)
-			fail(waitWindow("导出诊断ZIP"))
-			dialog := findWindow("导出诊断ZIP")
-			var filename uintptr
-			until(dialog, "native save dialog filename missing", func() bool { filename = findDialogFilename(dialog); return filename != 0 && control(dialog, 1) != 0 })
-			writeText(filename, destination)
-			click(dialog, 1)
+			selectNativeDocument("导出诊断ZIP", destination)
 			until(diagnostic, "GUI ZIP export missing", func() bool { _, e := os.Stat(destination); return e == nil })
 			z, e := zip.OpenReader(destination)
 			fail(e)
 			names := map[string]bool{}
 			for _, entry := range z.File {
 				names[entry.Name] = true
+				stream, e := entry.Open()
+				fail(e)
+				data, e := io.ReadAll(stream)
+				fail(e)
+				fail(stream.Close())
+				if entry.Name == "screenshot.png" && !bytes.Equal(data, pngData) {
+					fail(fmt.Errorf("ZIP changed original PNG bytes"))
+				}
+				if entry.Name == "report.json" {
+					var copy recognitionNative
+					fail(json.Unmarshal(data, &copy))
+					if copy.Report.ScreenshotSHA != report.Report.ScreenshotSHA {
+						fail(fmt.Errorf("ZIP report/frame SHA mismatch"))
+					}
+				}
 			}
 			fail(z.Close())
 			if !names["screenshot.png"] || !names["report.json"] || !names["instance-profile.json"] || names["config.json"] {
@@ -194,7 +211,7 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 				if expect {
 					for _, a := range s.Anchors {
 						if a.MeanAbsoluteError != 0 || a.MeanLimit != 10 || !a.Passed {
-							fail(fmt.Errorf("wrong anchor metric %+v", a))
+							fail(fmt.Errorf("wrong anchor metric: mean %.3f, limit %.3f, passed=%t; expected mean0/limit10", a.MeanAbsoluteError, a.MeanLimit, a.Passed))
 						}
 					}
 				}
@@ -240,7 +257,67 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 		_, ok := p.Pages["custom_fixture"]
 		return ok
 	})
+	// Restore the actual previous valid calibration using the history picker and GUI confirmation.
+	history, e = filepath.Glob(filepath.Join(data, "profiles", "history", "*.json"))
+	fail(e)
+	prior := ""
+	for _, path := range history {
+		raw, e := os.ReadFile(path)
+		fail(e)
+		if bytes.Equal(raw, validCalibrationRaw) {
+			prior = path
+			break
+		}
+	}
+	if prior == "" {
+		fail(fmt.Errorf("previous valid rules missing from history"))
+	}
+	modifiedRaw, e := os.ReadFile(profile)
+	fail(e)
+	user.NewProc("PostMessageW").Call(control(manager, 1404), 0xF5, 0, 0)
+	selectNativeDocument("选择规则文件：先预览，保存确认后生效", prior)
+	until(manager, "history not loaded into preview", func() bool {
+		return strings.ReplaceAll(readText(control(manager, 1409)), "\r\n", "\n") == strings.ReplaceAll(string(validCalibrationRaw), "\r\n", "\n")
+	})
+	unchanged, e := os.ReadFile(profile)
+	fail(e)
+	if !bytes.Equal(unchanged, modifiedRaw) {
+		fail(fmt.Errorf("history preview changed active rules before confirmation"))
+	}
+	user.NewProc("PostMessageW").Call(control(manager, 1402), 0xF5, 0, 0)
+	fail(waitWindow("确认规则修改"))
+	click(findWindow("确认规则修改"), 6)
+	until(manager, "history restore not durable", func() bool {
+		var restored automation.Profile
+		if filesafe.ReadJSON(profile, &restored) != nil {
+			return false
+		}
+		_, found := restored.Pages["custom_fixture"]
+		return !found && restored.Pages["game"].Threshold == 10
+	})
+	history, e = filepath.Glob(filepath.Join(data, "profiles", "history", "*.json"))
+	fail(e)
+	backedModified := false
+	for _, path := range history {
+		raw, e := os.ReadFile(path)
+		fail(e)
+		if bytes.Equal(raw, modifiedRaw) {
+			backedModified = true
+		}
+	}
+	if !backedModified {
+		fail(fmt.Errorf("history restore lost replaced rules"))
+	}
 	closeTitle("页面规则管理")
+	inspect(true)
+	// Verify restored rules are also read after a fresh process restart.
+	closeTitle(title)
+	fail(wait(app, 10*time.Second))
+	app = start(exe, "--data-dir", data)
+	fail(waitWindow(title))
+	h = findWindow(title)
+	until(h, "restored identity unavailable after restart", func() bool { return strings.Contains(readText(control(h, 208)), "ADB 已验证 1 台") })
+	inspect(true)
 	state.Page = "unknown"
 	fail(filesafe.JSON(statePath, state))
 	unknown := inspect(false)
@@ -253,7 +330,7 @@ func recognitionGUI(exe, fixture, version, out string) map[string]any {
 	}
 	closeTitle(title)
 	fail(wait(app, 10*time.Second))
-	return map[string]any{"passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_rule_edit_confirmed_and_persisted": true, "gui_zip_export_without_file_hunting": true, "gui_diagnostic_report_visible_and_clipboard_verified": true, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
+	return map[string]any{"passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_original_image_view_exact_pixels": true, "zip_original_png_and_report_sha_verified": true, "gui_history_preview_is_read_only": true, "gui_history_restore_confirmed_and_backed_up": true, "restored_rules_work_after_restart": true, "gui_rule_edit_confirmed_and_persisted": true, "gui_zip_export_without_file_hunting": true, "gui_diagnostic_report_visible_and_clipboard_verified": true, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
 }
 
 func readClipboard() string {
@@ -312,4 +389,46 @@ func findDialogFilename(dialog uintptr) uintptr {
 	filenameRank = -1000000
 	user.NewProc("EnumChildWindows").Call(dialog, enumFilenameCallback, 0)
 	return filenameCandidate
+}
+
+func selectNativeDocument(title, path string) {
+	fail(waitWindow(title))
+	dialog := findWindow(title)
+	var filename uintptr
+	until(dialog, "native document filename missing", func() bool { filename = findDialogFilename(dialog); return filename != 0 && control(dialog, 1) != 0 })
+	writeText(filename, path)
+	click(dialog, 1)
+}
+func verifyOriginalView(diagnostic uintptr, expected []byte, out string) {
+	click(diagnostic, 1302)
+	fail(waitWindow("诊断原图 · 960×540"))
+	viewer := findWindow("诊断原图 · 960×540")
+	if !onScreen(viewer) || !onScreen(control(viewer, 1310)) {
+		fail(fmt.Errorf("original image viewer exceeds desktop"))
+	}
+	fail(captureWindow(viewer, out))
+	raw, e := os.ReadFile(out)
+	fail(e)
+	rendered, e := png.Decode(bytes.NewReader(raw))
+	fail(e)
+	original, e := png.Decode(bytes.NewReader(expected))
+	fail(e)
+	var origin struct{ X, Y int32 }
+	var wr screenRect
+	user.NewProc("ClientToScreen").Call(viewer, uintptr(unsafe.Pointer(&origin)))
+	user.NewProc("GetWindowRect").Call(viewer, uintptr(unsafe.Pointer(&wr)))
+	for y := 0; y < 540; y++ {
+		for x := 0; x < 960; x++ {
+			r, g, b, _ := original.At(x, y).RGBA()
+			a, c, d, _ := rendered.At(int(origin.X-wr.L)+20+x, int(origin.Y-wr.T)+70+y).RGBA()
+			if r != a || g != c || b != d {
+				fail(fmt.Errorf("original image pixel changed at %d,%d", x, y))
+			}
+		}
+	}
+	closeTitle("诊断原图 · 960×540")
+	enabled, _, _ := user.NewProc("IsWindowEnabled").Call(diagnostic)
+	if enabled == 0 {
+		fail(fmt.Errorf("closing original view did not restore diagnostic window"))
+	}
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/ab393911/MHX-Studio-Updates/internal/automation"
 	"github.com/ab393911/MHX-Studio-Updates/internal/filesafe"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 )
 
 type utilityPanel struct {
+	image                                        *diagnosticImage
 	app                                          *app
 	hwnd, editor, scope, id, name, button, count uintptr
 	kind                                         string
@@ -206,7 +206,7 @@ func (p *utilityPanel) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 				p.app.log("完整识别诊断已复制。")
 			}
 		case 1302:
-			_ = exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", filepath.Join(p.bundle.Directory, "screenshot.png")).Start()
+			p.openOriginalImage()
 		case 1303:
 			if path := chooseDocument(h, true, "导出诊断ZIP", "", "*.zip"); path != "" {
 				if !strings.EqualFold(filepath.Ext(path), ".zip") {

@@ -99,6 +99,7 @@ func main() {
 	published19 := flag.String("published19", "", "")
 	published21 := flag.String("published21", "", "")
 	published40 := flag.String("published40", "", "")
+	published41 := flag.String("published41", "", "")
 	updateOnly := flag.Bool("update-only", false, "")
 	recognitionOnly := flag.Bool("recognition-only", false, "")
 	interrupt := flag.String("interrupt-update", "", "")
@@ -329,6 +330,12 @@ func main() {
 		folder := filepath.Join(filepath.Dir(*out), "preview40-direct")
 		fail(os.MkdirAll(folder, 0700))
 		results["preview40_direct_gui_upgrade"] = localGUIUpgrade(*published40, "3.5.0-preview.40", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
+	}
+	if *published41 != "" {
+		results["active_scenario"] = "preview41_issue2_gui_upgrade"
+		folder := filepath.Join(filepath.Dir(*out), "preview41-issue2")
+		fail(os.MkdirAll(folder, 0700))
+		results["preview41_issue2_gui_upgrade"] = localGUIUpgrade(*published41, "3.5.0-preview.41-issue2.1", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
 	}
 	// Also prove settings saves preserve unknown fields (unit tests cover detail).
 	results["publication_ready"] = false

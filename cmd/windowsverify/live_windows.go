@@ -102,7 +102,8 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	fail(e)
 	profileBefore, e := os.ReadFile(profile)
 	fail(e)
-	studioSeeded := oldVersion == "3.4.999" || oldVersion == "3.5.0-preview.40"
+	issue2Baseline := oldVersion == "3.5.0-preview.40" || oldVersion == "3.5.0-preview.41-issue2.1"
+	studioSeeded := oldVersion == "3.4.999" || issue2Baseline
 	studioOrderID := ""
 	studioPlanID, studioActor := "", ""
 	if studioSeeded {
@@ -111,7 +112,7 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		o, e := s.CreateOrder("ci-update-preserved", 90000)
 		fail(e)
 		studioOrderID = o.ID
-		if oldVersion == "3.5.0-preview.40" {
+		if issue2Baseline {
 			actors := []studio.Actor{}
 			for i := 1; i <= 5; i++ {
 				actors = append(actors, studio.Actor{Instance: i, Identity: fmt.Sprint(i), Profession: []string{"合欢", "天音", "青云", "鬼王", "鬼王"}[i-1]})

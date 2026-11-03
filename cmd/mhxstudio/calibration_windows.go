@@ -110,16 +110,7 @@ func (a *app) startRuleCalibration(name calibrationName, shared bool, count int)
 	})
 }
 func (c *calibration) open() {
-	c.pixels = make([]byte, 960*540*4)
-	for y := 0; y < 540; y++ {
-		for x := 0; x < 960; x++ {
-			r, g, b, _ := c.img.At(x, y).RGBA()
-			i := (y*960 + x) * 4
-			c.pixels[i] = byte(b >> 8)
-			c.pixels[i+1] = byte(g >> 8)
-			c.pixels[i+2] = byte(r >> 8)
-		}
-	}
+	c.pixels = originalImagePixels(c.img)
 	inst, _, _ := moduleHandle.Call(0)
 	h, _, _ := createWindow.Call(0, uintptr(unsafe.Pointer(utf("MHXStudioNextWindow"))), uintptr(unsafe.Pointer(utf(fmt.Sprintf("实例 %d 标定 · %s", c.index, c.name.label)))), 0x00CA0000|wsVisible, 100, 50, 1015, 750, c.app.hwnd, 0, inst, 0)
 	if h == 0 {
@@ -339,4 +330,18 @@ func chooseConsole(owner uintptr) string {
 		return ""
 	}
 	return syscall.UTF16ToString(file)
+}
+
+func originalImagePixels(img image.Image) []byte {
+	pixels := make([]byte, 960*540*4)
+	for y := 0; y < 540; y++ {
+		for x := 0; x < 960; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			i := (y*960 + x) * 4
+			pixels[i] = byte(b >> 8)
+			pixels[i+1] = byte(g >> 8)
+			pixels[i+2] = byte(r >> 8)
+		}
+	}
+	return pixels
 }
