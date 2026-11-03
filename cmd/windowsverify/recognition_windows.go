@@ -94,10 +94,12 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 	fail(waitWindow(title))
 	h := findWindow(title)
 	until(h, "recognition fixture identity not verified", func() bool { return strings.Contains(readText(control(h, 208)), "ADB 已验证 1 台") })
+	fmt.Println("recognition: identity verified; selecting PNG source")
 	if screenPNG {
 		// Actual screen pixels of this disposable Windows GUI, not generated shapes.
 		fail(captureScreenRegion(image.Rect(0, 0, 960, 540), framePath))
 		copyFile(framePath, filepath.Join(filepath.Dir(out), "source-desktop.png"))
+		fmt.Println("recognition: real desktop PNG captured")
 	}
 	// Generic game is index 11, registered once; no nickname or login page is changed.
 	send := user.NewProc("SendMessageW")
@@ -105,6 +107,7 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 	click(h, 108)
 	calTitle := "实例 1 标定 · 游戏主界面：两处稳定特征 + 菜单按钮"
 	fail(waitWindow(calTitle))
+	fmt.Println("recognition: calibration window opened")
 	cal := findWindow(calTitle)
 	dpi, _, _ := user.NewProc("GetDpiForWindow").Call(cal)
 	if displayProbe {
@@ -139,7 +142,9 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 			fail(fmt.Errorf("display coordinate/pixel mismatch at %d,%d: %d,%d,%d != %d,%d,%d", x, y, rr, gg, bb, ar, ag, ab))
 		}
 	}
+	fmt.Println("recognition: image lifecycle passed; saving calibration")
 	click(cal, 302)
+	fmt.Println("recognition: calibration save returned")
 	until(h, "calibration not saved", func() bool {
 		return findWindow(calTitle) == 0 && strings.Contains(readText(control(h, 900)), "已保存 游戏主界面")
 	})
@@ -159,6 +164,7 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 	inspect := func(expect bool) recognitionNative {
 		path := filepath.Join(data, "diagnostics", "recognition-latest-1.json")
 		_ = os.Remove(path)
+		fmt.Println("recognition: requesting fresh report")
 		click(h, 109)
 		var report recognitionNative
 		until(h, "fresh recognition report not written", func() bool { return filesafe.ReadJSON(path, &report) == nil })
@@ -169,13 +175,16 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 		if !strings.Contains(displayed, "fixture-1") || !strings.Contains(displayed, "平均误差") || !strings.Contains(displayed, "algorithm_version") {
 			fail(fmt.Errorf("GUI diagnostic incomplete: %s", displayed))
 		}
+		fmt.Println("recognition: copying report")
 		click(diagnostic, 1301)
 		clipboardText := readClipboard()
 		if strings.ReplaceAll(clipboardText, "\r\n", "\n") != strings.ReplaceAll(displayed, "\r\n", "\n") {
 			fail(fmt.Errorf("clipboard report differs: %d vs %d", len(clipboardText), len(displayed)))
 		}
 		if !exported {
+			fmt.Println("recognition: viewing original image")
 			verifyOriginalView(diagnostic, pngData, filepath.Join(filepath.Dir(out), "diagnostic-original-view.png"), displayProbe, framePath)
+			fmt.Println("recognition: exporting ZIP")
 			destination, e := filepath.Abs(filepath.Join(filepath.Dir(out), "recognition-export.zip"))
 			fail(e)
 			_ = os.Remove(destination)
@@ -231,6 +240,7 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 		}
 		return report
 	}
+	fmt.Println("recognition: saved calibration verified")
 	first := inspect(true)
 	if first.Report.ScreenshotSHA != fmt.Sprintf("%x", sha256.Sum256(pngData)) {
 		fail(fmt.Errorf("recognition did not use current source frame"))
@@ -246,6 +256,7 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 		fail(fmt.Errorf("restart profile changed"))
 	}
 	// Edit and persist a custom rule through the actual GUI, never hand-edit production files.
+	fmt.Println("recognition: restart passed; editing rules")
 	click(h, 122)
 	fail(waitWindow("页面规则管理"))
 	manager := findWindow("页面规则管理")
@@ -284,6 +295,7 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 	modifiedRaw, e := os.ReadFile(profile)
 	fail(e)
 	user.NewProc("PostMessageW").Call(control(manager, 1404), 0xF5, 0, 0)
+	fmt.Println("recognition: restoring history preview")
 	selectNativeDocument("选择规则文件：先预览，保存确认后生效", prior)
 	until(manager, "history not loaded into preview", func() bool {
 		return strings.ReplaceAll(readText(control(manager, 1409)), "\r\n", "\n") == strings.ReplaceAll(string(validCalibrationRaw), "\r\n", "\n")
@@ -327,6 +339,7 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 	h = findWindow(title)
 	until(h, "restored identity unavailable after restart", func() bool { return strings.Contains(readText(control(h, 208)), "ADB 已验证 1 台") })
 	inspect(true)
+	fmt.Println("recognition: restored rules passed; rejecting unknown frame")
 	state.Page = "unknown"
 	fail(filesafe.JSON(statePath, state))
 	unknown := inspect(false)
