@@ -78,7 +78,7 @@ jobs:
           $log = Get-Content dist/display-baseline/baseline.log -Raw
           $pixelFailure = $baselineExit -ne 0 -and $log -match '(calibration|original) [a-z0-9-]+: screen pixel mismatch'
           if ($baselineExit -ne 0 -and -not $pixelFailure) { throw 'Old baseline failed outside image pixel checks; inspect evidence' }
-          @{reproduced=$pixelFailure;baseline_passed_on_ci=($baselineExit -eq 0);exit=$baselineExit;source_commit='25b5adcad0221cd3f6e1c90d569b8006ea4ebcc7';injection='WM_ERASEBKGND followed by observation of normal message-loop repaint';exact_user_trigger_confirmed=$false} | ConvertTo-Json | Set-Content -Encoding utf8 dist/display-baseline/baseline-display.json
+          @{reproduced=$pixelFailure;baseline_passed_on_ci=($baselineExit -eq 0);exit=$baselineExit;source_commit='25b5adcad0221cd3f6e1c90d569b8006ea4ebcc7';injection='RedrawWindow erase-now followed by normal message-loop repaint';exact_user_trigger_confirmed=$false} | ConvertTo-Json | Set-Content -Encoding utf8 dist/display-baseline/baseline-display.json
           $global:LASTEXITCODE = 0
       - name: Real GUI calibration save, pixel mapping, reload and read-only recognition
         id: recognition

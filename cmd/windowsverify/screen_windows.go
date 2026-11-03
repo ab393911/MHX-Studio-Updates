@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 	"unsafe"
@@ -128,9 +129,10 @@ func verifyDisplayLifecycle(h uintptr, framePath, outDir, prefix string) {
 	verify("initial")
 	// Exercise background erasure and normal message-loop recovery. The old
 	// renderer may recover via a pending WM_PAINT; record that honestly.
-	dc, _, _ := user.NewProc("GetDC").Call(h)
-	user.NewProc("SendMessageW").Call(h, 0x14, dc, 0)
-	user.NewProc("ReleaseDC").Call(h, dc)
+	// Let Windows supply a DC owned by the target process; never pass a
+	// verifier-owned GDI handle to another process. RDW_ERASENOW | ERASE |
+	// INVALIDATE | NOCHILDREN exercises normal erase/repaint ordering.
+	user.NewProc("RedrawWindow").Call(h, 0, 0, 0x245)
 	verify("erase")
 	user.NewProc("ShowWindow").Call(h, 6)
 	time.Sleep(100 * time.Millisecond)
@@ -142,7 +144,34 @@ func verifyDisplayLifecycle(h uintptr, framePath, outDir, prefix string) {
 	user.NewProc("MoveWindow").Call(h, uintptr(r.L), uintptr(r.T), uintptr(r.R-r.L), uintptr(r.B-r.T), 1)
 	verify("resized")
 	for _, dpi := range []uintptr{120, 144, 192} {
-		user.NewProc("SendMessageW").Call(h, 0x2E0, dpi|(dpi<<16), uintptr(unsafe.Pointer(&r)))
+		fail(sendDPINotification(h, dpi, &r))
 		verify(fmt.Sprintf("dpi-%d", dpi))
 	}
+}
+
+// WM_DPICHANGED is above WM_USER, so SendMessage does not marshal its RECT.
+// Use target-owned memory in this isolated CI app, never a local pointer.
+func sendDPINotification(h, dpi uintptr, rect *screenRect) error {
+	var pid uint32
+	user.NewProc("GetWindowThreadProcessId").Call(h, uintptr(unsafe.Pointer(&pid)))
+	kernel := syscall.NewLazyDLL("kernel32.dll")
+	process, _, err := kernel.NewProc("OpenProcess").Call(0x28, 0, uintptr(pid))
+	if process == 0 {
+		return fmt.Errorf("DPI fixture OpenProcess: %v", err)
+	}
+	defer kernel.NewProc("CloseHandle").Call(process)
+	size := unsafe.Sizeof(*rect)
+	remote, _, err := kernel.NewProc("VirtualAllocEx").Call(process, 0, size, 0x3000, 4)
+	if remote == 0 {
+		return fmt.Errorf("DPI fixture allocation: %v", err)
+	}
+	defer kernel.NewProc("VirtualFreeEx").Call(process, remote, 0, 0x8000)
+	var written uintptr
+	ok, _, err := kernel.NewProc("WriteProcessMemory").Call(process, remote, uintptr(unsafe.Pointer(rect)), size, uintptr(unsafe.Pointer(&written)))
+	runtime.KeepAlive(rect)
+	if ok == 0 || written != size {
+		return fmt.Errorf("DPI fixture RECT write: %v", err)
+	}
+	user.NewProc("SendMessageW").Call(h, 0x2E0, dpi|(dpi<<16), remote)
+	return nil
 }
