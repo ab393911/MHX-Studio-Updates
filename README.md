@@ -1,5 +1,7 @@
 # MHX Studio
 
+当前版本、开发分支与待办以[项目交接](PROJECT_HANDOVER.md)为准；自动测试与用户实机验收分别记录于[实机测试台账](REAL_DEVICE_TESTS.md)。用户当前使用preview.41-issue2.1；新增一键识别诊断和通用页面规则管理仍为未发布候选。以下介绍包含历史开发阶段记录。
+
 当前流程、用户最新修订与尚未接通的执行器见[开发状态与规则逐条对照](docs/CURRENT_FLOW.md)。
 
 本轮新增[保存方案后自动启动登录及组队执行测试](docs/ON_OPEN_TEAM_ACCEPTANCE.md)，仍在开发分支，未发布、未实机验收。
