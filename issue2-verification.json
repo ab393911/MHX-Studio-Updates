@@ -1,20 +1,20 @@
 {
-  "SOURCE_SHA": "f62ea1c7e5f8a0b291959bdc72dbdbea652ca77a",
-  "RUN_ID": "41667971687",
+  "SOURCE_SHA": "d16130606071786eab41738f7b2f4e63bbc3f38f",
+  "RUN_ID": "41668629335",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "cancelled",
+  "PORTABLE_RESULT": "not-yet-aggregated",
   "WINDOWS_RESULT": "failure",
-  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41667971687",
+  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41668629335",
   "published": false,
   "stable_manifest_changed": false,
   "reports": {
     "verification-artifacts/issue2-windows-results/candidate.json": {
-      "size": 8523776,
-      "sha256": "4383256dca8f48e7d96940a8a8ce5336df6e24895848a58f35817bb3d4a52e59",
-      "version": "3.5.0-preview.41-issue2.3-gui.1",
-      "isolated_test_id": "",
       "published": false,
-      "source_commit": "f62ea1c7e5f8a0b291959bdc72dbdbea652ca77a"
+      "source_commit": "d16130606071786eab41738f7b2f4e63bbc3f38f",
+      "isolated_test_id": "",
+      "size": 8523776,
+      "version": "3.5.0-preview.41-issue2.3-gui.1",
+      "sha256": "4f19f18167202eb60ea23d41450d8acf42dc190f055c2ec77eeb44aebe5e3add"
     },
     "verification-artifacts/issue2-windows-results/display-baseline/recognition-tests.json": {
       "actual_windows_desktop_png": false,
@@ -48,9 +48,6 @@
       "two_anchor_scores_verified": true,
       "unknown_frame_rejected_without_click": true,
       "zip_original_png_and_report_sha_verified": true
-    },
-    "verification-artifacts/issue2-portable-results/portable-tests.json": {
-      "pass": 257
     }
   },
   "ready_for_publication": false,
