@@ -18,7 +18,10 @@ import (
 	"unsafe"
 )
 
-const baselineSHA = "e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2"
+var baselineHashes = map[string]string{
+	"3.5.0-preview.40":          "e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2",
+	"3.5.0-preview.41-issue2.1": "b7ac42b0800b96c4dd60a4245e31ebf054373675ae23702af4bb7ba978bf3cb7",
+}
 
 var user = syscall.NewLazyDLL("user32.dll")
 
@@ -55,6 +58,7 @@ func wait(cmd *exec.Cmd) {
 }
 func main() {
 	old := flag.String("old", "", "")
+	oldVersion := flag.String("old-version", "3.5.0-preview.40", "")
 	out := flag.String("out", "manual-recovery.json", "")
 	flag.Parse()
 	defer func() {
@@ -64,6 +68,10 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+	baselineSHA, ok := baselineHashes[*oldVersion]
+	if !ok {
+		panic("unsupported immutable baseline")
+	}
 	must(update.Verify(*old, baselineSHA))
 	root, e := os.MkdirTemp("", "MHX manual recovery GUI ")
 	must(e)
@@ -83,7 +91,7 @@ func main() {
 	must(os.MkdirAll(filepath.Dir(stage), 0700))
 	must(filesafe.CopyNew(*old, target))
 	must(filesafe.CopyNew(*old, stage))
-	p, e := update.NewPlan(target, stage, "3.5.0-preview.41-issue2.1", baselineSHA)
+	p, e := update.NewPlan(target, stage, "3.5.0-preview.41-issue2.2", baselineSHA)
 	must(e)
 	p, e = update.WithConfig(p, data)
 	must(e)
@@ -101,7 +109,7 @@ func main() {
 	}
 	user.NewProc("SendMessageW").Call(yes, 0xF5, 0, 0)
 	wait(cmd)
-	gui := waitWindow("知夏 · MHX Studio 3.5.0-preview.40")
+	gui := waitWindow("知夏 · MHX Studio " + *oldVersion)
 	visible, _, _ := user.NewProc("IsWindowVisible").Call(gui)
 	if visible == 0 {
 		panic("restored GUI hidden")
@@ -111,7 +119,7 @@ func main() {
 	must(update.Verify(helper, baselineSHA))
 	user.NewProc("PostMessageW").Call(gui, 0x10, 0, 0)
 	end := time.Now().Add(15 * time.Second)
-	for window("知夏 · MHX Studio 3.5.0-preview.40") != 0 {
+	for window("知夏 · MHX Studio "+*oldVersion) != 0 {
 		if time.Now().After(end) {
 			panic("GUI failed to close")
 		}
@@ -130,5 +138,5 @@ func main() {
 		panic("order not restored")
 	}
 	must(s.Close())
-	must(filesafe.JSON(*out, map[string]any{"passed": true, "native_windows": true, "actual_published_preview40": true, "explorer_equivalent_no_arguments": true, "confirmation_clicked": true, "no_cmd_bat_python_or_manual_exe_copy": true, "old_exe_restored": true, "old_backup_retained": true, "config_bytes_preserved": true, "sqlite_order_preserved": true, "restored_gui_visible": true, "temporary_ci_data_only": true, "custom_data_directory_case_tested": false}))
+	must(filesafe.JSON(*out, map[string]any{"passed": true, "native_windows": true, "baseline_version": *oldVersion, "baseline_sha256": baselineSHA, "actual_published_preview40": *oldVersion == "3.5.0-preview.40", "actual_published_preview41_issue2": *oldVersion == "3.5.0-preview.41-issue2.1", "explorer_equivalent_no_arguments": true, "confirmation_clicked": true, "no_cmd_bat_python_or_manual_exe_copy": true, "old_exe_restored": true, "old_backup_retained": true, "config_bytes_preserved": true, "sqlite_order_preserved": true, "restored_gui_visible": true, "temporary_ci_data_only": true, "custom_data_directory_case_tested": false}))
 }

@@ -9,13 +9,15 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import time
 
 REPO='ab393911/MHX-Studio-Updates'
-SOURCE='f3bc322408aaa92fcc91d8fac0133144238d8184'
-VERSION='3.5.0-preview.41-issue2.1'
-SHA='b7ac42b0800b96c4dd60a4245e31ebf054373675ae23702af4bb7ba978bf3cb7'
-RUN='41438510528'
+SOURCE='25b5adcad0221cd3f6e1c90d569b8006ea4ebcc7'
+VERSION='3.5.0-preview.41-issue2.2'
+SHA='28a5f525f9df3c04d53818dc561cde21765c3850f7f3c5aea9182566daebd9a7'
+RUN='41629992043'
+PRIOR_VERSION='3.5.0-preview.41-issue2.1'
+PRIOR_SHA='b7ac42b0800b96c4dd60a4245e31ebf054373675ae23702af4bb7ba978bf3cb7'
+STABLE_BLOB='fc0cb8c83a5c3aad7df831354b930fe82c4fb013'
 TAG='issue2-v'+VERSION
 CHANNEL='https://raw.githubusercontent.com/'+REPO+'/updates/issue2-test.json'
 ASSET='https://github.com/'+REPO+'/releases/download/'+TAG+'/update.json'
@@ -36,22 +38,36 @@ def save(p,obj):Path(p).write_text(json.dumps(obj,ensure_ascii=False,indent=2)+'
 def require(condition,message):
     if not condition:raise RuntimeError(message)
 
+UPGRADE_KEYS=['passed','one_click_without_confirmation','new_gui_visible','configuration_byte_identical','calibration_byte_identical','studio_database_preserved','studio_data_seeded','role_execution_history_preserved','game_settings_byte_preserved','old_exe_backup_retained','configuration_snapshot_verified','previous_update_backup_preserved','progress_history_logs_preserved','emulator_directory_sentinels_preserved','sha256_verified','real_update_button_clicked']
+GUI_KEYS=['passed','native_windows','gui_diagnostic_report_visible_and_clipboard_verified','gui_original_image_view_exact_pixels','zip_original_png_and_report_sha_verified','gui_zip_export_without_file_hunting','gui_rule_edit_confirmed_and_persisted','gui_history_preview_is_read_only','gui_history_restore_confirmed_and_backed_up','restored_rules_work_after_restart','thresholds_unchanged','unknown_frame_rejected_without_click']
+SCENARIOS=['success','startup_timeout','immediate_exit','config_migration_exit','sha_tamper','sharing_violation','interrupted_recovery']
+
+def validate_upgrade(d,baseline):
+    for key in UPGRADE_KEYS:
+        require(d.get(key) is True,'Upgrade gate failed: '+key)
+    require(d['source_commit']==SOURCE and d['version']==VERSION and d['previous_version']==baseline and d['confirmation_clicks']==0,'Upgrade source/baseline/version/confirmation mismatch')
+
+def validate_rollback(n):
+    require(n['passed'] is True and n['gui_smoke']['source_commit']==SOURCE and n['gui_smoke']['version']==VERSION,'Native report mismatch')
+    for scenario in SCENARIOS:
+        r=n[scenario]
+        require(r['passed'] and r['config_unchanged'] and r['studio_order_database_preserved'],'Native rollback/preflight failed: '+scenario)
+    require(n['interrupted_recovery']['recovery_helper_restarted_by_test'] is True and n['interrupted_recovery']['automatic_without_restarting_helper'] is False,'Unexpected manual interruption scope')
+
+def validate_bytes(c,b):
+    require(c['source_commit']==SOURCE and c['version']==VERSION and c['sha256']==SHA and c['isolated_test_id']=='','Candidate metadata mismatch')
+    require(hashlib.sha256(b).hexdigest()==SHA and len(b)==c['size']==8514048,'Candidate bytes differ from frozen native artifact')
+
 def validate():
     run=api(f'repos/{REPO}/actions/runs/{RUN}')
-    require(run['head_sha']==SOURCE and run['conclusion']=='success','Exact historical verification run did not succeed')
+    require(run['head_sha']==SOURCE and run['conclusion']=='success','Exact native verification run did not succeed')
     call('git','diff','--exit-code',SOURCE,'HEAD','--','cmd','internal','go.mod','go.sum')
-    c=load('dist/candidate.json');n=load('dist/issue2-native-update.json')
-    b=Path('dist/MHXStudio.exe').read_bytes()
-    require(c['source_commit']==SOURCE and c['version']==VERSION and c['sha256']==SHA and c['isolated_test_id']=='','Candidate metadata mismatch')
-    require(hashlib.sha256(b).hexdigest()==SHA and len(b)==c['size'],'Candidate bytes differ from native tested artifact')
-    require(n['passed'] is True and n['gui_smoke']['source_commit']==SOURCE,'Native report mismatch')
-    for scenario in ['success','startup_timeout','immediate_exit','config_migration_exit','sha_tamper','sharing_violation','interrupted_recovery']:
-        require(n[scenario]['passed'] and n[scenario]['config_unchanged'] and n[scenario]['studio_order_database_preserved'],'Native scenario failed: '+scenario)
-    require(n['interrupted_recovery']['recovery_helper_restarted_by_test'] is True and n['interrupted_recovery']['automatic_without_restarting_helper'] is False,'Unexpected legacy interruption scope')
-    d=n['preview40_direct_gui_upgrade']
-    for key in ['passed','one_click_without_confirmation','configuration_byte_identical','studio_database_preserved','game_settings_byte_preserved','role_execution_history_preserved','previous_update_backup_preserved','progress_history_logs_preserved','emulator_directory_sentinels_preserved','new_gui_visible','test_channel_enrolled_via_preview40_gui']:
-        require(d[key] is True,'Published preview40 upgrade gate failed: '+key)
-    require(d['previous_version']=='3.5.0-preview.40' and d['source_commit']==SOURCE and d['confirmation_clicks']==0,'Baseline/source/confirmation mismatch')
+    c=load('dist/candidate.json');n=load('dist/issue2-native-update.json');g=load('dist/recognition-tests.json')
+    validate_bytes(c,Path('dist/MHXStudio.exe').read_bytes())
+    validate_rollback(n)
+    validate_upgrade(n['preview40_direct_gui_upgrade'],'3.5.0-preview.40')
+    validate_upgrade(n['preview41_issue2_gui_upgrade'],PRIOR_VERSION)
+    for key in GUI_KEYS:require(g.get(key) is True,'Frozen GUI gate failed: '+key)
     failures=[];counts={}
     for line in Path('dist/windows-unit-tests.json').read_text(encoding='utf-8-sig').splitlines():
         try:e=json.loads(line)
@@ -59,18 +75,19 @@ def validate():
         if e.get('Test') and e.get('Action') in ['pass','fail','skip']:
             counts[e['Action']]=counts.get(e['Action'],0)+1
             if e['Action']=='fail':failures.append(e)
-    require(not failures and counts.get('pass',0)>=256,'Windows unit results failed or incomplete')
-    save('dist/ISSUE2-VERIFICATION.json',{'source_commit':SOURCE,'version':VERSION,'sha256':SHA,'native_run':run['html_url'],'latest_business_diff_empty':True,'windows_unit_tests':counts,'native_update':n,'release_policy':{'user_accepted_legacy_first_hop_manual_recovery':True,'acceptance_date_shanghai':'2026-11-02','waiver_scope':'only helper forcibly terminated during legacy first hop; all other gates remain mandatory'},'real_ldplayer_tested':False,'workflow_source_commit':os.environ['GITHUB_SHA']})
+    require(not failures and counts.get('pass',0)==271,'Windows unit results failed or incomplete')
+    stable=api(f'repos/{REPO}/contents/preview.json?ref=updates')
+    previous=api(f'repos/{REPO}/contents/issue2-test.json?ref=updates')
+    prior=json.loads(base64.b64decode(previous['content']))
+    require(stable['sha']==STABLE_BLOB,'Default manifest changed since authorization')
+    require(prior['version']==PRIOR_VERSION and prior['sha256']==PRIOR_SHA,'Test channel changed since authorization')
+    save('dist/channel-before.json',{'stable_blob':stable['sha'],'test_blob':previous['sha'],'test_content':previous['content']})
+    save('dist/ISSUE2-VERIFICATION.json',{'source_commit':SOURCE,'version':VERSION,'sha256':SHA,'native_run':run['html_url'],'latest_business_diff_empty':True,'windows_unit_tests':counts,'excluded_experimental_test':'TestNativeWindowsAssetAmounts','native_update':n,'diagnostic_gui':g,'release_policy':{'user_accepted_helper_forced_interruption_manual_recovery':True,'acceptance_date_shanghai':'2026-11-03','scope':'recognition diagnostics only; no real-game fix claim; no runtime changes or deliberate mistakes'},'real_ldplayer_tested':False,'workflow_source_commit':os.environ['GITHUB_SHA']})
 
 def verify_online(url,report):
-    for attempt in range(6):
-        try:
-            print(call('go','run','./cmd/release','-verify',url,'-commit',SOURCE,'-version',VERSION,'-report',report))
-            require(load(report)['sha256']==SHA,'Online bytes mismatch')
-            return
-        except subprocess.CalledProcessError:
-            if attempt==5:raise
-            time.sleep(5)  # bounded propagation wait after release/contents API write
+    # Fail immediately on any transport, metadata, PE or integrity failure.
+    print(call('go','run','./cmd/release','-verify',url,'-commit',SOURCE,'-version',VERSION,'-report',report))
+    require(load(report)['sha256']==SHA,'Online bytes mismatch')
 
 def publish():
     validate()
@@ -78,14 +95,25 @@ def publish():
     print(call('go','run','./cmd/release','-exe','dist/MHXStudio.exe','-version',VERSION,'-commit',SOURCE,'-report','dist/issue2-native-update.json'))
     m=load('dist/update.json')
     m['download_url']=f'https://github.com/{REPO}/releases/download/{TAG}/MHXStudio.exe'
-    m['notes']='Issue2独立候选测试版：修复游戏绑定复用、ADB掉线身份重验、停止/切换实例后的异步回调及错误点击重放保护。保留现有业务、配置、SQLite和备份回滚。preview.40正常一键升级与启动失败回滚已通过Windows自动测试；首次升级助手若被强制终止，可能需在资源管理器双击原事务updater.exe并确认恢复。用户已接受此剩余风险；不是无人干预中断恢复。真实雷电/游戏尚待分阶段验收，不自动执行本轮游戏验收任务。'
+    m['notes']='识别诊断测试版：一键查看/复制识别报告、查看960×540原图、导出ZIP与规则历史恢复。复用已验证EXE，保留全部现有功能、配置、SQLite、绑定、角色历史及备份回滚；不新增游戏任务，不涉及金额。真实主界面识别失败根因仍待实机诊断，不宣称修复。更新助手被强制中断时可能需要在资源管理器双击原事务updater.exe并确认恢复，不承诺无人干预恢复。'
     save('dist/update.json',m)
     Path('dist/ISSUE2-RECOVERY.md').write_bytes(Path('docs/ISSUE_2_TEST_CHANNEL_RECOVERY.md').read_bytes())
-    notes=f'''Issue2 独立在线候选 {VERSION}\n\n业务提交 {SOURCE}；复用 Windows 原生验证构建，不重建、不恢复已删除功能。\n\nWindows 原版 preview.40 一次点击升级、SHA校验、替换前备份、自动重启可见GUI和启动失败回滚通过。仅接受旧助手被强制终止时可能需要人工GUI恢复的剩余风险，不宣称无人干预恢复。\n\n首次在软件“更新清单”填写 {CHANNEL}，点“保存设置”，再点“一键检查更新”；以后只点检查。默认 preview.json 不变。请等测试通道验证完成再加入。\n\n无需下载ZIP、替换EXE、CMD/BAT或Python。恢复方法见附件 ISSUE2-RECOVERY.md：原安装目录 .mhx-updates/tx-.../updater.exe 双击后确认；旧EXE及配置/SQLite快照在 .mhx-backups，不要手工复制覆盖。目标存在或校验失败时停止操作并保留文件。\n\n真实雷电尚未验收；CI仅执行更新/恢复和接口替身检查，没有执行真实游戏任务。\n'''
+    notes=f"""MHX Studio {VERSION} 识别诊断测试版
+
+源码 {SOURCE}；复用Windows原生验证运行 {RUN} 的原EXE，SHA-256 {SHA}。未重建业务EXE。
+
+交付一键识别诊断、报告复制、原图查看、ZIP导出及规则管理。保留现有业务、职业/角色功能、随机短延迟与点击偏移；不新增随机误操作、不执行游戏任务、不涉及金额。不宣称已修复真实主界面识别失败。
+
+Windows真实GUI及preview.40、issue2.1正常升级、配置/SQLite保留、SHA拒绝与失败回滚自动测试通过；真实雷电仍待验收。公开资产升级复核通过后才推进测试清单，默认preview.json不变。
+
+已加入 {CHANNEL} 的issue2.1用户，通道验证完成后只点击“一键检查更新”。无需下载ZIP、替换EXE、CMD/BAT或Python。
+
+更新助手被强制中断仍可能需要人工GUI恢复：原安装目录.mhx-updates/tx-.../updater.exe双击后确认；旧EXE和配置/SQLite快照在.mhx-backups。不得删除目标、手工覆盖或清空数据，详见附件ISSUE2-RECOVERY.md。
+"""
     Path('dist/ISSUE2-RELEASE.md').write_text(notes)
     created=False
     try:
-        print(call('gh','release','create',TAG,'dist/MHXStudio.exe','dist/update.json','dist/SHA256SUMS.txt','dist/ISSUE2-VERIFICATION.json','dist/issue2-native-update.json','dist/ISSUE2-RECOVERY.md','--repo',REPO,'--target',SOURCE,'--title',f'MHX Studio {VERSION} — Issue2 test','--notes-file','dist/ISSUE2-RELEASE.md','--prerelease','--draft','--latest=false'))
+        print(call('gh','release','create',TAG,'dist/MHXStudio.exe','dist/update.json','dist/SHA256SUMS.txt','dist/ISSUE2-VERIFICATION.json','dist/issue2-native-update.json','dist/recognition-tests.json','dist/ISSUE2-RECOVERY.md','--repo',REPO,'--target',SOURCE,'--title',f'MHX Studio {VERSION} — Issue2 test','--notes-file','dist/ISSUE2-RELEASE.md','--prerelease','--draft','--latest=false'))
         created=True
         draft=Path(os.environ['RUNNER_TEMP'])/'issue2-draft-download'
         print(call('gh','release','download',TAG,'--repo',REPO,'--pattern','MHXStudio.exe','--dir',str(draft)))
@@ -99,27 +127,29 @@ def publish():
 def promote():
     m=load('dist/update.json');d=load('reports/published-gui-update.json');recovery=load('reports/manual-recovery.json')
     require(m['source_commit']==SOURCE and m['version']==VERSION and m['sha256']==SHA,'Manifest mismatch')
-    for key in ['passed','one_click_without_confirmation','new_gui_visible','configuration_byte_identical','studio_database_preserved','role_execution_history_preserved','game_settings_byte_preserved','previous_update_backup_preserved','progress_history_logs_preserved','emulator_directory_sentinels_preserved']:
-        require(d[key] is True,'Public GUI gate failed: '+key)
-    require(d['source_commit']==SOURCE and d['version']==VERSION and d['previous_version']=='3.5.0-preview.40','Public source/baseline mismatch')
+    validate_upgrade(d,PRIOR_VERSION)
+    validate_rollback(load('reports/public-rollback.json'))
     for key in ['passed','old_exe_restored','old_backup_retained','config_bytes_preserved','sqlite_order_preserved','restored_gui_visible','no_cmd_bat_python_or_manual_exe_copy']:
         require(recovery[key] is True,'Manual GUI recovery failed: '+key)
+    require(recovery['baseline_version']==PRIOR_VERSION and recovery['baseline_sha256']==PRIOR_SHA,'Recovery tested the wrong installed version')
+    require(load('dist/public-download.json')['sha256']==SHA,'Public download evidence mismatch')
     release=api(f'repos/{REPO}/releases/tags/{TAG}')
     require(not release['draft'] and release['prerelease'] and release['target_commitish']==SOURCE,'Release metadata mismatch')
     stable=api(f'repos/{REPO}/contents/preview.json?ref=updates')
     endpoint=f'repos/{REPO}/contents/issue2-test.json'
-    try:previous=api(endpoint+'?ref=updates')
-    except subprocess.CalledProcessError as exc:
-        require('404' in exc.stderr,'Cannot determine previous test channel');previous=None
+    previous=api(endpoint+'?ref=updates')
+    before=load('dist/channel-before.json')
+    require(stable['sha']==before['stable_blob']==STABLE_BLOB,'Default manifest changed; refusing promotion')
+    require(previous['sha']==before['test_blob'],'Concurrent test-channel change; refusing promotion')
     body={'branch':'updates','message':f'Publish verified Issue2 test channel {VERSION}','content':base64.b64encode(Path('dist/update.json').read_bytes()).decode()}
     if previous:body['sha']=previous['sha']
     updated=api(endpoint,body)
     try:
         require(api(f'repos/{REPO}/contents/preview.json?ref=updates')['sha']==stable['sha'],'Default manifest changed during promotion')
         verify_online(CHANNEL,'reports/test-channel-download.json')
-        result={'published':True,'version':VERSION,'source_commit':SOURCE,'sha256':SHA,'test_manifest':CHANNEL,'release_manifest':ASSET,'public_gui_update':d,'manual_gui_recovery':recovery,'stable_manifest_blob_before':stable['sha'],'stable_manifest_blob_after':api(f'repos/{REPO}/contents/preview.json?ref=updates')['sha'],'default_preview_manifest_unchanged':True,'legacy_first_hop_manual_recovery_risk_accepted':True,'real_ldplayer_tested':False,'workflow_source_commit':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID']}
+        result={'published':True,'version':VERSION,'source_commit':SOURCE,'sha256':SHA,'test_manifest':CHANNEL,'release_manifest':ASSET,'public_gui_update':d,'manual_gui_recovery':recovery,'public_rollback':load('reports/public-rollback.json'),'stable_manifest_blob_before':stable['sha'],'stable_manifest_blob_after':api(f'repos/{REPO}/contents/preview.json?ref=updates')['sha'],'default_preview_manifest_unchanged':True,'legacy_first_hop_manual_recovery_risk_accepted':True,'real_ldplayer_tested':False,'workflow_source_commit':os.environ['GITHUB_SHA'],'run_id':os.environ['GITHUB_RUN_ID'],'channel_commit':updated['commit']['sha'],'release_tag':TAG}
         save('reports/issue2-publication.json',result)
-        print(call('gh','release','upload',TAG,'reports/published-gui-update.json','reports/manual-recovery.json','reports/test-channel-download.json','reports/issue2-publication.json','--repo',REPO))
+        print(call('gh','release','upload',TAG,'reports/published-gui-update.json','reports/manual-recovery.json','reports/public-rollback.json','reports/test-channel-download.json','reports/issue2-publication.json','--repo',REPO))
     except Exception:
         current=api(endpoint+'?ref=updates')
         if current['sha']==updated['content']['sha']:

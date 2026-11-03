@@ -1,7 +1,7 @@
 name: Publish Windows-verified Issue2 test channel (accepted legacy recovery risk)
 on:
   push:
-    branches: [codex/fix-preview40-bindings-adb]
+    branches: [codex/recognition-diagnostics-20261102]
     paths:
       - '.github/workflows/issue2-publish-test.yml'
       - 'scripts/issue2-release-control.py'
@@ -31,13 +31,15 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: issue2-windows-results
-          run-id: 41438510528
+          run-id: 41629992043
           github-token: ${{ github.token }}
           path: dist
       - name: Validate exact native artifact and publish only Issue2 prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/issue2-release-control.py publish
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_issue2_release_control.py'
+          python3 scripts/issue2-release-control.py publish
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -45,6 +47,7 @@ jobs:
           path: |
             dist/update.json
             dist/public-download.json
+            dist/channel-before.json
             dist/ISSUE2-VERIFICATION.json
   public-windows:
     needs: publish
@@ -56,7 +59,7 @@ jobs:
         with:
           go-version: '1.26.10'
           cache: false
-      - name: Build verification tools only, obtain immutable preview40
+      - name: Build verification tools only, obtain immutable installed Issue2
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force reports,dist | Out-Null
@@ -67,20 +70,30 @@ jobs:
           if ($LASTEXITCODE) { throw 'Fixture build failed' }
           go vet ./tools/issue2manualverify
           if ($LASTEXITCODE) { throw 'Manual recovery verifier vet failed' }
+          go build -ldflags '-H windowsgui -s -w' -o dist/exit-test.exe ./cmd/testexit
+          if ($LASTEXITCODE) { throw 'Exit verification fixture build failed' }
           go build -o dist/manualverify.exe ./tools/issue2manualverify
           if ($LASTEXITCODE) { throw 'Manual recovery verifier build failed' }
-          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/v3.5.0-preview.40/MHXStudio.exe' -OutFile dist/published40.exe
-          if ((Get-FileHash dist/published40.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2') { throw 'Old binary SHA mismatch' }
-      - name: Actual published preview40 GUI upgrades from public release assets
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.1/MHXStudio.exe' -OutFile dist/published41.exe
+          if ((Get-FileHash dist/published41.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'b7ac42b0800b96c4dd60a4245e31ebf054373675ae23702af4bb7ba978bf3cb7') { throw 'Installed baseline SHA mismatch' }
+          Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.2/MHXStudio.exe' -OutFile dist/published-new.exe
+          if ((Get-FileHash dist/published-new.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne '28a5f525f9df3c04d53818dc561cde21765c3850f7f3c5aea9182566daebd9a7') { throw 'Public candidate SHA mismatch' }
+      - name: Actual installed issue2.1 GUI upgrades from public release assets
         shell: pwsh
         run: |
-          ./dist/windowsverify.exe -old "$pwd/dist/published40.exe" -old-version '3.5.0-preview.40' -expect-one-click -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.1/update.json' -version '3.5.0-preview.41-issue2.1' -emulator-fixture "$pwd/dist/ldfixture.exe" -out reports/published-gui-update.json 2>&1 | Tee-Object reports/public-gui.log
+          ./dist/windowsverify.exe -old "$pwd/dist/published41.exe" -old-version '3.5.0-preview.41-issue2.1' -expect-one-click -live-update 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.2/update.json' -version '3.5.0-preview.41-issue2.2' -emulator-fixture "$pwd/dist/ldfixture.exe" -out reports/published-gui-update.json 2>&1 | Tee-Object reports/public-gui.log
           $code = $LASTEXITCODE
           if ($code) { throw 'Public upgrade failed; test channel must not be promoted' }
+      - name: Installed updater public-binary backups and rollback recheck
+        shell: pwsh
+        run: |
+          ./dist/windowsverify.exe -old "$pwd/dist/published41.exe" -old-version '3.5.0-preview.41-issue2.1' -new "$pwd/dist/published-new.exe" -version '3.5.0-preview.41-issue2.2' -exit-fixture "$pwd/dist/exit-test.exe" -update-only -out reports/public-rollback.json 2>&1 | Tee-Object reports/public-rollback.log
+          $code = $LASTEXITCODE
+          if ($code) { throw 'Installed updater rollback checks failed; promotion blocked' }
       - name: User double-click + Yes recovery, no command-line user procedure
         shell: pwsh
         run: |
-          ./dist/manualverify.exe -old "$pwd/dist/published40.exe" -out reports/manual-recovery.json 2>&1 | Tee-Object reports/manual-gui.log
+          ./dist/manualverify.exe -old "$pwd/dist/published41.exe" -old-version '3.5.0-preview.41-issue2.1' -out reports/manual-recovery.json 2>&1 | Tee-Object reports/manual-gui.log
           $code = $LASTEXITCODE
           if ($code) { throw 'Manual GUI recovery failed' }
       - uses: actions/upload-artifact@v4
@@ -127,7 +140,7 @@ jobs:
       - name: Hide candidate when post-publication acceptance fails
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit issue2-v3.5.0-preview.41-issue2.1 --repo ab393911/MHX-Studio-Updates --draft=true
+        run: gh release edit issue2-v3.5.0-preview.41-issue2.2 --repo ab393911/MHX-Studio-Updates --draft=true
   evidence:
     if: always()
     needs: [publish, public-windows, promote-test-channel, quarantine]
