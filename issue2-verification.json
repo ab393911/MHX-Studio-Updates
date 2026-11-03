@@ -2,7 +2,7 @@
   "SOURCE_SHA": "f62ea1c7e5f8a0b291959bdc72dbdbea652ca77a",
   "RUN_ID": "41667971687",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "not-yet-aggregated",
+  "PORTABLE_RESULT": "cancelled",
   "WINDOWS_RESULT": "failure",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41667971687",
   "published": false,
@@ -48,6 +48,9 @@
       "two_anchor_scores_verified": true,
       "unknown_frame_rejected_without_click": true,
       "zip_original_png_and_report_sha_verified": true
+    },
+    "verification-artifacts/issue2-portable-results/portable-tests.json": {
+      "pass": 257
     }
   },
   "ready_for_publication": false,
