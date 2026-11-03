@@ -2,7 +2,7 @@
   "SOURCE_SHA": "08836e144a68c7bcfe9502b2422198214d245845",
   "RUN_ID": "41671895328",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "not-yet-aggregated",
+  "PORTABLE_RESULT": "success",
   "WINDOWS_RESULT": "success",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41671895328",
   "published": false,
@@ -375,6 +375,9 @@
     },
     "verification-artifacts/issue2-windows-results/windows-unit-tests.json": {
       "pass": 272
+    },
+    "verification-artifacts/issue2-portable-results/portable-tests.json": {
+      "pass": 269
     },
     "verification-artifacts/issue2-windows-results/recognition.log": "recognition: identity verified; selecting PNG source\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n",
     "verification-artifacts/issue2-windows-results/native-update.log": "Native Windows update scenario: success\nNative Windows update scenario: startup_timeout\nNative Windows update scenario: sha_tamper\nNative Windows update scenario: sharing_violation\nNative Windows update scenario: interrupted_recovery\nNative Windows update scenario: immediate_exit\nNative Windows update scenario: config_migration_exit\nPreparing private HTTPS candidate for published baseline: 3.5.0-preview.40\nPrivate HTTPS trust ready: 3.5.0-preview.40\nGUI upgrade begins: 3.5.0-preview.40 -> 3.5.0-preview.41-issue2.3-gui.1\nLive GUI update passed: 3.5.0-preview.41-issue2.3-gui.1 one click: true legacy confirmations: 0\nPreparing private HTTPS candidate for published baseline: 3.5.0-preview.41-issue2.1\nPrivate HTTPS trust ready: 3.5.0-preview.41-issue2.1\nGUI upgrade begins: 3.5.0-preview.41-issue2.1 -> 3.5.0-preview.41-issue2.3-gui.1\nLive GUI update passed: 3.5.0-preview.41-issue2.3-gui.1 one click: true legacy confirmations: 0\nNative Windows GUI/update checks passed; LDPlayer/game tests remain pending.\n",
