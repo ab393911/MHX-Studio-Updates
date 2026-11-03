@@ -1,6 +1,6 @@
 # MHX Studio
 
-当前版本、开发分支与待办以[项目交接](PROJECT_HANDOVER.md)为准；自动测试与用户实机验收分别记录于[实机测试台账](REAL_DEVICE_TESTS.md)。用户当前使用preview.41-issue2.1；新增一键识别诊断和通用页面规则管理仍为未发布候选。以下介绍包含历史开发阶段记录。
+当前版本、开发分支与待办以[项目交接](PROJECT_HANDOVER.md)为准；自动测试与用户实机验收分别记录于[实机测试台账](REAL_DEVICE_TESTS.md)。用户最近报告使用preview.41-issue2.1；识别诊断测试版preview.41-issue2.2现已通过独立issue2-test通道发布，可在原软件内检查更新。默认preview.json仍preview.40；真实主界面识别根因未确认。以下介绍包含历史开发阶段记录。
 
 当前流程、用户最新修订与尚未接通的执行器见[开发状态与规则逐条对照](docs/CURRENT_FLOW.md)。
 
