@@ -1,20 +1,71 @@
 {
-  "SOURCE_SHA": "b772875553e36641455a0dde3dc9dde2bcbf3a81",
-  "RUN_ID": "41669119609",
+  "SOURCE_SHA": "49a96f0330776c4a5040520eecc2ae30018e034b",
+  "RUN_ID": "41669657300",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "cancelled",
+  "PORTABLE_RESULT": "success",
   "WINDOWS_RESULT": "failure",
-  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41669119609",
+  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41669657300",
   "published": false,
   "stable_manifest_changed": false,
   "reports": {
+    "verification-artifacts/issue2-windows-results/issue2-native-update.json": {
+      "active_scenario": "success",
+      "arch": "amd64",
+      "error": "window did not close: 知夏 · MHX Studio 3.5.0-preview.41-issue2.3-gui.1",
+      "gui_smoke": {
+        "controls": 34,
+        "message_loop": true,
+        "source_commit": "49a96f0330776c4a5040520eecc2ae30018e034b",
+        "version": "3.5.0-preview.41-issue2.3-gui.1",
+        "window_created": true,
+        "window_visible": true,
+        "windows_game_tested": false
+      },
+      "native_windows": true,
+      "passed": false,
+      "version": "3.5.0-preview.41-issue2.3-gui.1",
+      "windows_game_tested": false
+    },
+    "verification-artifacts/issue2-windows-results/recognition-tests.json": {
+      "actual_windows_desktop_png": false,
+      "fixture_only": true,
+      "fresh_instance_identity_and_frame_sha_verified": true,
+      "gdi_960x540_client_coordinate_roundtrip": true,
+      "gui_diagnostic_report_visible_and_clipboard_verified": true,
+      "gui_history_preview_is_read_only": true,
+      "gui_history_restore_confirmed_and_backed_up": true,
+      "gui_original_image_view_exact_pixels": true,
+      "gui_rule_edit_confirmed_and_persisted": true,
+      "gui_saved_calibration_immediate_reload": true,
+      "gui_zip_export_without_file_hunting": true,
+      "host_window_dpi": 96,
+      "native_windows": true,
+      "old_calibration_backup_preserved": true,
+      "passed": true,
+      "real_game_tested": false,
+      "real_ldplayer_tested": false,
+      "reported_right_edge_feature_rectangles_verified": true,
+      "restart_preserves_calibration": true,
+      "restored_rules_work_after_restart": true,
+      "screen_rendering_without_printwindow": true,
+      "simulated_dpi_notifications": [
+        120,
+        144,
+        192
+      ],
+      "source_png_sha256": "7579f768bba2915a8fd17ad67cfdf9d41d75c4a8eb6f58a796a58410d6d004c6",
+      "thresholds_unchanged": true,
+      "two_anchor_scores_verified": true,
+      "unknown_frame_rejected_without_click": true,
+      "zip_original_png_and_report_sha_verified": true
+    },
     "verification-artifacts/issue2-windows-results/candidate.json": {
-      "source_commit": "b772875553e36641455a0dde3dc9dde2bcbf3a81",
       "published": false,
-      "size": 8523776,
-      "sha256": "06a65933b031f0816843e409211a56b2bf19ebc65302e6f76561b9fb258377e5",
+      "sha256": "923ff96710a0673a8a7a840dd86dc454ec298b316954c5002183943f852ae586",
       "isolated_test_id": "",
-      "version": "3.5.0-preview.41-issue2.3-gui.1"
+      "version": "3.5.0-preview.41-issue2.3-gui.1",
+      "source_commit": "49a96f0330776c4a5040520eecc2ae30018e034b",
+      "size": 8523776
     },
     "verification-artifacts/issue2-windows-results/display-baseline/recognition-tests.json": {
       "actual_windows_desktop_png": false,
@@ -49,9 +100,21 @@
       "unknown_frame_rejected_without_click": true,
       "zip_original_png_and_report_sha_verified": true
     },
+    "verification-artifacts/issue2-windows-results/display-baseline/baseline-display.json": {
+      "injection": "RedrawWindow erase-now followed by normal message-loop repaint",
+      "exit": 0,
+      "baseline_passed_on_ci": true,
+      "exact_user_trigger_confirmed": false,
+      "source_commit": "25b5adcad0221cd3f6e1c90d569b8006ea4ebcc7",
+      "reproduced": false
+    },
     "verification-artifacts/issue2-portable-results/portable-tests.json": {
-      "pass": 224
-    }
+      "pass": 269
+    },
+    "verification-artifacts/issue2-windows-results/native-update.log": "Native Windows update scenario: success\nwindow did not close: 知夏 · MHX Studio 3.5.0-preview.41-issue2.3-gui.1\n",
+    "verification-artifacts/issue2-windows-results/desktop-png/recognition.log": "panic: native verifier exceeded 8 minutes; refusing an unbounded or incomplete pass\n\ngoroutine 12 [running]:\nmain.main.func1()\n\tD:/a/MHX-Studio-Updates/MHX-Studio-Updates/cmd/windowsverify/main_windows.go:96 +0x25\ncreated by time.goFunc\n\tC:/hostedtoolcache/windows/go/1.26.10/x64/src/time/sleep.go:215 +0x2d\n\ngoroutine 1 [syscall, 7 minutes]:\nsyscall.syscalln(0x203d72c81090?, 0x203d72c83220?, {0x203d72896320?, 0x7ff670c66969?, 0x203d726c6198?})\n\tC:/hostedtoolcache/windows/go/1.26.10/x64/src/runtime/syscall_windows.go:431 +0x4e\nsyscall.SyscallN(0x203d72896320?, {0x203d72896320?, 0x0?, 0x7ff670c66a00?})\n\tC:/hostedtoolcache/windows/go/1.26.10/x64/src/syscall/dll_windows.go:99 +0x1e\nsyscall.(*Proc).Call(0x203d72c87a40?, {0x203d72896320?, 0x7ff670fa7940?, 0x7ff6713af901?})\n\tC:/hostedtoolcache/windows/go/1.26.10/x64/src/syscall/dll_windows.go:256 +0x1c\nsyscall.(*LazyProc).Call(0x203d72c87a40, {0x203d72896320, 0x4, 0x4})\n\tC:/hostedtoolcache/windows/go/1.26.10/x64/src/syscall/dll_windows.go:376 +0x4a\nmain.click(0x203d72980000?, 0x515)\n\tD:/a/MHX-Studio-Updates/MHX-Studio-Updates/cmd/windowsverify/emulators_windows.go:47 +0x125\nmain.recognitionGUI.func4(0x1)\n\tD:/a/MHX-Studio-Updates/MHX-Studio-Updates/cmd/windowsverify/recognition_windows.go:172 +0x365\nmain.recognitionGUI({0x203d726dc800, 0x3d}, {0x203d726dc880, 0x3d}, {0x203d726e24a0, 0x1f}, {0x203d726de6c0, 0x27}, 0x1, 0x1)\n\tD:/a/MHX-Studio-Updates/MHX-Studio-Updates/cmd/windowsverify/recognition_windows.go:321 +0x30c2\nmain.main()\n\tD:/a/MHX-Studio-Updates/MHX-Studio-Updates/cmd/windowsverify/main_windows.go:134 +0x12bd\n",
+    "verification-artifacts/issue2-windows-results/display-baseline/workflow.log": "**********************\nPowerShell transcript start\nStart time: 20261103160157\nUsername: runnervmhao91\\runneradmin\nRunAs User: runnervmhao91\\runneradmin\nConfiguration Name: \nMachine: runnervmhao91 (Microsoft Windows NT 10.0.26100.0)\nHost Application: C:\\Program Files\\PowerShell\\7\\pwsh.dll -command . 'D:\\a\\_temp\\59bd34af-c78f-42f9-8373-d7ed3def7fb8.ps1'\nProcess ID: 1980\nPSVersion: 7.6.9\nPSEdition: Core\nGitCommitId: 7.6.9\nOS: Microsoft Windows 10.0.26100\nPlatform: Win32NT\nPSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0\nPSRemotingProtocolVersion: 2.4\nSerializationVersion: 1.1.0.1\nWSManStackVersion: 3.0\n**********************\n\n**********************\nPowerShell transcript end\nEnd time: 20261103160213\n**********************\n",
+    "verification-artifacts/issue2-windows-results/display-baseline/baseline.log": "\n"
   },
   "ready_for_publication": false,
   "release_gate_note": "Diagnostic candidate only: real intermittent recognition root cause remains unconfirmed; no automatic publication is configured. Accepted legacy first-hop interruption risk is documented separately.",
