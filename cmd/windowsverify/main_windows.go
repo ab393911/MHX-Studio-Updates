@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"syscall"
 	"time"
@@ -92,6 +93,9 @@ func waitWindow(title string) error {
 	return fmt.Errorf("GUI not found: %s", title)
 }
 func main() {
+	// Clipboard locks and GDI DCs belong to their acquiring Windows thread.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	debug.SetTraceback("all")
 	watchdog := time.AfterFunc(8*time.Minute, func() { panic("native verifier exceeded its time limit; refusing an unbounded or incomplete pass") })
 	defer watchdog.Stop()

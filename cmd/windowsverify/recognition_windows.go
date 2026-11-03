@@ -361,6 +361,10 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 
 func readClipboard() string {
 	ok, _, err := user.NewProc("OpenClipboard").Call(0)
+	for deadline := time.Now().Add(2 * time.Second); ok == 0 && time.Now().Before(deadline); {
+		time.Sleep(25 * time.Millisecond)
+		ok, _, err = user.NewProc("OpenClipboard").Call(0)
+	}
 	if ok == 0 {
 		fail(err)
 	}
