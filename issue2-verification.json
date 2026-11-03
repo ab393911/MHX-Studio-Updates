@@ -2,7 +2,7 @@
   "SOURCE_SHA": "b1de0b54a9165d519217b35312211931b557968b",
   "RUN_ID": "41671634932",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "not-yet-aggregated",
+  "PORTABLE_RESULT": "cancelled",
   "WINDOWS_RESULT": "cancelled",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41671634932",
   "published": false,
@@ -125,6 +125,9 @@
     },
     "verification-artifacts/issue2-windows-results/windows-unit-tests.json": {
       "pass": 32
+    },
+    "verification-artifacts/issue2-portable-results/portable-tests.json": {
+      "pass": 235
     },
     "verification-artifacts/issue2-windows-results/recognition.log": "recognition: identity verified; selecting PNG source\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n",
     "verification-artifacts/issue2-windows-results/desktop-png/recognition.log": "recognition: identity verified; selecting PNG source\nrecognition: real desktop PNG captured\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n",
