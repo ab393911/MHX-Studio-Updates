@@ -72,13 +72,17 @@ jobs:
           Invoke-WebRequest -Uri 'https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v3.5.0-preview.41-issue2.2/MHXStudio.exe' -OutFile dist/published2.exe
           if ((Get-FileHash dist/published2.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne '28a5f525f9df3c04d53818dc561cde21765c3850f7f3c5aea9182566daebd9a7') { throw 'Published issue2.2 SHA mismatch' }
           New-Item -ItemType Directory -Force dist/display-baseline | Out-Null
-          ./dist/windowsverify.exe -recognition-only -display-probe -new "$pwd/dist/published2.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.2' -out dist/display-baseline/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/display-baseline/baseline.log
+          Start-Transcript -Path dist/display-baseline/workflow.log | Out-Null
+          $baselineOutput = & ./dist/windowsverify.exe -recognition-only -display-probe -new "$pwd/dist/published2.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.2' -out dist/display-baseline/recognition-tests.json 2>&1
           $baselineExit = $LASTEXITCODE
           Stop-Process -Name published2,dnplayer,adb,ldconsole -Force -ErrorAction SilentlyContinue
-          $log = Get-Content dist/display-baseline/baseline.log -Raw
+          $log = $baselineOutput | Out-String
+          Set-Content -Encoding utf8 -Path dist/display-baseline/baseline.log -Value $log
+          Write-Output $log
           $pixelFailure = $baselineExit -ne 0 -and $log -match '(calibration|original) [a-z0-9-]+: screen pixel mismatch'
           if ($baselineExit -ne 0 -and -not $pixelFailure) { throw 'Old baseline failed outside image pixel checks; inspect evidence' }
           @{reproduced=$pixelFailure;baseline_passed_on_ci=($baselineExit -eq 0);exit=$baselineExit;source_commit='25b5adcad0221cd3f6e1c90d569b8006ea4ebcc7';injection='RedrawWindow erase-now followed by normal message-loop repaint';exact_user_trigger_confirmed=$false} | ConvertTo-Json | Set-Content -Encoding utf8 dist/display-baseline/baseline-display.json
+          Stop-Transcript | Out-Null
           $global:LASTEXITCODE = 0
       - name: Real GUI calibration save, pixel mapping, reload and read-only recognition
         id: recognition
