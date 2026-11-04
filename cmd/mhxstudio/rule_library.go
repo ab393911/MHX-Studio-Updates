@@ -48,16 +48,24 @@ func saveRuleLibrary(root string, index int, p automation.Profile, shared bool) 
 	if err := p.Validate(); err != nil {
 		return err
 	}
-	pages := make(map[string]automation.Page, len(p.Pages))
-	for k, v := range p.Pages {
-		pages[k] = v
-	}
-	p.Pages = pages
 	path := profilePath(root, index)
 	if shared {
 		path = sharedProfilePath(root)
 	}
 	old, _ := readProfile(path)
+	p = withRuleRevisions(old, p)
+	if !shared {
+		return saveProfile(root, index, p)
+	}
+	// Reuse the same validate/backup/atomic-write path; "shared" has no device state.
+	return saveProfileFile(root, sharedProfilePath(root), "shared", p)
+}
+func withRuleRevisions(old, p automation.Profile) automation.Profile {
+	pages := make(map[string]automation.Page, len(p.Pages))
+	for k, v := range p.Pages {
+		pages[k] = v
+	}
+	p.Pages = pages
 	for key, page := range p.Pages {
 		previous, exists := old.Pages[key]
 		a, b := previous, page
@@ -82,11 +90,7 @@ func saveRuleLibrary(root string, index int, p automation.Profile, shared bool) 
 		}
 		p.Pages[key] = page
 	}
-	if !shared {
-		return saveProfile(root, index, p)
-	}
-	// Reuse the same validate/backup/atomic-write path; "shared" has no device state.
-	return saveProfileFile(root, sharedProfilePath(root), "shared", p)
+	return p
 }
 func restoreRuleLibrary(root string, index int, path string, shared bool) error {
 	// The GUI supplies an explicitly chosen file and asks for confirmation.

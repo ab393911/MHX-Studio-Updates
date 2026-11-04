@@ -17,6 +17,8 @@ import (
 )
 
 type utilityPanel struct {
+	iconExpected                                 string
+	iconChoice                                   uintptr
 	image                                        *diagnosticImage
 	app                                          *app
 	hwnd, editor, scope, id, name, button, count uintptr
@@ -157,6 +159,7 @@ func (a *app) openRuleManager() {
 	send(p.count, 0x14e, 0, 0)
 	child(p.hwnd, "BUTTON", "实时截图并框选", 735, 562, 200, 30, 0, 1405)
 	child(p.hwnd, "BUTTON", "关闭", 15, 615, 130, 32, 0, 1304)
+	child(p.hwnd, "BUTTON", "图标草稿（仅诊断）", 165, 615, 235, 32, 0, 1440)
 	p.loadRules()
 }
 func (p *utilityPanel) shared() bool { return comboIndex(p.scope) == 1 }
@@ -191,6 +194,14 @@ func (p *utilityPanel) proc(h uintptr, m uint32, w, l uintptr) uintptr {
 	switch m {
 	case wmCommand:
 		id := int(w & 0xffff)
+		if p.kind == "icon-rules" {
+			return p.iconCommand(h, id, w>>16)
+		}
+		if id == 1440 && w>>16 == 0 {
+			destroyWindow.Call(h)
+			p.app.openIconManager()
+			return 0
+		}
 		if id == 1400 && w>>16 == 1 {
 			p.loadRules()
 			return 0

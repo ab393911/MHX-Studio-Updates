@@ -391,6 +391,11 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 	h = findWindow(title)
 	until(h, "restored identity unavailable after restart", func() bool { return strings.Contains(readText(control(h, 208)), "ADB 已验证 1 台") })
 	inspect(true)
+	iconsTested := false
+	if framePNG == "" && !screenPNG && version == "3.5.0-preview.41-issue2.3-gui.1" {
+		verifyIconDraftGUI(h, data, profile, framePath, filepath.Dir(out))
+		iconsTested = true
+	}
 	fmt.Println("recognition: restored rules passed; rejecting unknown frame")
 	state.Page = "unknown"
 	fail(filesafe.JSON(statePath, state))
@@ -408,7 +413,7 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 	if displayProbe {
 		simulatedDPI = []int{120, 144, 192}
 	}
-	return map[string]any{"image_source_kind": frameKind, "redacted_png_tested": framePNG != "" && frameKind == "redacted", "private_original_png_tested": framePNG != "" && frameKind == "private-original", "calibration_preview_gdi_handles": previewHandles, "viewer_reopen_gdi_handles": viewerHandles, "source_png_sha256": fmt.Sprintf("%x", sha256.Sum256(pngData)), "host_window_dpi": dpi, "screen_rendering_without_printwindow": displayProbe, "actual_windows_desktop_png": screenPNG, "simulated_dpi_notifications": simulatedDPI, "passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_original_image_view_exact_pixels": true, "zip_original_png_and_report_sha_verified": true, "gui_history_preview_is_read_only": true, "gui_history_restore_confirmed_and_backed_up": true, "restored_rules_work_after_restart": true, "gui_rule_edit_confirmed_and_persisted": true, "gui_zip_export_without_file_hunting": true, "gui_diagnostic_report_visible_and_clipboard_verified": true, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
+	return map[string]any{"icon_draft_gui_tested": iconsTested, "image_source_kind": frameKind, "redacted_png_tested": framePNG != "" && frameKind == "redacted", "private_original_png_tested": framePNG != "" && frameKind == "private-original", "calibration_preview_gdi_handles": previewHandles, "viewer_reopen_gdi_handles": viewerHandles, "source_png_sha256": fmt.Sprintf("%x", sha256.Sum256(pngData)), "host_window_dpi": dpi, "screen_rendering_without_printwindow": displayProbe, "actual_windows_desktop_png": screenPNG, "simulated_dpi_notifications": simulatedDPI, "passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_original_image_view_exact_pixels": true, "zip_original_png_and_report_sha_verified": true, "gui_history_preview_is_read_only": true, "gui_history_restore_confirmed_and_backed_up": true, "restored_rules_work_after_restart": true, "gui_rule_edit_confirmed_and_persisted": true, "gui_zip_export_without_file_hunting": true, "gui_diagnostic_report_visible_and_clipboard_verified": true, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
 }
 
 func readClipboard() string {

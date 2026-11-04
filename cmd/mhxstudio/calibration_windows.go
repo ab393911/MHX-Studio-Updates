@@ -25,6 +25,9 @@ var calibrationNames = func() []calibrationName {
 }()
 
 type calibration struct {
+	iconDraft    bool
+	iconExpected string
+	iconRules    automation.IconRules
 	shared       bool
 	featureCount int
 	app          *app
@@ -69,6 +72,9 @@ func (a *app) startCalibration() {
 	a.startRuleCalibration(calibrationNames[i], false, 2)
 }
 func (a *app) startRuleCalibration(name calibrationName, shared bool, count int) {
+	a.startCalibrationStore(name, shared, count, false, 0)
+}
+func (a *app) startCalibrationStore(name calibrationName, shared bool, count int, icons bool, expectedIndex int) {
 	if a.cal != nil || count < 2 || count > 8 {
 		return
 	}
@@ -77,8 +83,17 @@ func (a *app) startRuleCalibration(name calibrationName, shared bool, count int)
 		a.log(e.Error())
 		return
 	}
+	if icons && d.Index != expectedIndex {
+		a.log("实例已变化，未打开图标标定")
+		return
+	}
 	profile, e := loadLocalProfile(a.root, d.Index)
-	if shared {
+	var iconRules automation.IconRules
+	var iconSHA string
+	if icons {
+		iconRules, iconSHA, e = readIconScope(a.root, d.Index, shared)
+		profile = iconRules.Profile
+	} else if shared {
 		profile, e = readProfile(sharedProfilePath(a.root))
 	}
 	if e != nil {
@@ -104,7 +119,7 @@ func (a *app) startRuleCalibration(name calibrationName, shared bool, count int)
 				return
 			}
 			a.log(fmt.Sprintf("标定取图：实例%d serial=%s AndroidID=%s boot=%s；实时960×540截图；无缓存", d.Index, d.Serial, d.AndroidID, d.BootID))
-			c := &calibration{shared: shared, featureCount: count, app: a, index: d.Index, name: name, profile: profile, img: img}
+			c := &calibration{iconDraft: icons, iconExpected: iconSHA, iconRules: iconRules, shared: shared, featureCount: count, app: a, index: d.Index, name: name, profile: profile, img: img}
 			a.cal = c
 			c.open()
 		})
@@ -154,6 +169,24 @@ func (c *calibration) save() {
 	}
 	if len(c.rects) != c.featureCount+1 {
 		c.app.info("请依次框选全部稳定特征和最后的按钮范围。")
+		return
+	}
+	if c.iconDraft {
+		rules, err := c.iconRules.Calibrate(c.img, c.name.key, c.name.label, c.name.button, c.rects[:c.featureCount], c.rects[c.featureCount])
+		if err == nil {
+			err = saveIconScope(c.app.root, c.index, c.shared, rules, c.iconExpected)
+		}
+		if err != nil {
+			c.app.info("图标草稿未保存：" + err.Error())
+			return
+		}
+		loaded, _, err := readIconScope(c.app.root, c.index, c.shared)
+		if err != nil || !loaded.Profile.Score(c.img, c.name.key).Passed {
+			c.app.log("图标草稿写入后自检失败；历史保留，未启用游戏操作")
+			return
+		}
+		c.app.log("图标草稿已保存并重读验证；原页面标定、登录配置未改变，仅供诊断。")
+		destroyWindow.Call(c.hwnd)
 		return
 	}
 	anchors := []automation.Anchor{}
