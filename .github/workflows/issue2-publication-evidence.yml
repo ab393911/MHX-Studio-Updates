@@ -34,7 +34,16 @@ jobs:
           probe="CalledProcessError: Command ['gh', 'release', 'create', 'SECRET-ROLE-TOKEN'] returned 1"
           assert 'SECRET' not in json.dumps(facts(probe))
           r=gh(f'repos/{repo}/actions/jobs/126657656921/logs')
+          def http_status(stderr):
+              m=re.search(r'HTTP (\d{3})',stderr)
+              return int(m.group(1)) if m else None
           report={'run_id':'41854029375','job_id':'126657656921','publication_retried':False,'channel_writes':False,'raw_logs_persisted':False,'log_read_succeeded':r.returncode==0,'failure_facts':facts(r.stdout) if r.returncode==0 else {}}
+          report['job_log_http_status']=http_status(r.stderr)
+          if r.returncode!=0:
+              fallback=subprocess.run(['gh','run','view','41854029375','--repo',repo,'--log-failed'],text=True,capture_output=True)
+              report['fallback_log_read_succeeded']=fallback.returncode==0
+              report['fallback_log_http_status']=http_status(fallback.stderr)
+              if fallback.returncode==0:report['failure_facts']=facts(fallback.stdout)
           response=gh(f'repos/{repo}/releases/tags/issue2-v3.5.0-preview.41-issue2.3')
           if response.returncode==0:
               release=json.loads(response.stdout)
@@ -42,7 +51,7 @@ jobs:
               report['release_state']={'exists':True,'draft':bool(release['draft']),'prerelease':bool(release['prerelease']),'target_commit':target if re.fullmatch('[0-9a-f]{40}',target) else 'nonliteral'}
               allowed={'MHXStudio.exe','update.json','SHA256SUMS.txt','ISSUE2-VERIFICATION.json','issue2-native-update.json','recognition-tests.json','ISSUE2-RECOVERY.md'}
               report['release_state']['asset_sizes']={a['name']:int(a['size']) for a in release.get('assets',[]) if a['name'] in allowed}
-          else:report['release_state']={'lookup_succeeded':False,'exit_code':int(response.returncode)}
+          else:report['release_state']={'lookup_succeeded':False,'exit_code':int(response.returncode),'http_status':http_status(response.stderr)}
           endpoint=f'repos/{repo}/contents/issue2-publication-failure.json'
           body={'branch':'issue2-ci-evidence','message':'Record bounded Issue2.3 failure facts; no raw logs or release retry','content':base64.b64encode((json.dumps(report,ensure_ascii=False,indent=2)+'\n').encode()).decode()}
           existing=gh(endpoint+'?ref=issue2-ci-evidence')
