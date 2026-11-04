@@ -1,0 +1,113 @@
+{
+  "version": "3.5.0-preview.41-issue2.3",
+  "business_source_commit": "461cac4f5436b0989b6b1af5e0a51b6fa32660ca",
+  "verification_commit": "84caf61b0d906b9943c06c4fbcec537848f3f6dd",
+  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41838190565",
+  "artifact_name": "issue2-windows-results",
+  "exe": "MHXStudio.exe",
+  "sha256": "eab8c4b55bf28fe5a51b0030ff6fbc930403fa2c2c01b9cb7b7490d39e1d5dad",
+  "size": 8585728,
+  "native_windows_pass": 285,
+  "linux_race_pass": 282,
+  "private_fixture_skips_each_platform": 3,
+  "excluded_experimental_windows_test": "TestNativeWindowsAssetAmounts",
+  "embedded_metadata": {
+    "arch": "amd64",
+    "os": "windows",
+    "source_commit": "461cac4f5436b0989b6b1af5e0a51b6fa32660ca",
+    "version": "3.5.0-preview.41-issue2.3",
+    "windows_game_tested": false
+  },
+  "candidate_manifest_matches_embedded_metadata": true,
+  "issue2_2_gui_upgrade": {
+    "all_five_calibrations_and_shared_rules_preserved": true,
+    "anonymous_manifest_download": true,
+    "baseline_published": true,
+    "calibration_byte_identical": true,
+    "candidate_published": false,
+    "candidate_transport": "ephemeral_loopback_https_trusted_certificate",
+    "completed_at": "2026-11-04T13:38:04Z",
+    "configuration_backup_timing": "before_executable_replacement",
+    "configuration_byte_identical": true,
+    "configuration_snapshot_verified": true,
+    "confirmation_clicks": 0,
+    "emulator_directory_sentinels_preserved": true,
+    "emulator_fixture_only": true,
+    "explicit_success_message": true,
+    "game_settings_byte_preserved": true,
+    "icon_draft_sentinel_preserved": true,
+    "latest_version_message": true,
+    "native_windows": true,
+    "new_gui_restarted": true,
+    "new_gui_visible": true,
+    "old_exe_backup_retained": true,
+    "one_click_without_confirmation": true,
+    "passed": true,
+    "post_upgrade_24_instance_detection_fixture": true,
+    "post_upgrade_five_launch_and_adb_fixture": true,
+    "post_upgrade_start_and_adb_fixture": true,
+    "previous_published_version": "3.5.0-preview.41-issue2.2",
+    "previous_update_backup_preserved": true,
+    "previous_version": "3.5.0-preview.41-issue2.2",
+    "production_channel_changed": false,
+    "progress_history_logs_preserved": true,
+    "real_ldplayer_tested": false,
+    "real_update_button_clicked": true,
+    "role_execution_history_preserved": true,
+    "sha256_verified": true,
+    "source_commit": "461cac4f5436b0989b6b1af5e0a51b6fa32660ca",
+    "studio_data_seeded": true,
+    "studio_database_preserved": true,
+    "test_channel_enrolled_via_preview40_gui": false,
+    "update_button_clicks": 1,
+    "version": "3.5.0-preview.41-issue2.3",
+    "window_and_critical_buttons_on_screen": true,
+    "windows_game_tested": false
+  },
+  "interruption_recovery": {
+    "automatic_without_restarting_helper": false,
+    "backup_retained": true,
+    "config_unchanged": true,
+    "configuration_snapshot_verified": true,
+    "passed": true,
+    "recovery_helper_restarted_by_test": true,
+    "status": "rolled_back",
+    "studio_order_database_preserved": true
+  },
+  "approved_redacted_png_gui_tested": true,
+  "private_original_png_native_windows_tested": false,
+  "current_version_sorting": {
+    "issue2.2_to_3": true,
+    "issue2.3_to_4": true,
+    "same_version_not_reinstalled": true,
+    "downgrades_not_offered": true,
+    "runtime_comparator_changed": false
+  },
+  "channels_before": {
+    "preview.json": {
+      "version": "3.5.0-preview.40",
+      "git_blob": "fc0cb8c83a5c3aad7df831354b930fe82c4fb013"
+    },
+    "issue2-test.json": {
+      "version": "3.5.0-preview.41-issue2.2",
+      "git_blob": "aa0c788db429ac1f1bec9360e8cd18b713b5bdc6"
+    }
+  },
+  "channels_after": {
+    "preview.json": {
+      "version": "3.5.0-preview.40",
+      "git_blob": "fc0cb8c83a5c3aad7df831354b930fe82c4fb013"
+    },
+    "issue2-test.json": {
+      "version": "3.5.0-preview.41-issue2.2",
+      "git_blob": "aa0c788db429ac1f1bec9360e8cd18b713b5bdc6"
+    }
+  },
+  "published": false,
+  "release_created": false,
+  "test_channel_changed": false,
+  "default_channel_changed": false,
+  "user_real_device_acceptance": false,
+  "public_release_asset_download_tested": false,
+  "next_step": "Await explicit publication confirmation; reuse this exact tested EXE, verify public HTTPS assets and issue2.2 GUI upgrade before promoting only issue2-test.json."
+}
