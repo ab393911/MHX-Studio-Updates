@@ -17,3 +17,9 @@ cmd/replayredact只供开发环境使用，不接入MHX Studio GUI、不触碰�
 internal/fixtureprivacy验证RGBA8 PNG的尺寸和IHDR格式、遮盖外全部像素、受保护区域、不透明alpha；保留sRGB/sBIT等数字显示元数据，去除文本/EXIF元数据。嵌入ICC配置须另行检查。指定私有profile后，工具自动保护每个标定框和按钮范围，并比较所有页面的完整识别评分；不同则拒绝输出。
 
 预览PNG和审计报告只能写入私有工作目录。像素/评分检查不能代替人工隐私检查；用户确认脱敏预览之前不得提交任何预览素材。对私有原图的Windows GUI验证需要可用且获授权的私有Windows环境，Linux或交叉编译不计通过。
+
+## 获准脱敏图的GUI测试路径
+
+png-frame配合png-frame-kind=redacted可复用既有Windows GUI流程，临时规则由非私人fixture生成；三轮标定预览取消、三轮原图窗口重开和GDI资源检查不使用用户原规则。该路径不宣称修复用户原标定的识别结果。原图与脱敏图对现有私有规则的完整评分比较只在私有环境执行。
+
+当前公开仓库没有脱敏PNG，因此相关Windows步骤明确skip。必须先获得用户对具体预览的确认，再仅提交相应PNG，禁止附带原图、ZIP、用户原规则或设备报告。
