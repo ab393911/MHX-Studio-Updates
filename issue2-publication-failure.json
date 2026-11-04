@@ -1,0 +1,13 @@
+{
+  "run_id": "41854029375",
+  "job_id": "126657656921",
+  "publication_retried": false,
+  "channel_writes": false,
+  "raw_logs_persisted": false,
+  "log_read_succeeded": false,
+  "failure_facts": {},
+  "release_state": {
+    "lookup_succeeded": false,
+    "exit_code": 1
+  }
+}
