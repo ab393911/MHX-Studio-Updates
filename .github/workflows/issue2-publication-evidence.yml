@@ -1,0 +1,54 @@
+name: Read bounded Issue2.3 publication failure facts only
+on:
+  push:
+    branches: [codex/issue2-3-publication-evidence-20261104]
+    paths: ['.github/workflows/issue2-publication-evidence.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract allowlisted failure facts without publishing log contents
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYCODE'
+          import os,json,base64,subprocess,re
+          from pathlib import Path
+          repo='ab393911/MHX-Studio-Updates'
+          def gh(*args):return subprocess.run(['gh','api',*args],text=True,capture_output=True)
+          def facts(log):
+              result={'failed_command':'unknown','exception_type':'unknown'}
+              commands={"'gh', 'release', 'create'":'gh release create',"'gh', 'release', 'download'":'gh release download',"'gh', 'release', 'edit'":'gh release edit',"'go', 'run', './cmd/release'":'go release utility'}
+              for line in log.splitlines():
+                  if 'CalledProcessError:' in line:
+                      result['exception_type']='CalledProcessError'
+                      for marker,label in commands.items():
+                          if marker in line:result['failed_command']=label
+                  elif 'FileNotFoundError:' in line:result['exception_type']='FileNotFoundError'
+                  elif 'RuntimeError:' in line:result['exception_type']='RuntimeError'
+              return result
+          # Demonstrate that injected private text never appears in the output.
+          probe="CalledProcessError: Command ['gh', 'release', 'create', 'SECRET-ROLE-TOKEN'] returned 1"
+          assert 'SECRET' not in json.dumps(facts(probe))
+          r=gh(f'repos/{repo}/actions/jobs/126657656921/logs')
+          report={'run_id':'41854029375','job_id':'126657656921','publication_retried':False,'channel_writes':False,'raw_logs_persisted':False,'log_read_succeeded':r.returncode==0,'failure_facts':facts(r.stdout) if r.returncode==0 else {}}
+          response=gh(f'repos/{repo}/releases/tags/issue2-v3.5.0-preview.41-issue2.3')
+          if response.returncode==0:
+              release=json.loads(response.stdout)
+              target=release.get('target_commitish','')
+              report['release_state']={'exists':True,'draft':bool(release['draft']),'prerelease':bool(release['prerelease']),'target_commit':target if re.fullmatch('[0-9a-f]{40}',target) else 'nonliteral'}
+              allowed={'MHXStudio.exe','update.json','SHA256SUMS.txt','ISSUE2-VERIFICATION.json','issue2-native-update.json','recognition-tests.json','ISSUE2-RECOVERY.md'}
+              report['release_state']['asset_sizes']={a['name']:int(a['size']) for a in release.get('assets',[]) if a['name'] in allowed}
+          else:report['release_state']={'lookup_succeeded':False,'exit_code':int(response.returncode)}
+          endpoint=f'repos/{repo}/contents/issue2-publication-failure.json'
+          body={'branch':'issue2-ci-evidence','message':'Record bounded Issue2.3 failure facts; no raw logs or release retry','content':base64.b64encode((json.dumps(report,ensure_ascii=False,indent=2)+'\n').encode()).decode()}
+          existing=gh(endpoint+'?ref=issue2-ci-evidence')
+          if existing.returncode==0:body['sha']=json.loads(existing.stdout)['sha']
+          Path('/tmp/failure-facts.json').write_text(json.dumps(body))
+          saved=gh(endpoint,'--method','PUT','--input','/tmp/failure-facts.json')
+          if saved.returncode!=0:raise SystemExit('Could not save bounded facts; no raw response printed')
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PYCODE
