@@ -1,0 +1,72 @@
+{
+  "checked_at_shanghai": "2026-11-04T20:21:49.554143+08:00",
+  "source_commit": "461cac4f5436b0989b6b1af5e0a51b6fa32660ca",
+  "handover_commit": "a7ecf1581f5ef0a47bc33d5701780685f4a01f31",
+  "candidate_metadata_from_prior_verified_run": {
+    "sha256": "0f70e2cc0c4c1cfb68f6e50f1ccf3b03ed33d2032d228adb4fea0df574697585",
+    "size": 8586240,
+    "version": "3.5.0-preview.41-issue2.3-gui.1",
+    "published": false,
+    "source_commit": "461cac4f5436b0989b6b1af5e0a51b6fa32660ca",
+    "isolated_test_id": ""
+  },
+  "prior_native_run": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41822425678",
+  "version_preflight": [
+    {
+      "candidate": "3.5.0-preview.41-issue2.3-gui.1",
+      "installed": "3.5.0-preview.41-issue2.2",
+      "compare": 1,
+      "update_offered": true
+    },
+    {
+      "candidate": "3.5.0-preview.41-issue2.3",
+      "installed": "3.5.0-preview.41-issue2.3-gui.1",
+      "compare": -1,
+      "update_offered": false
+    },
+    {
+      "candidate": "3.5.0-preview.41-issue2.4",
+      "installed": "3.5.0-preview.41-issue2.3-gui.1",
+      "compare": -1,
+      "update_offered": false
+    },
+    {
+      "candidate": "3.5.0-preview.41-issue2.3",
+      "installed": "3.5.0-preview.41-issue2.2",
+      "compare": 1,
+      "update_offered": true
+    },
+    {
+      "candidate": "3.5.0-preview.41-issue2.4",
+      "installed": "3.5.0-preview.41-issue2.3",
+      "compare": 1,
+      "update_offered": true
+    }
+  ],
+  "channels_read_only": {
+    "preview.json": {
+      "version": "3.5.0-preview.40",
+      "sha256": "e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2",
+      "git_blob": "fc0cb8c83a5c3aad7df831354b930fe82c4fb013"
+    },
+    "issue2-test.json": {
+      "version": "3.5.0-preview.41-issue2.2",
+      "sha256": "28a5f525f9df3c04d53818dc561cde21765c3850f7f3c5aea9182566daebd9a7",
+      "git_blob": "aa0c788db429ac1f1bec9360e8cd18b713b5bdc6"
+    }
+  },
+  "gate_passed": false,
+  "blocker": "Frozen EXE uses a nonnumeric prerelease identifier 3-gui. Later numeric issue2.3/issue2.4 sort below it, blocking the regular test-channel version sequence. Manifest-only renaming also conflicts with embedded-version startup health checks.",
+  "publication_attempted": false,
+  "release_created": false,
+  "test_channel_changed": false,
+  "default_channel_changed": false,
+  "private_data_uploaded": false,
+  "public_asset_download_sha_verified": false,
+  "current_issue2_2_public_gui_upgrade_tested": false,
+  "new_public_asset_rollback_tested": false,
+  "runtime_modified": false,
+  "release_controller_retargeted": false,
+  "suggested_version_not_authorized": "3.5.0-preview.41-issue2.3",
+  "next_action_requires_version_confirmation": "Build a newly versioned Windows artifact from business source 461cac4, rerun native Windows and issue2.2 public HTTPS upgrade/data/rollback gates; do not relabel or reuse the old EXE as the new version."
+}
