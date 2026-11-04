@@ -88,12 +88,14 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 		preserved[path] = value
 	}
 	if install != "" {
-		for _, name := range []string{"vms/leidian1/config.json", "vms/leidian1/game-data.bin"} {
-			path := filepath.Join(install, filepath.FromSlash(name))
-			fail(os.MkdirAll(filepath.Dir(path), 0700))
-			value := []byte("emulator/game sentinel " + name)
-			fail(os.WriteFile(path, value, 0600))
-			preserved[path] = value
+		for instance := 1; instance <= 5; instance++ {
+			for _, name := range []string{fmt.Sprintf("vms/leidian%d/config.json", instance), fmt.Sprintf("vms/leidian%d/game-data.bin", instance)} {
+				path := filepath.Join(install, filepath.FromSlash(name))
+				fail(os.MkdirAll(filepath.Dir(path), 0700))
+				value := []byte("emulator/game sentinel " + name)
+				fail(os.WriteFile(path, value, 0600))
+				preserved[path] = value
+			}
 		}
 	}
 	profile := filepath.Join(dataRoot, "profiles", "1.json")
@@ -102,7 +104,14 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	fail(e)
 	profileBefore, e := os.ReadFile(profile)
 	fail(e)
-	issue2Baseline := oldVersion == "3.5.0-preview.40" || oldVersion == "3.5.0-preview.41-issue2.1"
+	preserved[profile] = profileBefore
+	for _, name := range []string{"profiles/2.json", "profiles/3.json", "profiles/4.json", "profiles/5.json", "profiles/shared.json", "profiles/history/pre-upgrade.json", "profiles/icon-drafts/shared.json"} {
+		path := filepath.Join(dataRoot, filepath.FromSlash(name))
+		value := []byte("{\"synthetic_existing_calibration\":\"keep original bytes\"}\n")
+		fail(filesafe.Write(path, value, 0600))
+		preserved[path] = value
+	}
+	issue2Baseline := oldVersion == "3.5.0-preview.40" || oldVersion == "3.5.0-preview.41-issue2.1" || oldVersion == "3.5.0-preview.41-issue2.2"
 	studioSeeded := oldVersion == "3.4.999" || issue2Baseline
 	studioOrderID := ""
 	studioPlanID, studioActor := "", ""
@@ -247,6 +256,17 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	fail(update.Verify(result.Backup, oldHash))
 	_, e = update.ReadConfigBackup(plan.ConfigBackupPath(), dataRoot, plan.Token)
 	fail(e)
+	for path, want := range preserved {
+		rel, err := filepath.Rel(dataRoot, path)
+		fail(err)
+		if strings.HasPrefix(rel, "profiles"+string(filepath.Separator)) {
+			backed, err := os.ReadFile(filepath.Join(plan.ConfigBackupPath(), "files", rel))
+			fail(err)
+			if !bytes.Equal(backed, want) {
+				fail(fmt.Errorf("calibration omitted from upgrade backup: %s", rel))
+			}
+		}
+	}
 	after, e := os.ReadFile(cfgPath)
 	fail(e)
 	if !bytes.Equal(before, after) {
@@ -349,6 +369,8 @@ func liveUpdate(old, oldVersion, manifest, expected, out, fixture string, oneCli
 	resultMap["emulator_directory_sentinels_preserved"] = install != ""
 	resultMap["previous_update_backup_preserved"] = true
 	resultMap["role_execution_history_preserved"] = studioPlanID != ""
+	resultMap["all_five_calibrations_and_shared_rules_preserved"] = true
+	resultMap["icon_draft_sentinel_preserved"] = true
 	resultMap["studio_data_seeded"] = studioSeeded
 	resultMap["studio_database_preserved"] = studioPreserved
 	if legacyPlanID != "" {

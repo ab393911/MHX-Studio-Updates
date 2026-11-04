@@ -40,7 +40,7 @@ type recognitionNative struct {
 	}
 }
 
-func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG bool, replayDir, framePNG, frameKind string) map[string]any {
+func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG bool, replayDir, framePNG, frameKind string, iconDraftGUI bool) map[string]any {
 	user.NewProc("SetProcessDPIAware").Call()
 	root, e := os.MkdirTemp("", "MHX recognition calibration ")
 	fail(e)
@@ -392,7 +392,7 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 	until(h, "restored identity unavailable after restart", func() bool { return strings.Contains(readText(control(h, 208)), "ADB 已验证 1 台") })
 	inspect(true)
 	iconsTested := false
-	if framePNG == "" && !screenPNG && version == "3.5.0-preview.41-issue2.3-gui.1" {
+	if iconDraftGUI {
 		verifyIconDraftGUI(h, data, profile, framePath, filepath.Dir(out))
 		iconsTested = true
 	}

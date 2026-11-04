@@ -1,4 +1,4 @@
-name: Issue2 preview40 update verification (no publication)
+name: Issue2.3 rebuild and prepublication verification (no publication)
 on:
   push:
     branches: [codex/fix-preview40-bindings-adb, codex/recognition-diagnostics-20261102, codex/windows-image-display-20261103, codex/windows-image-display-public-20261104]
@@ -9,6 +9,9 @@ on:
       - 'scripts/issue2-ci-evidence.py'
       - 'testdata/issue2-redacted/**'
   workflow_dispatch:
+env:
+  MHX_BUSINESS_SOURCE: 461cac4f5436b0989b6b1af5e0a51b6fa32660ca
+  MHX_TEST_VERSION: 3.5.0-preview.41-issue2.3
 permissions:
   contents: read
 concurrency:
@@ -40,7 +43,7 @@ jobs:
         with:
           go-version: '1.26.10'
           cache: false
-      - name: Verify unchanged database schema and build native candidate
+      - name: Build confirmed version from frozen business source
         shell: pwsh
         run: |
           git fetch --no-tags origin bfc5e2f0336ede93e963d364cac21fb1a2f15a43
@@ -49,9 +52,23 @@ jobs:
           if ($LASTEXITCODE) { throw 'Database schema changed; explicit migration acceptance required' }
           New-Item -ItemType Directory -Force dist | Out-Null
           $env:CGO_ENABLED = '0'
-          $version = '3.5.0-preview.41-issue2.3-gui.1'
-          go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version -X main.sourceCommit=$env:GITHUB_SHA" -o dist/MHXStudio.exe ./cmd/mhxstudio
-          if ($LASTEXITCODE) { throw 'Candidate build failed' }
+          $version = $env:MHX_TEST_VERSION
+          $businessSource = $env:MHX_BUSINESS_SOURCE
+          git fetch --no-tags origin $businessSource
+          if ($LASTEXITCODE) { throw 'Frozen business source missing' }
+          $runtimeDiff = @(git diff --name-only $businessSource HEAD -- cmd/mhxstudio internal go.mod go.sum | Where-Object { $_ -notmatch '_test[.]go$' })
+          if ($LASTEXITCODE -or $runtimeDiff.Count -ne 0) { throw 'Business runtime differs from verified 461cac4' }
+          $approvedPNG = (Get-FileHash testdata/issue2-redacted/screenshot.png -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($approvedPNG -ne 'e7e2e9436a79f2535e3955a3961e0317e5308672d9d8536ecab724aabc16444e') { throw 'Missing or unapproved PNG' }
+          $candidateEXE = Join-Path $pwd 'dist/MHXStudio.exe'
+          $businessDir = Join-Path $env:RUNNER_TEMP 'mhx-frozen-business-461cac4'
+          git worktree add --detach $businessDir $businessSource
+          if ($LASTEXITCODE) { throw 'Cannot isolate frozen business checkout' }
+          Push-Location $businessDir
+          try {
+            go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=$version -X main.sourceCommit=$businessSource" -o $candidateEXE ./cmd/mhxstudio
+            if ($LASTEXITCODE) { throw 'Candidate build failed' }
+          } finally { Pop-Location }
           go build -trimpath -ldflags '-H windowsgui -s -w' -o dist/exit-test.exe ./cmd/testexit
           if ($LASTEXITCODE) { throw 'Exit fixture build failed' }
           go build -trimpath -ldflags '-H windowsgui -s -w' -o dist/ldfixture.exe ./cmd/ldfixture
@@ -59,7 +76,13 @@ jobs:
           go build -o dist/windowsverify.exe ./cmd/windowsverify
           if ($LASTEXITCODE) { throw 'Native verifier build failed' }
           $hash = (Get-FileHash dist/MHXStudio.exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          @{version=$version;source_commit=$env:GITHUB_SHA;sha256=$hash;size=(Get-Item dist/MHXStudio.exe).Length;isolated_test_id='';published=$false} | ConvertTo-Json | Set-Content -Encoding utf8 dist/candidate.json
+          @{version=$version;source_commit=$businessSource;verification_commit=$env:GITHUB_SHA;sha256=$hash;size=(Get-Item dist/MHXStudio.exe).Length;isolated_test_id='';published=$false} | ConvertTo-Json | Set-Content -Encoding utf8 dist/candidate.json
+          if ($hash -eq '0f70e2cc0c4c1cfb68f6e50f1ccf3b03ed33d2032d228adb4fea0df574697585') { throw 'Old GUI artifact reused' }
+          $self = (& ./dist/MHXStudio.exe --self-test | ConvertFrom-Json)
+          if ($LASTEXITCODE -or $self.version -ne $version -or $self.source_commit -ne $businessSource -or $self.os -ne 'windows' -or $self.arch -ne 'amd64') { throw 'Embedded metadata disagrees with build' }
+          $self | ConvertTo-Json | Set-Content -Encoding utf8 dist/embedded-metadata.json
+          @{schema_version=1;version=$version;platform='windows-amd64';download_url="https://github.com/ab393911/MHX-Studio-Updates/releases/download/issue2-v$version/MHXStudio.exe";sha256=$hash;size=(Get-Item dist/MHXStudio.exe).Length;source_commit=$businessSource;windows_game_tested=$false;notes='未发布候选：原图/标定显示与只读图标草稿诊断；不宣称实机修复。'} | ConvertTo-Json | Set-Content -Encoding utf8 dist/candidate-manifest.json
+          "$hash  MHXStudio.exe" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
       - name: Verify published preview40 baseline
         shell: pwsh
         run: |
@@ -89,7 +112,7 @@ jobs:
         id: recognition
         shell: pwsh
         run: |
-          ./dist/windowsverify.exe -recognition-only -display-probe -new "$pwd/dist/MHXStudio.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.3-gui.1' -out dist/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/recognition.log
+          ./dist/windowsverify.exe -recognition-only -icon-draft-gui -display-probe -new "$pwd/dist/MHXStudio.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.3' -out dist/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/recognition.log
           $recognitionExit = $LASTEXITCODE
           if ($recognitionExit) { Stop-Process -Name MHXStudio,dnplayer,adb,ldconsole -Force -ErrorAction SilentlyContinue; throw 'Calibration/recognition regression failed; publication remains blocked' }
       - name: Actual Windows desktop PNG display lifecycle and full pixel comparison
@@ -97,7 +120,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist/desktop-png | Out-Null
-          ./dist/windowsverify.exe -recognition-only -display-probe -screen-png -new "$pwd/dist/MHXStudio.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.3-gui.1' -out dist/desktop-png/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/desktop-png/recognition.log
+          ./dist/windowsverify.exe -recognition-only -display-probe -screen-png -new "$pwd/dist/MHXStudio.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.3' -out dist/desktop-png/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/desktop-png/recognition.log
           if ($LASTEXITCODE) { Stop-Process -Name MHXStudio,dnplayer,adb,ldconsole -Force -ErrorAction SilentlyContinue; throw 'Actual PNG onscreen rendering regression failed' }
       - name: Approved redacted PNG GUI lifecycle (only when sample is present)
         id: redacted
@@ -105,21 +128,20 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist/redacted-png | Out-Null
-          ./dist/windowsverify.exe -recognition-only -display-probe -png-frame "$pwd/testdata/issue2-redacted/screenshot.png" -png-frame-kind redacted -new "$pwd/dist/MHXStudio.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.3-gui.1' -out dist/redacted-png/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/redacted-png/recognition.log
+          ./dist/windowsverify.exe -recognition-only -display-probe -png-frame "$pwd/testdata/issue2-redacted/screenshot.png" -png-frame-kind redacted -new "$pwd/dist/MHXStudio.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -version '3.5.0-preview.41-issue2.3' -out dist/redacted-png/recognition-tests.json 2>&1 | Tee-Object -FilePath dist/redacted-png/recognition.log
           if ($LASTEXITCODE) { Stop-Process -Name MHXStudio,dnplayer,adb,ldconsole -Force -ErrorAction SilentlyContinue; throw 'Approved redacted PNG GUI regression failed' }
       - name: Native Windows static checks and unit tests
-        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           go vet ./...
           if ($LASTEXITCODE) { throw 'Windows vet failed' }
           go test -p 1 -count=1 -json -skip '^TestNativeWindowsAssetAmounts$' ./... > dist/windows-unit-tests.json
           if ($LASTEXITCODE) { throw 'Windows unit tests failed (experimental game currency fixture was not run)' }
-      - name: Native GUI, preview40 helper, backups, rollback and interruption
-        if: ${{ !cancelled() && steps.recognition.outcome == 'success' && steps.screenpng.outcome == 'success' && (steps.redacted.outcome == 'success' || steps.redacted.outcome == 'skipped') }}
+      - name: Full native GUI and issue2.2 helper backups, rollback, one-click upgrade
+        if: ${{ success() && steps.recognition.outcome == 'success' && steps.screenpng.outcome == 'success' && (steps.redacted.outcome == 'success' || steps.redacted.outcome == 'skipped') }}
         shell: pwsh
         run: |
-          ./dist/windowsverify.exe -old "$pwd/dist/published40.exe" -old-version '3.5.0-preview.40' -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '3.5.0-preview.41-issue2.3-gui.1' -update-only -published40 "$pwd/dist/published40.exe" -published41 "$pwd/dist/published41.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -out dist/issue2-native-update.json 2>&1 | Tee-Object -FilePath dist/native-update.log
+          ./dist/windowsverify.exe -old "$pwd/dist/published2.exe" -old-version '3.5.0-preview.41-issue2.2' -new "$pwd/dist/MHXStudio.exe" -exit-fixture "$pwd/dist/exit-test.exe" -version '3.5.0-preview.41-issue2.3' -published-issue2-2 "$pwd/dist/published2.exe" -published40 "$pwd/dist/published40.exe" -published41 "$pwd/dist/published41.exe" -emulator-fixture "$pwd/dist/ldfixture.exe" -out dist/issue2-native-update.json 2>&1 | Tee-Object -FilePath dist/native-update.log
           $verifyExit = $LASTEXITCODE
           if ($verifyExit) { throw 'Native update acceptance failed; publication blocked' }
       - uses: actions/upload-artifact@v4
@@ -128,6 +150,9 @@ jobs:
           name: issue2-windows-results
           path: |
             dist/candidate.json
+            dist/candidate-manifest.json
+            dist/embedded-metadata.json
+            dist/SHA256SUMS.txt
             dist/windows-unit-tests.json
             dist/issue2-native-update.json
             dist/native-update.log
@@ -142,6 +167,7 @@ jobs:
             dist/redacted-png/
             dist/preview40-direct/
             dist/preview41-issue2/
+            dist/preview41-issue2-2/
             dist/MHXStudio.exe
           if-no-files-found: error
       - name: Publish execution summary only

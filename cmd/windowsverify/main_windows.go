@@ -104,8 +104,10 @@ func main() {
 	published21 := flag.String("published21", "", "")
 	published40 := flag.String("published40", "", "")
 	published41 := flag.String("published41", "", "")
+	published412 := flag.String("published-issue2-2", "", "published issue2.2 baseline for GUI upgrade")
 	updateOnly := flag.Bool("update-only", false, "")
 	recognitionOnly := flag.Bool("recognition-only", false, "")
+	iconDraftGUI := flag.Bool("icon-draft-gui", false, "exercise the opt-in icon draft GUI on synthetic fixture only")
 	screenPNG := flag.Bool("screen-png", false, "use a real Windows desktop PNG as the fixture frame")
 	framePNG := flag.String("png-frame", "", "optional authorized PNG for fixture-only GUI tests")
 	frameKind := flag.String("png-frame-kind", "", "redacted or private-original; no live-device acceptance")
@@ -148,10 +150,13 @@ func main() {
 		if sources > 1 {
 			fail(errors.New("PNG input modes are mutually exclusive"))
 		}
+		if *iconDraftGUI && sources != 0 {
+			fail(errors.New("icon draft GUI requires the isolated synthetic calibration fixture"))
+		}
 		if *framePNG != "" && *frameKind != "redacted" && *frameKind != "private-original" {
 			fail(errors.New("PNG frame requires an explicit source kind"))
 		}
-		result := recognitionGUI(*newExe, *emulatorFixture, *version, *out, *displayProbe, *screenPNG, *replayDir, *framePNG, *frameKind)
+		result := recognitionGUI(*newExe, *emulatorFixture, *version, *out, *displayProbe, *screenPNG, *replayDir, *framePNG, *frameKind, *iconDraftGUI)
 		fail(filesafe.JSON(*out, result))
 		return
 	}
@@ -359,9 +364,15 @@ func main() {
 		fail(os.MkdirAll(folder, 0700))
 		results["preview41_issue2_gui_upgrade"] = localGUIUpgrade(*published41, "3.5.0-preview.41-issue2.1", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
 	}
+	if *published412 != "" {
+		results["active_scenario"] = "preview41_issue2_2_gui_upgrade"
+		folder := filepath.Join(filepath.Dir(*out), "preview41-issue2-2")
+		fail(os.MkdirAll(folder, 0700))
+		results["preview41_issue2_2_gui_upgrade"] = localGUIUpgrade(*published412, "3.5.0-preview.41-issue2.2", *newExe, *version, *emulatorFixture, filepath.Join(folder, "upgrade.json"))
+	}
 	// Also prove settings saves preserve unknown fields (unit tests cover detail).
 	results["publication_ready"] = false
-	results["publication_blocker"] = "preview40 helper termination between renames leaves target absent; recovery requires restarting retained helper, not unattended rollback"
+	results["publication_blocker"] = *oldVersion + " helper termination between renames leaves target absent; recovery requires restarting retained helper, not unattended rollback"
 	results["passed"] = true
 	results["completed_at"] = time.Now().UTC().Format(time.RFC3339)
 	fail(filesafe.JSON(*out, results))
