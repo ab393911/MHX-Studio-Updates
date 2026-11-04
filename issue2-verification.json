@@ -2,7 +2,7 @@
   "SOURCE_SHA": "57122aaf79a4a0ff3c93d8409107d4630ffe3ca7",
   "RUN_ID": "41821918477",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "not-yet-aggregated",
+  "PORTABLE_RESULT": "cancelled",
   "WINDOWS_RESULT": "cancelled",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41821918477",
   "published": false,
@@ -190,6 +190,10 @@
     },
     "verification-artifacts/issue2-windows-results/windows-unit-tests.json": {
       "pass": 210,
+      "skip": 3
+    },
+    "verification-artifacts/issue2-portable-results/portable-tests.json": {
+      "pass": 249,
       "skip": 3
     },
     "verification-artifacts/issue2-windows-results/recognition.log": "recognition: identity verified; selecting PNG source\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: icon draft GUI; no active-profile changes\nrecognition: icon cancel/save/shared reload/history/two-frame report passed\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n",
