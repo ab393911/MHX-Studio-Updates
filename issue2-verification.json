@@ -1,17 +1,17 @@
 {
-  "SOURCE_SHA": "aa2a08a902cdda46ce492814b678f10b91d1a909",
-  "RUN_ID": "41776436630",
+  "SOURCE_SHA": "5f9152e77be86d5fa69426d2056c81e23400abf1",
+  "RUN_ID": "41817781911",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "success",
+  "PORTABLE_RESULT": "not-yet-aggregated",
   "WINDOWS_RESULT": "success",
-  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41776436630",
+  "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41817781911",
   "published": false,
   "stable_manifest_changed": false,
   "reports": {
     "verification-artifacts/issue2-windows-results/issue2-native-update.json": {
       "active_scenario": "preview41_issue2_gui_upgrade",
       "arch": "amd64",
-      "completed_at": "2026-11-04T05:06:28Z",
+      "completed_at": "2026-11-04T11:05:52Z",
       "config_migration_exit": {
         "backup_retained": true,
         "config_unchanged": true,
@@ -23,7 +23,7 @@
       "gui_smoke": {
         "controls": 34,
         "message_loop": true,
-        "source_commit": "aa2a08a902cdda46ce492814b678f10b91d1a909",
+        "source_commit": "5f9152e77be86d5fa69426d2056c81e23400abf1",
         "version": "3.5.0-preview.41-issue2.3-gui.1",
         "window_created": true,
         "window_visible": true,
@@ -55,7 +55,7 @@
         "calibration_byte_identical": true,
         "candidate_published": false,
         "candidate_transport": "ephemeral_loopback_https_trusted_certificate",
-        "completed_at": "2026-11-04T05:06:15Z",
+        "completed_at": "2026-11-04T11:05:31Z",
         "configuration_backup_timing": "before_executable_replacement",
         "configuration_byte_identical": true,
         "configuration_snapshot_verified": true,
@@ -83,7 +83,7 @@
         "real_update_button_clicked": true,
         "role_execution_history_preserved": true,
         "sha256_verified": true,
-        "source_commit": "aa2a08a902cdda46ce492814b678f10b91d1a909",
+        "source_commit": "5f9152e77be86d5fa69426d2056c81e23400abf1",
         "studio_data_seeded": true,
         "studio_database_preserved": true,
         "test_channel_enrolled_via_preview40_gui": true,
@@ -98,7 +98,7 @@
         "calibration_byte_identical": true,
         "candidate_published": false,
         "candidate_transport": "ephemeral_loopback_https_trusted_certificate",
-        "completed_at": "2026-11-04T05:06:28Z",
+        "completed_at": "2026-11-04T11:05:52Z",
         "configuration_backup_timing": "before_executable_replacement",
         "configuration_byte_identical": true,
         "configuration_snapshot_verified": true,
@@ -126,7 +126,7 @@
         "real_update_button_clicked": true,
         "role_execution_history_preserved": true,
         "sha256_verified": true,
-        "source_commit": "aa2a08a902cdda46ce492814b678f10b91d1a909",
+        "source_commit": "5f9152e77be86d5fa69426d2056c81e23400abf1",
         "studio_data_seeded": true,
         "studio_database_preserved": true,
         "test_channel_enrolled_via_preview40_gui": false,
@@ -211,12 +211,12 @@
       "zip_original_png_and_report_sha_verified": true
     },
     "verification-artifacts/issue2-windows-results/candidate.json": {
-      "size": 8523776,
-      "source_commit": "aa2a08a902cdda46ce492814b678f10b91d1a909",
-      "version": "3.5.0-preview.41-issue2.3-gui.1",
+      "source_commit": "5f9152e77be86d5fa69426d2056c81e23400abf1",
+      "published": false,
       "isolated_test_id": "",
-      "sha256": "0f31829947eae3041bf92d401658d4742f38b0b7e886e991349491f16d1b60e7",
-      "published": false
+      "sha256": "f3e44d34bd2d169f18c8e2833e2550f804d774773f154dba7f247baccb697c5a",
+      "size": 8523776,
+      "version": "3.5.0-preview.41-issue2.3-gui.1"
     },
     "verification-artifacts/issue2-windows-results/preview41-issue2/upgrade.json": {
       "anonymous_manifest_download": true,
@@ -224,7 +224,7 @@
       "calibration_byte_identical": true,
       "candidate_published": false,
       "candidate_transport": "ephemeral_loopback_https_trusted_certificate",
-      "completed_at": "2026-11-04T05:06:28Z",
+      "completed_at": "2026-11-04T11:05:52Z",
       "configuration_backup_timing": "before_executable_replacement",
       "configuration_byte_identical": true,
       "configuration_snapshot_verified": true,
@@ -252,7 +252,7 @@
       "real_update_button_clicked": true,
       "role_execution_history_preserved": true,
       "sha256_verified": true,
-      "source_commit": "aa2a08a902cdda46ce492814b678f10b91d1a909",
+      "source_commit": "5f9152e77be86d5fa69426d2056c81e23400abf1",
       "studio_data_seeded": true,
       "studio_database_preserved": true,
       "test_channel_enrolled_via_preview40_gui": false,
@@ -267,7 +267,7 @@
       "calibration_byte_identical": true,
       "candidate_published": false,
       "candidate_transport": "ephemeral_loopback_https_trusted_certificate",
-      "completed_at": "2026-11-04T05:06:15Z",
+      "completed_at": "2026-11-04T11:05:31Z",
       "configuration_backup_timing": "before_executable_replacement",
       "configuration_byte_identical": true,
       "configuration_snapshot_verified": true,
@@ -295,7 +295,7 @@
       "real_update_button_clicked": true,
       "role_execution_history_preserved": true,
       "sha256_verified": true,
-      "source_commit": "aa2a08a902cdda46ce492814b678f10b91d1a909",
+      "source_commit": "5f9152e77be86d5fa69426d2056c81e23400abf1",
       "studio_data_seeded": true,
       "studio_database_preserved": true,
       "test_channel_enrolled_via_preview40_gui": true,
@@ -335,7 +335,7 @@
         144,
         192
       ],
-      "source_png_sha256": "715a3272c94381fcb37b86832d00417fd763cce1bbdd460ea03f24fff47f6862",
+      "source_png_sha256": "289bbd0add3da3afadf004a54d3971ee22e118de30a4402ef0733787746bf896",
       "thresholds_unchanged": true,
       "two_anchor_scores_verified": true,
       "unknown_frame_rejected_without_click": true,
@@ -381,26 +381,69 @@
       "zip_original_png_and_report_sha_verified": true
     },
     "verification-artifacts/issue2-windows-results/display-baseline/baseline-display.json": {
-      "reproduced": false,
       "exit": 0,
-      "baseline_passed_on_ci": true,
       "injection": "RedrawWindow erase-now followed by normal message-loop repaint",
+      "baseline_passed_on_ci": true,
+      "reproduced": false,
       "exact_user_trigger_confirmed": false,
       "source_commit": "25b5adcad0221cd3f6e1c90d569b8006ea4ebcc7"
+    },
+    "verification-artifacts/issue2-windows-results/redacted-png/recognition-tests.json": {
+      "actual_windows_desktop_png": false,
+      "calibration_preview_gdi_handles": [
+        9,
+        9,
+        9
+      ],
+      "fixture_only": true,
+      "fresh_instance_identity_and_frame_sha_verified": true,
+      "gdi_960x540_client_coordinate_roundtrip": true,
+      "gui_diagnostic_report_visible_and_clipboard_verified": true,
+      "gui_history_preview_is_read_only": true,
+      "gui_history_restore_confirmed_and_backed_up": true,
+      "gui_original_image_view_exact_pixels": true,
+      "gui_rule_edit_confirmed_and_persisted": true,
+      "gui_saved_calibration_immediate_reload": true,
+      "gui_zip_export_without_file_hunting": true,
+      "host_window_dpi": 96,
+      "image_source_kind": "redacted",
+      "native_windows": true,
+      "old_calibration_backup_preserved": true,
+      "passed": true,
+      "private_original_png_tested": false,
+      "real_game_tested": false,
+      "real_ldplayer_tested": false,
+      "redacted_png_tested": true,
+      "reported_right_edge_feature_rectangles_verified": true,
+      "restart_preserves_calibration": true,
+      "restored_rules_work_after_restart": true,
+      "screen_rendering_without_printwindow": true,
+      "simulated_dpi_notifications": [
+        120,
+        144,
+        192
+      ],
+      "source_png_sha256": "e7e2e9436a79f2535e3955a3961e0317e5308672d9d8536ecab724aabc16444e",
+      "thresholds_unchanged": true,
+      "two_anchor_scores_verified": true,
+      "unknown_frame_rejected_without_click": true,
+      "viewer_reopen_gdi_handles": [
+        10,
+        10,
+        10
+      ],
+      "zip_original_png_and_report_sha_verified": true
     },
     "verification-artifacts/issue2-windows-results/windows-unit-tests.json": {
       "pass": 275,
       "skip": 2
     },
-    "verification-artifacts/issue2-portable-results/portable-tests.json": {
-      "pass": 272,
-      "skip": 2
-    },
     "verification-artifacts/issue2-windows-results/recognition.log": "recognition: identity verified; selecting PNG source\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n",
     "verification-artifacts/issue2-windows-results/native-update.log": "Native Windows update scenario: success\nNative Windows update scenario: startup_timeout\nNative Windows update scenario: sha_tamper\nNative Windows update scenario: sharing_violation\nNative Windows update scenario: interrupted_recovery\nNative Windows update scenario: immediate_exit\nNative Windows update scenario: config_migration_exit\nPreparing private HTTPS candidate for published baseline: 3.5.0-preview.40\nPrivate HTTPS trust ready: 3.5.0-preview.40\nGUI upgrade begins: 3.5.0-preview.40 -> 3.5.0-preview.41-issue2.3-gui.1\nLive GUI update passed: 3.5.0-preview.41-issue2.3-gui.1 one click: true legacy confirmations: 0\nPreparing private HTTPS candidate for published baseline: 3.5.0-preview.41-issue2.1\nPrivate HTTPS trust ready: 3.5.0-preview.41-issue2.1\nGUI upgrade begins: 3.5.0-preview.41-issue2.1 -> 3.5.0-preview.41-issue2.3-gui.1\nLive GUI update passed: 3.5.0-preview.41-issue2.3-gui.1 one click: true legacy confirmations: 0\nNative Windows GUI/update checks passed; LDPlayer/game tests remain pending.\n",
     "verification-artifacts/issue2-windows-results/desktop-png/recognition.log": "recognition: identity verified; selecting PNG source\nrecognition: real desktop PNG captured\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n",
-    "verification-artifacts/issue2-windows-results/display-baseline/workflow.log": "**********************\nPowerShell transcript start\nStart time: 20261104050015\nUsername: runnervmhao91\\runneradmin\nRunAs User: runnervmhao91\\runneradmin\nConfiguration Name: \nMachine: runnervmhao91 (Microsoft Windows NT 10.0.26100.0)\nHost Application: C:\\Program Files\\PowerShell\\7\\pwsh.dll -command . 'D:\\a\\_temp\\b866c122-3d2e-4a82-8a13-beff4a7b1025.ps1'\nProcess ID: 7252\nPSVersion: 7.6.9\nPSEdition: Core\nGitCommitId: 7.6.9\nOS: Microsoft Windows 10.0.26100\nPlatform: Win32NT\nPSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0\nPSRemotingProtocolVersion: 2.4\nSerializationVersion: 1.1.0.1\nWSManStackVersion: 3.0\n**********************\nrecognition: identity verified; selecting PNG source\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n**********************\nPowerShell transcript end\nEnd time: 20261104050033\n**********************\n",
-    "verification-artifacts/issue2-windows-results/display-baseline/baseline.log": "recognition: identity verified; selecting PNG source\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n\n"
+    "verification-artifacts/issue2-windows-results/display-baseline/workflow.log": "**********************\nPowerShell transcript start\nStart time: 20261104105937\nUsername: runnervmhao91\\runneradmin\nRunAs User: runnervmhao91\\runneradmin\nConfiguration Name: \nMachine: runnervmhao91 (Microsoft Windows NT 10.0.26100.0)\nHost Application: C:\\Program Files\\PowerShell\\7\\pwsh.dll -command . 'D:\\a\\_temp\\3077b0b9-e393-47c3-b251-966e32a46dc0.ps1'\nProcess ID: 6552\nPSVersion: 7.6.9\nPSEdition: Core\nGitCommitId: 7.6.9\nOS: Microsoft Windows 10.0.26100\nPlatform: Win32NT\nPSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0\nPSRemotingProtocolVersion: 2.4\nSerializationVersion: 1.1.0.1\nWSManStackVersion: 3.0\n**********************\nrecognition: identity verified; selecting PNG source\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n**********************\nPowerShell transcript end\nEnd time: 20261104105955\n**********************\n",
+    "verification-artifacts/issue2-windows-results/display-baseline/baseline.log": "recognition: identity verified; selecting PNG source\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n\n",
+    "verification-artifacts/issue2-windows-results/redacted-png/recognition.log": "recognition: identity verified; selecting PNG source\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n"
   },
   "ready_for_publication": false,
   "release_gate_note": "Diagnostic candidate only: real intermittent recognition root cause remains unconfirmed; no automatic publication is configured. Accepted legacy first-hop interruption risk is documented separately."
