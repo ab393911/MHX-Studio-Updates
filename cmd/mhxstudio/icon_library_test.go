@@ -94,6 +94,15 @@ func TestIconSharedReuseOverrideRestorePreservesExistingData(t *testing.T) {
 	if bytes.Equal(one.Profile.Pages["ui_bag"].Anchors[0].Pixels, two.Profile.Pages["ui_bag"].Anchors[0].Pixels) {
 		t.Fatal("instance override lost")
 	}
+	_, localSHA, _ := readIconScope(root, 1, false)
+	if err := saveIconScope(root, 1, false, b, localSHA); err != nil {
+		t.Fatal(err)
+	}
+	one, _ = loadIcons(root, 1)
+	two, _ = loadIcons(root, 2)
+	if one.Revision != 2 || two.Revision != 1 {
+		t.Fatal("effective revision ignored local scope", one.Revision, two.Revision)
+	}
 	_, sha, err := readIconScope(root, 1, true)
 	if err != nil {
 		t.Fatal(err)
@@ -105,11 +114,15 @@ func TestIconSharedReuseOverrideRestorePreservesExistingData(t *testing.T) {
 		t.Fatal("stale writer accepted")
 	}
 	history, _ := filepath.Glob(filepath.Join(root, "profiles", "icon-drafts", "history", "*.json"))
-	if len(history) != 1 {
+	if len(history) != 2 {
 		t.Fatal(history)
 	}
 	var restore automation.IconRules
-	if err = filesafe.ReadJSON(history[0], &restore); err != nil {
+	sharedHistory, _ := filepath.Glob(filepath.Join(root, "profiles", "icon-drafts", "history", "shared.json-*.json"))
+	if len(sharedHistory) != 1 {
+		t.Fatal(sharedHistory)
+	}
+	if err = filesafe.ReadJSON(sharedHistory[0], &restore); err != nil {
 		t.Fatal(err)
 	}
 	_, current, _ := readIconScope(root, 1, true)

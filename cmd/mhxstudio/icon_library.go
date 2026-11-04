@@ -62,6 +62,11 @@ func loadIcons(root string, index int) (automation.IconRules, error) {
 	if len(local.Blockers) > 0 {
 		shared.Blockers = local.Blockers
 	}
+	// The composite has no single storage revision. Report its maximum scope
+	// revision; the effective SHA and per-page revisions identify exact inputs.
+	if local.Revision > shared.Revision {
+		shared.Revision = local.Revision
+	}
 	return shared, shared.Validate()
 }
 

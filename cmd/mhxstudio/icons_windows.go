@@ -249,7 +249,7 @@ func (a *app) inspectIcons() {
 		}
 		a.gameUI(ctx, request, func() {
 			dir := filepath.Join(a.root, "diagnostics", fmt.Sprintf("icons-%d-%d", d.Index, time.Now().UnixNano()))
-			doc := map[string]any{"instance": d.Index, "serial": d.Serial, "assessment": assessment, "rules_revision": rules.Revision, "effective_rule_sha256": fmt.Sprintf("%x", sha256.Sum256(ruleJSON)), "captures": captures, "source_verified_by_client": true, "live_device_acceptance": false}
+			doc := map[string]any{"instance": d.Index, "serial": d.Serial, "assessment": assessment, "effective_max_rule_revision": rules.Revision, "effective_rule_sha256": fmt.Sprintf("%x", sha256.Sum256(ruleJSON)), "captures": captures, "source_verified_by_client": true, "live_device_acceptance": false}
 			raw, err := json.MarshalIndent(doc, "", "  ")
 			if err == nil {
 				err = filesafe.Write(filepath.Join(dir, "report.json"), raw, 0600)

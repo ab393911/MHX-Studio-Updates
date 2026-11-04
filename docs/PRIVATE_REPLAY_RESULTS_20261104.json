@@ -1,0 +1,36 @@
+{
+  "source_commit": "5d19d4a",
+  "platform": "linux",
+  "race_enabled": true,
+  "attempts": [
+    {
+      "counts": {
+        "pass": 265,
+        "fail": 6
+      },
+      "socket_failure": [
+        "adbserver_test.go:88: listen tcp 127.0.0.1:0: socket: operation not permitted",
+        "adbserver_test.go:111: listen tcp 127.0.0.1:0: socket: operation not permitted",
+        "adbserver_test.go:133: listen tcp 127.0.0.1:0: socket: operation not permitted",
+        "adbserver_test.go:145: listen tcp 127.0.0.1:0: socket: operation not permitted",
+        "adbserver_test.go:210: listen tcp 127.0.0.1:0: socket: operation not permitted",
+        "panic: httptest: failed to listen on a port: listen tcp6 [::1]:0: socket: operation not permitted [recovered, repanicked]"
+      ]
+    },
+    {
+      "counts": {
+        "pass": 54
+      },
+      "socket_failure": []
+    }
+  ],
+  "latest_per_test": {
+    "pass": 283
+  },
+  "latest_per_package": {
+    "pass": 11
+  },
+  "raw_original_png_private_only": true,
+  "native_windows_original_png_tested": false,
+  "publication": false
+}
