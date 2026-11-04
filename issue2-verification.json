@@ -2,7 +2,7 @@
   "SOURCE_SHA": "aa2a08a902cdda46ce492814b678f10b91d1a909",
   "RUN_ID": "41776436630",
   "RUN_ATTEMPT": "1",
-  "PORTABLE_RESULT": "not-yet-aggregated",
+  "PORTABLE_RESULT": "success",
   "WINDOWS_RESULT": "success",
   "run_url": "https://github.com/ab393911/MHX-Studio-Updates/actions/runs/41776436630",
   "published": false,
@@ -390,6 +390,10 @@
     },
     "verification-artifacts/issue2-windows-results/windows-unit-tests.json": {
       "pass": 275,
+      "skip": 2
+    },
+    "verification-artifacts/issue2-portable-results/portable-tests.json": {
+      "pass": 272,
       "skip": 2
     },
     "verification-artifacts/issue2-windows-results/recognition.log": "recognition: identity verified; selecting PNG source\nrecognition: calibration window opened\nrecognition: image lifecycle passed; saving calibration\nrecognition: calibration save returned\nrecognition: saved calibration verified\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: viewing original image\nrecognition: exporting ZIP\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restart passed; editing rules\nrecognition: restoring history preview\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: requesting fresh report\nrecognition: copying report\nrecognition: restored rules passed; rejecting unknown frame\nrecognition: requesting fresh report\nrecognition: copying report\n",
