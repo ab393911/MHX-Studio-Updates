@@ -8,3 +8,9 @@
 /profiles/
 /.mhx-updates/
 /.mhx-backups/
+
+# Recorded screenshots remain private; public samples require separate approval.
+/.private-fixtures/
+/testdata/private/
+/testdata/issue2-white-screen/
+/preview.png

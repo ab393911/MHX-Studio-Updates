@@ -28,6 +28,7 @@ type recognitionNative struct {
 	Report   struct {
 		ProfileSHA    string `json:"profile_file_sha256"`
 		ScreenshotSHA string `json:"screenshot_sha256"`
+		ImagePixelSHA string `json:"image_pixel_sha256"`
 		CacheUsed     bool   `json:"cache_used"`
 		Matches       []string
 		Pages         []struct {
@@ -39,7 +40,7 @@ type recognitionNative struct {
 	}
 }
 
-func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG bool) map[string]any {
+func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG bool, replayDir, framePNG, frameKind string) map[string]any {
 	user.NewProc("SetProcessDPIAware").Call()
 	root, e := os.MkdirTemp("", "MHX recognition calibration ")
 	fail(e)
@@ -79,12 +80,35 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 	gamePage := p.Pages["game"]
 	gamePage.Threshold = 10
 	p.Pages["game"] = gamePage
+	var replayRules []byte
+	if replayDir != "" {
+		recordedPNG, err := os.ReadFile(filepath.Join(replayDir, "screenshot.png"))
+		fail(err)
+		_, err = automation.Decode(recordedPNG)
+		fail(err)
+		replayRules, err = os.ReadFile(filepath.Join(replayDir, "recorded-profile.json"))
+		fail(err)
+		p = automation.NewProfile()
+		fail(json.Unmarshal(replayRules, &p))
+		fail(p.Validate())
+		fail(filesafe.Write(framePath, recordedPNG, 0600))
+	}
+	if framePNG != "" {
+		recordedPNG, err := os.ReadFile(framePNG)
+		fail(err)
+		_, err = automation.Decode(recordedPNG)
+		fail(err)
+		fail(filesafe.Write(framePath, recordedPNG, 0600))
+	}
 	state := gameFixtureState{Package: "com.pwrd.mzlite.laohu", Activity: ".Main", Foreground: "com.pwrd.mzlite.laohu", Page: "game_3", Running: true}
 	statePath := filepath.Join(install, "game-fixture.json")
 	fail(filesafe.JSON(statePath, state))
 	data := filepath.Join(root, "data")
 	profile := filepath.Join(data, "profiles", "1.json")
 	fail(filesafe.JSON(profile, p))
+	if replayDir != "" {
+		fail(filesafe.Write(profile, replayRules, 0600))
+	}
 	old, _ := os.ReadFile(profile)
 	fail(filesafe.JSON(filepath.Join(data, "config.json"), map[string]any{"ldplayer_directory": install, "group_start_index": 1, "retries": 0, "min_delay_ms": 100, "max_delay_ms": 100, "game_bindings": map[string]any{"1": map[string]any{"package": state.Package, "activity": state.Activity, "android_id": "abcdef0123456789", "user_confirmed": true}}}))
 	host := start(filepath.Join(install, "dnplayer.exe"), "--hold")
@@ -100,6 +124,21 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 		fail(captureScreenRegion(image.Rect(0, 0, 960, 540), framePath))
 		copyFile(framePath, filepath.Join(filepath.Dir(out), "source-desktop.png"))
 		fmt.Println("recognition: real desktop PNG captured")
+	}
+	if replayDir != "" {
+		return replayGameImageGUI(exe, title, framePath, profile, statePath, out, replayDir, app, h)
+	}
+	var previewHandles, viewerHandles []uintptr
+	if framePNG != "" {
+		for round := 0; round < 3; round++ {
+			dir := filepath.Join(filepath.Dir(out), fmt.Sprintf("calibration-preview-%d", round+1))
+			fail(os.MkdirAll(dir, 0700))
+			count := previewCalibrationOnce(h, framePath, profile, dir, round%2 == 0)
+			previewHandles = append(previewHandles, count)
+			if round > 0 && count > previewHandles[0] {
+				fail(fmt.Errorf("GDI growth after calibration preview: %v", previewHandles))
+			}
+		}
 	}
 	// Generic game is index 11, registered once; no nickname or login page is changed.
 	send := user.NewProc("SendMessageW")
@@ -183,7 +222,20 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 		}
 		if !exported {
 			fmt.Println("recognition: viewing original image")
-			verifyOriginalView(diagnostic, pngData, filepath.Join(filepath.Dir(out), "diagnostic-original-view.png"), displayProbe, framePath)
+			if framePNG == "" {
+				verifyOriginalView(diagnostic, pngData, filepath.Join(filepath.Dir(out), "diagnostic-original-view.png"), displayProbe, framePath)
+			} else {
+				for round := 0; round < 3; round++ {
+					dir := filepath.Join(filepath.Dir(out), fmt.Sprintf("viewer-reopen-%d", round+1))
+					fail(os.MkdirAll(dir, 0700))
+					verifyOriginalView(diagnostic, pngData, filepath.Join(dir, "original.png"), true, framePath)
+					count := guiGDIHandles(diagnostic)
+					viewerHandles = append(viewerHandles, count)
+					if round > 0 && count > viewerHandles[0] {
+						fail(fmt.Errorf("GDI growth after original viewer: %v", viewerHandles))
+					}
+				}
+			}
 			fmt.Println("recognition: exporting ZIP")
 			destination, e := filepath.Abs(filepath.Join(filepath.Dir(out), "recognition-export.zip"))
 			fail(e)
@@ -356,7 +408,7 @@ func recognitionGUI(exe, fixture, version, out string, displayProbe, screenPNG b
 	if displayProbe {
 		simulatedDPI = []int{120, 144, 192}
 	}
-	return map[string]any{"source_png_sha256": fmt.Sprintf("%x", sha256.Sum256(pngData)), "host_window_dpi": dpi, "screen_rendering_without_printwindow": displayProbe, "actual_windows_desktop_png": screenPNG, "simulated_dpi_notifications": simulatedDPI, "passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_original_image_view_exact_pixels": true, "zip_original_png_and_report_sha_verified": true, "gui_history_preview_is_read_only": true, "gui_history_restore_confirmed_and_backed_up": true, "restored_rules_work_after_restart": true, "gui_rule_edit_confirmed_and_persisted": true, "gui_zip_export_without_file_hunting": true, "gui_diagnostic_report_visible_and_clipboard_verified": true, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
+	return map[string]any{"image_source_kind": frameKind, "redacted_png_tested": framePNG != "" && frameKind == "redacted", "private_original_png_tested": framePNG != "" && frameKind == "private-original", "calibration_preview_gdi_handles": previewHandles, "viewer_reopen_gdi_handles": viewerHandles, "source_png_sha256": fmt.Sprintf("%x", sha256.Sum256(pngData)), "host_window_dpi": dpi, "screen_rendering_without_printwindow": displayProbe, "actual_windows_desktop_png": screenPNG, "simulated_dpi_notifications": simulatedDPI, "passed": true, "native_windows": true, "fixture_only": true, "real_ldplayer_tested": false, "real_game_tested": false, "gui_original_image_view_exact_pixels": true, "zip_original_png_and_report_sha_verified": true, "gui_history_preview_is_read_only": true, "gui_history_restore_confirmed_and_backed_up": true, "restored_rules_work_after_restart": true, "gui_rule_edit_confirmed_and_persisted": true, "gui_zip_export_without_file_hunting": true, "gui_diagnostic_report_visible_and_clipboard_verified": true, "gui_saved_calibration_immediate_reload": true, "restart_preserves_calibration": true, "two_anchor_scores_verified": true, "thresholds_unchanged": true, "gdi_960x540_client_coordinate_roundtrip": true, "reported_right_edge_feature_rectangles_verified": true, "fresh_instance_identity_and_frame_sha_verified": true, "old_calibration_backup_preserved": true, "unknown_frame_rejected_without_click": true}
 }
 
 func readClipboard() string {

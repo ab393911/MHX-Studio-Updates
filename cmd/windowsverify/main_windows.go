@@ -107,6 +107,9 @@ func main() {
 	updateOnly := flag.Bool("update-only", false, "")
 	recognitionOnly := flag.Bool("recognition-only", false, "")
 	screenPNG := flag.Bool("screen-png", false, "use a real Windows desktop PNG as the fixture frame")
+	framePNG := flag.String("png-frame", "", "optional authorized PNG for fixture-only GUI tests")
+	frameKind := flag.String("png-frame-kind", "", "redacted or private-original; no live-device acceptance")
+	replayDir := flag.String("image-replay-dir", "", "replay a recorded PNG/profile in isolated test data without saving calibration")
 	displayProbe := flag.Bool("display-probe", false, "verify actual screen rendering, never force PrintWindow")
 	interrupt := flag.String("interrupt-update", "", "")
 	newExe := flag.String("new", "", "")
@@ -136,7 +139,19 @@ func main() {
 		if *newExe == "" || *emulatorFixture == "" || *version == "" {
 			fail(errors.New("recognition verifier requires new EXE, fixture and version"))
 		}
-		result := recognitionGUI(*newExe, *emulatorFixture, *version, *out, *displayProbe, *screenPNG)
+		sources := 0
+		for _, enabled := range []bool{*screenPNG, *replayDir != "", *framePNG != ""} {
+			if enabled {
+				sources++
+			}
+		}
+		if sources > 1 {
+			fail(errors.New("PNG input modes are mutually exclusive"))
+		}
+		if *framePNG != "" && *frameKind != "redacted" && *frameKind != "private-original" {
+			fail(errors.New("PNG frame requires an explicit source kind"))
+		}
+		result := recognitionGUI(*newExe, *emulatorFixture, *version, *out, *displayProbe, *screenPNG, *replayDir, *framePNG, *frameKind)
 		fail(filesafe.JSON(*out, result))
 		return
 	}
