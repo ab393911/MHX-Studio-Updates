@@ -58,7 +58,7 @@ func (a *app) openIconManager() {
 	}
 	send(p.iconChoice, 0x14e, 3, 0)
 	child(p.hwnd, "BUTTON", "组合主界面候选", 320, 585, 190, 32, 0, 1442)
-	child(p.hwnd, "BUTTON", "两帧诊断（不点击）", 525, 585, 230, 32, 0, 1441)
+	child(p.hwnd, "BUTTON", "连续采样诊断（不点击）", 525, 585, 230, 32, 0, 1441)
 	child(p.hwnd, "BUTTON", "关闭", 770, 585, 165, 32, 0, 1304)
 	child(p.hwnd, "STATIC", "主界面候选至少配置3个不同图标，连续两帧至少同2个通过；弹窗可能保留图标，须补充遮挡页/负例规则。", 15, 633, 940, 36, 0, 0)
 	p.loadIconEditor()
@@ -217,6 +217,11 @@ func (a *app) inspectIcons() {
 			}
 			png, err := client.Screenshot(ctx, d)
 			if err != nil {
+				return err
+			}
+			// Screenshot verifies before reading. Verify again so an emulator
+			// restart/rebind during screencap cannot become accepted evidence.
+			if err = client.Verify(ctx, d); err != nil {
 				return err
 			}
 			img, err := automation.Decode(png)
