@@ -21,6 +21,7 @@ import (
 var baselineHashes = map[string]string{
 	"3.5.0-preview.40":          "e58eaef41b4e37361f79cc500872bc89f1e7ebe37d810785740b294eb397daa2",
 	"3.5.0-preview.41-issue2.1": "b7ac42b0800b96c4dd60a4245e31ebf054373675ae23702af4bb7ba978bf3cb7",
+	"3.5.0-preview.41-issue2.2": "28a5f525f9df3c04d53818dc561cde21765c3850f7f3c5aea9182566daebd9a7",
 }
 
 var user = syscall.NewLazyDLL("user32.dll")
@@ -91,7 +92,7 @@ func main() {
 	must(os.MkdirAll(filepath.Dir(stage), 0700))
 	must(filesafe.CopyNew(*old, target))
 	must(filesafe.CopyNew(*old, stage))
-	p, e := update.NewPlan(target, stage, "3.5.0-preview.41-issue2.2", baselineSHA)
+	p, e := update.NewPlan(target, stage, "3.5.0-preview.41-issue2.3", baselineSHA)
 	must(e)
 	p, e = update.WithConfig(p, data)
 	must(e)
@@ -138,5 +139,5 @@ func main() {
 		panic("order not restored")
 	}
 	must(s.Close())
-	must(filesafe.JSON(*out, map[string]any{"passed": true, "native_windows": true, "baseline_version": *oldVersion, "baseline_sha256": baselineSHA, "actual_published_preview40": *oldVersion == "3.5.0-preview.40", "actual_published_preview41_issue2": *oldVersion == "3.5.0-preview.41-issue2.1", "explorer_equivalent_no_arguments": true, "confirmation_clicked": true, "no_cmd_bat_python_or_manual_exe_copy": true, "old_exe_restored": true, "old_backup_retained": true, "config_bytes_preserved": true, "sqlite_order_preserved": true, "restored_gui_visible": true, "temporary_ci_data_only": true, "custom_data_directory_case_tested": false}))
+	must(filesafe.JSON(*out, map[string]any{"passed": true, "native_windows": true, "baseline_version": *oldVersion, "baseline_sha256": baselineSHA, "actual_published_preview40": *oldVersion == "3.5.0-preview.40", "actual_published_preview41_issue2": *oldVersion == "3.5.0-preview.41-issue2.1", "actual_published_preview41_issue2_2": *oldVersion == "3.5.0-preview.41-issue2.2", "explorer_equivalent_no_arguments": true, "confirmation_clicked": true, "no_cmd_bat_python_or_manual_exe_copy": true, "old_exe_restored": true, "old_backup_retained": true, "config_bytes_preserved": true, "sqlite_order_preserved": true, "restored_gui_visible": true, "temporary_ci_data_only": true, "custom_data_directory_case_tested": false}))
 }

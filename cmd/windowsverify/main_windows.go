@@ -122,7 +122,15 @@ func main() {
 	live := flag.String("live-update", "", "")
 	oldVersion := flag.String("old-version", "3.4.999", "")
 	oneClick := flag.Bool("expect-one-click", false, "")
+	transportFailures := flag.Bool("transport-failures-only", false, "test installed updater rejection of failed/corrupt downloads")
 	flag.Parse()
+	if *transportFailures {
+		if *old == "" || *newExe == "" || *version == "" || *emulatorFixture == "" {
+			fail(errors.New("download rejection test requires baseline, public candidate, fixture and version"))
+		}
+		fail(filesafe.JSON(*out, transportFailureGUI(*old, *oldVersion, *newExe, *version, *emulatorFixture)))
+		return
+	}
 	if *interrupt != "" {
 		var p update.Plan
 		fail(filesafe.ReadJSON(*interrupt, &p))

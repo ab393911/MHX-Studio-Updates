@@ -14,18 +14,20 @@ from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('release_control',ROOT/'scripts/issue2-release-control.py')
 c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
-FROZEN=json.loads((ROOT/'docs/DIAGNOSTIC_VERIFICATION_20261103.json').read_text())
+RAW=json.loads((ROOT/'docs/ISSUE2_3_REBUILD_VERIFICATION_20261104.json').read_text())['reports']
+def report(tail):return next(v for k,v in RAW.items() if k.endswith(tail))
+FROZEN={'native_update':report('issue2-native-update.json'),'windows_gui':report('issue2-windows-results/recognition-tests.json'),'candidate':report('candidate.json')}
 
 class ReleaseGates(unittest.TestCase):
     def test_frozen_native_and_installed_baseline_reports(self):
         c.validate_rollback(FROZEN['native_update'])
-        c.validate_upgrade(FROZEN['native_update']['preview41_issue2_gui_upgrade'],c.PRIOR_VERSION)
+        c.validate_upgrade(FROZEN['native_update']['preview41_issue2_2_gui_upgrade'],c.PRIOR_VERSION)
         for key in c.GUI_KEYS:self.assertIs(FROZEN['windows_gui'][key],True)
 
     def test_wrong_source_version_or_lost_history_blocks_upgrade(self):
         for key,value in [('source_commit','wrong'),('version',c.PRIOR_VERSION),('role_execution_history_preserved',False),('studio_database_preserved',False),('confirmation_clicks',1)]:
             with self.subTest(key=key):
-                d=copy.deepcopy(FROZEN['native_update']['preview41_issue2_gui_upgrade']);d[key]=value
+                d=copy.deepcopy(FROZEN['native_update']['preview41_issue2_2_gui_upgrade']);d[key]=value
                 with self.assertRaises(RuntimeError):c.validate_upgrade(d,c.PRIOR_VERSION)
 
     def test_failed_rollback_or_false_unattended_claim_is_rejected(self):
@@ -37,12 +39,12 @@ class ReleaseGates(unittest.TestCase):
 
     def test_altered_artifact_and_mixed_metadata_are_rejected(self):
         # Hash gate is tested with inert bytes; never substitute a test artifact for the frozen EXE.
-        body=b'\x00'*8514048;digest=hashlib.sha256(body).hexdigest()
+        body=b'\x00'*c.SIZE;digest=hashlib.sha256(body).hexdigest()
         meta=copy.deepcopy(FROZEN['candidate']);meta['sha256']=digest
         with patch.object(c,'SHA',digest):
             c.validate_bytes(meta,body)
             with self.assertRaises(RuntimeError):c.validate_bytes(meta,body[:-1]+b'x')
-            for key,value in [('source_commit','wrong'),('version','9.0.0'),('isolated_test_id','isolated')]:
+            for key,value in [('source_commit','wrong'),('version','9.0.0'),('isolated_test_id','isolated'),('verification_commit','wrong')]:
                 wrong=dict(meta);wrong[key]=value
                 with self.assertRaises(RuntimeError):c.validate_bytes(wrong,body)
 
@@ -51,13 +53,25 @@ class ReleaseGates(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):c.verify_online(c.ASSET,'report.json')
             self.assertEqual(call.call_count,1)
 
+    def transport_fixture(self):
+        d={'passed':True,'baseline_version':c.PRIOR_VERSION,'baseline_sha256':c.PRIOR_SHA,'version':c.VERSION,'source_commit':c.SOURCE,'sha256':c.SHA,'cases':{}}
+        for mode in ['http_503','truncated','sha_corruption']:
+            d['cases'][mode]={k:True for k in ['passed','installed_gui_remained','old_exe_unchanged','config_bindings_jobs_unchanged','five_calibrations_preserved','sqlite_order_preserved','prior_backup_preserved','no_install_transaction']}
+        return d
+
+    def test_failed_transport_case_blocks_promotion(self):
+        d=self.transport_fixture();c.validate_transport(d)
+        for mode in d['cases']:
+            bad=copy.deepcopy(d);bad['cases'][mode]['no_install_transaction']=False
+            with self.assertRaises(RuntimeError):c.validate_transport(bad)
+
     def context(self):
         manifest={'source_commit':c.SOURCE,'version':c.VERSION,'sha256':c.SHA}
         prior_text=json.dumps({'version':c.PRIOR_VERSION,'sha256':c.PRIOR_SHA})
         prior={'sha':'oldBlob','content':base64.b64encode(prior_text.encode()).decode()}
         recovery={key:True for key in ['passed','old_exe_restored','old_backup_retained','config_bytes_preserved','sqlite_order_preserved','restored_gui_visible','no_cmd_bat_python_or_manual_exe_copy']}
         recovery.update(baseline_version=c.PRIOR_VERSION,baseline_sha256=c.PRIOR_SHA)
-        files={'dist/update.json':manifest,'reports/published-gui-update.json':copy.deepcopy(FROZEN['native_update']['preview41_issue2_gui_upgrade']),'reports/manual-recovery.json':recovery,'reports/public-rollback.json':FROZEN['native_update'],'dist/public-download.json':{'sha256':c.SHA},'dist/channel-before.json':{'stable_blob':c.STABLE_BLOB,'test_blob':prior['sha']}}
+        files={'dist/update.json':manifest,'reports/published-gui-update.json':copy.deepcopy(FROZEN['native_update']['preview41_issue2_2_gui_upgrade']),'reports/manual-recovery.json':recovery,'reports/public-rollback.json':FROZEN['native_update'],'dist/public-download.json':{'sha256':c.SHA,'size':c.SIZE},'reports/transport-failures.json':self.transport_fixture(),'dist/channel-before.json':{'stable_blob':c.STABLE_BLOB,'test_blob':prior['sha']}}
         return files,prior
 
     def test_failed_public_gate_never_writes_a_channel(self):
