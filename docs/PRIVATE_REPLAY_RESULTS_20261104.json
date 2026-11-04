@@ -32,5 +32,18 @@
   },
   "raw_original_png_private_only": true,
   "native_windows_original_png_tested": false,
-  "publication": false
+  "publication": false,
+  "final_source_recorded_replay": {
+    "source_commit": "461cac4f5436b0989b6b1af5e0a51b6fa32660ca",
+    "race_enabled": true,
+    "counts": {
+      "pass": 3
+    },
+    "private_original_png_never_uploaded": true
+  },
+  "final_source_icon_storage_race": {
+    "source_commit": "461cac4f5436b0989b6b1af5e0a51b6fa32660ca",
+    "command": "go test -race ./cmd/mhxstudio -run ^TestIcon -count=1",
+    "exit_code": 0
+  }
 }
